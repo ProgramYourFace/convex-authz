@@ -46,7 +46,7 @@ export type PermissionDefinition = Record<string, Record<string, boolean>>;
  */
 export type RoleDefinition<P extends PermissionDefinition> = Record<
   string,
-  { [K in keyof P]?: Array<keyof P[K]> }
+  { [K in keyof P]?: ReadonlyArray<keyof P[K]> }
 >;
 
 /**
@@ -277,7 +277,7 @@ export class Authz<
    */
   private buildRolePermissionsMap(): Record<string, string[]> {
     const map: Record<string, string[]> = {};
-    const roles = this.options.roles as Record<string, Record<string, string[]>>;
+    const roles = this.options.roles as unknown as Record<string, Record<string, string[]>>;
 
     for (const roleName of Object.keys(roles)) {
       map[roleName] = flattenRolePermissions(roles, roleName);
