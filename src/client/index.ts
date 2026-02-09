@@ -90,22 +90,114 @@ export interface Scope {
 // ============================================================================
 
 /**
- * Define type-safe permissions
+ * Define type-safe permissions.
+ *
+ * Pass a single object to define permissions from scratch, or pass
+ * multiple objects to merge them together. Later entries add new
+ * resources and actions; overlapping resources are merged.
+ *
+ * @example
+ * ```ts
+ * // Single definition
+ * const permissions = definePermissions({
+ *   documents: { create: true, read: true, update: true, delete: true },
+ * });
+ *
+ * // Merge component defaults with app-specific resources
+ * import { TENANTS_PERMISSIONS } from "@djpanda/convex-tenants";
+ * const permissions = definePermissions(TENANTS_PERMISSIONS, {
+ *   billing: { manage: true, view: true },
+ * });
+ * ```
  */
-export function definePermissions<P extends PermissionDefinition>(
-  permissions: P
-): P {
-  return permissions;
+export function definePermissions<P extends PermissionDefinition>(p: P): P;
+export function definePermissions<
+  P1 extends PermissionDefinition,
+  P2 extends PermissionDefinition,
+>(p1: P1, p2: P2): P1 & P2;
+export function definePermissions<
+  P1 extends PermissionDefinition,
+  P2 extends PermissionDefinition,
+  P3 extends PermissionDefinition,
+>(p1: P1, p2: P2, p3: P3): P1 & P2 & P3;
+export function definePermissions(
+  ...definitions: PermissionDefinition[]
+): PermissionDefinition {
+  if (definitions.length === 1) return definitions[0];
+  const result: Record<string, Record<string, boolean>> = {};
+  for (const def of definitions) {
+    for (const [resource, actions] of Object.entries(def)) {
+      result[resource] = { ...(result[resource] ?? {}), ...actions };
+    }
+  }
+  return result;
 }
 
 /**
- * Define type-safe roles based on permissions
+ * Define type-safe roles based on permissions.
+ *
+ * The first argument is the permissions definition (for type inference).
+ * Pass a single role object, or pass multiple role objects to merge them.
+ * For existing roles, permission arrays are concatenated (deduplicated).
+ * New roles from later objects are added as-is.
+ *
+ * @example
+ * ```ts
+ * // Single definition
+ * const roles = defineRoles(permissions, {
+ *   admin: { documents: ["create", "read", "update", "delete"] },
+ *   viewer: { documents: ["read"] },
+ * });
+ *
+ * // Merge component defaults with app-specific extensions
+ * import { TENANTS_ROLES } from "@djpanda/convex-tenants";
+ * const roles = defineRoles(permissions, TENANTS_ROLES, {
+ *   owner: { billing: ["manage", "view"] },     // extend existing role
+ *   billing_admin: { billing: ["manage"] },      // add new role
+ * });
+ * ```
  */
 export function defineRoles<
   P extends PermissionDefinition,
   R extends RoleDefinition<P>,
->(permissions: P, roles: R): R {
-  return roles;
+>(permissions: P, roles: R): R;
+export function defineRoles<
+  P extends PermissionDefinition,
+  R1 extends RoleDefinition<P>,
+  R2 extends RoleDefinition<P>,
+>(permissions: P, r1: R1, r2: R2): R1 & R2;
+export function defineRoles<
+  P extends PermissionDefinition,
+  R1 extends RoleDefinition<P>,
+  R2 extends RoleDefinition<P>,
+  R3 extends RoleDefinition<P>,
+>(permissions: P, r1: R1, r2: R2, r3: R3): R1 & R2 & R3;
+export function defineRoles<P extends PermissionDefinition>(
+  _permissions: P,
+  ...roleDefs: RoleDefinition<P>[]
+): RoleDefinition<P> {
+  if (roleDefs.length === 1) return roleDefs[0];
+  const result: Record<string, Record<string, unknown[]>> = {};
+  for (const def of roleDefs) {
+    for (const [roleName, rolePerms] of Object.entries(def)) {
+      if (!result[roleName]) {
+        result[roleName] = {
+          ...(rolePerms as Record<string, unknown[]>),
+        };
+      } else {
+        for (const [resource, actions] of Object.entries(
+          rolePerms as Record<string, unknown[]>
+        )) {
+          const existing = (result[roleName][resource] ?? []) as string[];
+          const incoming = actions as string[];
+          result[roleName][resource] = [
+            ...new Set([...existing, ...incoming]),
+          ];
+        }
+      }
+    }
+  }
+  return result as RoleDefinition<P>;
 }
 
 /**
