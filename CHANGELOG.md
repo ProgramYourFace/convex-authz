@@ -2,8 +2,6 @@
 
 ## 0.1.7
 
-## 0.1.6
-
 - Update version to 0.1.4 in package-lock.json
 - Refactor permission definitions in index.ts to support merging multiple
   permission and role objects, enhancing type safety and flexibility. Update
@@ -35,9 +33,3 @@
 - Move UI dependencies to devDependencies
 - Fix linting issues and remove dead code
 - Improve scoped permission examples
-
-## 0.1.3
-
-## 0.0.0
-
-- Initial release.
