@@ -793,6 +793,184 @@ The audit log is invaluable for:
 - Debugging access issues
 - Security incident investigation
 
+### 6. Use Authz as a Global Singleton
+
+Authz is a **global component** — install it once and share a single client instance across your entire app. Do not create multiple `Authz` instances.
+
+```
+convex/
+  convex.config.ts   ← app.use(authz) — registered once
+  authz.ts           ← definePermissions, defineRoles, export authz client
+  documents.ts       ← import { authz } from "./authz"
+  billing.ts         ← import { authz } from "./authz"
+  settings.ts        ← import { authz } from "./authz"
+```
+
+```typescript
+// convex/authz.ts — single source of truth
+import { Authz, definePermissions, defineRoles } from "@djpanda/convex-authz";
+import { components } from "./_generated/api";
+
+const permissions = definePermissions({
+  documents: { create: true, read: true, update: true, delete: true },
+  billing: { view: true, manage: true },
+  settings: { view: true, manage: true },
+});
+
+const roles = defineRoles(permissions, {
+  admin: {
+    documents: ["create", "read", "update", "delete"],
+    billing: ["view", "manage"],
+    settings: ["view", "manage"],
+  },
+  viewer: {
+    documents: ["read"],
+    settings: ["view"],
+  },
+});
+
+// Export the single authz client — import this everywhere
+export const authz = new Authz(components.authz, { permissions, roles });
+```
+
+```typescript
+// convex/documents.ts — uses the shared client
+import { mutation } from "./_generated/server";
+import { authz } from "./authz";
+
+export const deleteDocument = mutation({
+  args: { docId: v.id("documents") },
+  handler: async (ctx, args) => {
+    await authz.require(ctx, userId, "documents:delete");
+    // ...
+  },
+});
+```
+
+### 7. Organize Permissions by Domain
+
+In larger apps, split permission and role definitions by domain and merge them into a single authz client using `definePermissions` and `defineRoles`:
+
+```typescript
+// convex/permissions/documents.ts
+export const documentPermissions = {
+  documents: { create: true, read: true, update: true, delete: true },
+};
+export const documentRoles = {
+  editor: { documents: ["create", "read", "update"] as const },
+  viewer: { documents: ["read"] as const },
+};
+
+// convex/permissions/billing.ts
+export const billingPermissions = {
+  billing: { view: true, manage: true },
+};
+export const billingRoles = {
+  billing_admin: { billing: ["view", "manage"] as const },
+};
+```
+
+```typescript
+// convex/authz.ts — merge all domains
+import { Authz, definePermissions, defineRoles } from "@djpanda/convex-authz";
+import { components } from "./_generated/api";
+import { documentPermissions, documentRoles } from "./permissions/documents";
+import { billingPermissions, billingRoles } from "./permissions/billing";
+
+const permissions = definePermissions(documentPermissions, billingPermissions);
+const roles = defineRoles(permissions, documentRoles, billingRoles);
+
+export const authz = new Authz(components.authz, { permissions, roles });
+```
+
+This keeps each domain self-contained while producing a single, type-safe authz client.
+
+### 8. Integrating with Other Convex Components
+
+When other Convex components (e.g., `@djpanda/convex-tenants`) need authorization, they share the **same global authz instance**. The pattern:
+
+1. Register both components independently in `convex.config.ts`
+2. The other component exports its required permissions and roles
+3. Merge them with your app's own definitions
+4. Pass the authz client to the other component's API factory
+
+```mermaid
+graph LR
+  subgraph app ["Your App (convex.config.ts)"]
+    AuthzComp["authz component"]
+    TenantsComp["tenants component"]
+  end
+
+  subgraph authzSetup ["convex/authz.ts"]
+    AppPerms["App permissions"]
+    TenantPerms["Tenant permissions"]
+    Merge["definePermissions + defineRoles"]
+    Client["authz client (singleton)"]
+    AppPerms --> Merge
+    TenantPerms --> Merge
+    Merge --> Client
+  end
+
+  Client -->|"import { authz }"| Docs["convex/documents.ts"]
+  Client -->|"import { authz }"| Billing["convex/billing.ts"]
+  Client -->|"passed to makeTenantsAPI"| TenantsAPI["convex/tenants.ts"]
+```
+
+```typescript
+// convex/convex.config.ts — register both components
+import { defineApp } from "convex/server";
+import authz from "@djpanda/convex-authz/convex.config";
+import tenants from "@djpanda/convex-tenants/convex.config";
+
+const app = defineApp();
+app.use(authz);
+app.use(tenants);
+export default app;
+```
+
+```typescript
+// convex/authz.ts — merge app + component permissions
+import { Authz, definePermissions, defineRoles } from "@djpanda/convex-authz";
+import { TENANTS_PERMISSIONS, TENANTS_ROLES } from "@djpanda/convex-tenants";
+import { components } from "./_generated/api";
+
+// Your app's own permissions
+const appPermissions = {
+  documents: { create: true, read: true, update: true, delete: true },
+};
+const appRoles = {
+  editor: { documents: ["create", "read", "update"] as const },
+};
+
+// Merge with tenant component's permissions
+const permissions = definePermissions(appPermissions, TENANTS_PERMISSIONS);
+const roles = defineRoles(permissions, appRoles, TENANTS_ROLES);
+
+export const authz = new Authz(components.authz, { permissions, roles });
+```
+
+```typescript
+// convex/tenants.ts — pass the shared authz client
+import { makeTenantsAPI } from "@djpanda/convex-tenants";
+import { components } from "./_generated/api";
+import { authz } from "./authz";
+
+export const {
+  createOrg,
+  inviteMember,
+  removeMember,
+  // ...
+} = makeTenantsAPI(components.tenants, {
+  authz,
+  creatorRole: "owner",
+  auth: async (ctx) => {
+    // return the current user ID
+  },
+});
+```
+
+This way every part of your app — your own functions and third-party components — shares a single, consistent authorization layer.
+
 ---
 
 ## Development
