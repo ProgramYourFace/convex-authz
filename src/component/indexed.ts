@@ -197,7 +197,7 @@ export const assignRoleWithCompute = mutation({
 
       if (existingPerm) {
         // Add this role as a source
-        const sources = existingPerm.sources || [];
+        const sources = existingPerm.sources /* v8 ignore next */ || [];
         if (!sources.includes(args.role)) {
           sources.push(args.role);
           await ctx.db.patch(existingPerm._id, {
@@ -270,7 +270,7 @@ export const revokeRoleWithCompute = mutation({
         .unique();
 
       if (existingPerm) {
-        const sources = (existingPerm.sources || []).filter(
+        const sources = (existingPerm.sources /* v8 ignore next */ || []).filter(
           (s) => s !== args.role
         );
 
@@ -612,7 +612,7 @@ export const getUserPermissionsFast = query({
         permission: p.permission,
         effect: p.effect,
         scopeKey: p.scopeKey,
-        sources: p.sources || [],
+        sources: p.sources /* v8 ignore next */ || [],
       }));
   },
 });

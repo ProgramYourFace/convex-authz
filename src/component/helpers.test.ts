@@ -206,5 +206,100 @@ describe("helpers", () => {
       expect(ctx.getAttribute("department")).toBe("engineering");
       expect(ctx.getAttribute("missing", "default")).toBe("default");
     });
+
+    it("should create context with resource and environment", () => {
+      const ctx = createPolicyContext(
+        "user_123",
+        ["admin"],
+        { department: "engineering" },
+        "documents:read",
+        { type: "document", id: "doc_1", attributes: { status: "draft" } },
+        { ip: "192.168.1.1" }
+      );
+
+      expect(ctx.resource).toEqual({
+        type: "document",
+        id: "doc_1",
+        attributes: { status: "draft" },
+      });
+      expect(ctx.environment.ip).toBe("192.168.1.1");
+      expect(ctx.environment.timestamp).toBeDefined();
+    });
+
+    it("should handle missing environment ip", () => {
+      const ctx = createPolicyContext(
+        "user_123",
+        [],
+        {},
+        "documents:read",
+        undefined,
+        undefined
+      );
+
+      expect(ctx.environment.ip).toBeUndefined();
+      expect(ctx.resource).toBeUndefined();
+    });
+
+    it("should handle getAttribute without default for missing key", () => {
+      const ctx = createPolicyContext(
+        "user_123",
+        [],
+        {},
+        "documents:read"
+      );
+
+      // getAttribute without default should return undefined
+      expect(ctx.getAttribute("nonexistent")).toBeUndefined();
+    });
+
+    it("should handle hasAttribute for missing key", () => {
+      const ctx = createPolicyContext(
+        "user_123",
+        [],
+        {},
+        "documents:read"
+      );
+
+      expect(ctx.hasAttribute("nonexistent")).toBe(false);
+    });
+  });
+
+  describe("checkOverrides with scope", () => {
+    it("should match override with matching scope", () => {
+      const overrides = [
+        {
+          permission: "documents:read",
+          effect: "allow" as const,
+          scope: { type: "team", id: "team_1" },
+        },
+      ];
+      expect(
+        checkOverrides(overrides, "documents:read", { type: "team", id: "team_1" })
+      ).toEqual({ allowed: true });
+    });
+
+    it("should not match override with different scope", () => {
+      const overrides = [
+        {
+          permission: "documents:read",
+          effect: "allow" as const,
+          scope: { type: "team", id: "team_1" },
+        },
+      ];
+      expect(
+        checkOverrides(overrides, "documents:read", { type: "team", id: "team_2" })
+      ).toBeNull();
+    });
+  });
+
+  describe("resolveRolePermissions edge cases", () => {
+    it("should handle roles not in definitions", () => {
+      const roleDefinitions = {
+        admin: ["documents:read"],
+      };
+
+      const perms = resolveRolePermissions(["unknown_role"], roleDefinitions);
+      expect(perms.size).toBe(0);
+    });
   });
 });

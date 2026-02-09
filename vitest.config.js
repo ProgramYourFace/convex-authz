@@ -6,5 +6,13 @@ export default defineConfig({
     typecheck: {
       tsconfig: "./tsconfig.test.json",
     },
+    coverage: {
+      include: ["src/**/*.ts"],
+      exclude: [
+        "src/**/test.ts",
+        "src/**/_generated/**",
+        "src/**/*.test.ts",
+      ],
+    },
   },
 });
