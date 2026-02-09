@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.1.7
+
 ## 0.1.6
 
 - Update version to 0.1.4 in package-lock.json
