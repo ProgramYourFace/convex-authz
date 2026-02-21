@@ -917,6 +917,234 @@ describe("Authz class", () => {
 });
 
 // ============================================================================
+// Input validation tests
+// ============================================================================
+
+describe("input validation", () => {
+  function createMockComponent() {
+    return {
+      queries: {
+        checkPermission: "queries.checkPermission",
+        hasRole: "queries.hasRole",
+        getUserRoles: "queries.getUserRoles",
+        getEffectivePermissions: "queries.getEffectivePermissions",
+        getUserAttributes: "queries.getUserAttributes",
+        getAuditLog: "queries.getAuditLog",
+      },
+      mutations: {
+        assignRole: "mutations.assignRole",
+        revokeRole: "mutations.revokeRole",
+        setAttribute: "mutations.setAttribute",
+        removeAttribute: "mutations.removeAttribute",
+        grantPermission: "mutations.grantPermission",
+        denyPermission: "mutations.denyPermission",
+      },
+    } as unknown as ComponentApi;
+  }
+
+  function createMockIndexedComponent() {
+    return {
+      indexed: {
+        checkPermissionFast: "indexed.checkPermissionFast",
+        hasRoleFast: "indexed.hasRoleFast",
+        hasRelationFast: "indexed.hasRelationFast",
+        getUserPermissionsFast: "indexed.getUserPermissionsFast",
+        getUserRolesFast: "indexed.getUserRolesFast",
+        assignRoleWithCompute: "indexed.assignRoleWithCompute",
+        revokeRoleWithCompute: "indexed.revokeRoleWithCompute",
+        grantPermissionDirect: "indexed.grantPermissionDirect",
+        denyPermissionDirect: "indexed.denyPermissionDirect",
+        addRelationWithCompute: "indexed.addRelationWithCompute",
+        removeRelationWithCompute: "indexed.removeRelationWithCompute",
+      },
+    } as unknown as ComponentApi;
+  }
+
+  const permissions = definePermissions({
+    documents: { create: true, read: true, update: true, delete: true },
+  });
+
+  const roles = defineRoles(permissions, {
+    admin: { documents: ["create", "read", "update", "delete"] },
+    viewer: { documents: ["read"] },
+  });
+
+  describe("Authz", () => {
+    it("throws for empty userId", async () => {
+      const component = createMockComponent();
+      const authz = new Authz(component, { permissions, roles });
+      const ctx = {
+        runQuery: vi.fn().mockResolvedValue({ allowed: true, reason: "ok" }),
+      };
+
+      await expect(authz.can(ctx, "", "documents:read")).rejects.toThrow(
+        "userId must be a non-empty string"
+      );
+      await expect(authz.can(ctx, "   ", "documents:read")).rejects.toThrow(
+        "userId must be a non-empty string"
+      );
+    });
+
+    it("throws for invalid permission format", async () => {
+      const component = createMockComponent();
+      const authz = new Authz(component, { permissions, roles });
+      const ctx = {
+        runQuery: vi.fn().mockResolvedValue({ allowed: false, reason: "ok" }),
+      };
+
+      await expect(authz.can(ctx, "user_1", "read")).rejects.toThrow(
+        'Invalid permission format: "read". Expected "resource:action"'
+      );
+      await expect(authz.can(ctx, "user_1", "a:b:c")).rejects.toThrow(
+        'Invalid permission format: "a:b:c". Expected "resource:action"'
+      );
+      await expect(authz.can(ctx, "user_1", "")).rejects.toThrow(
+        'Invalid permission format: "". Expected "resource:action"'
+      );
+    });
+
+    it("throws for invalid scope when provided", async () => {
+      const component = createMockComponent();
+      const authz = new Authz(component, { permissions, roles });
+      const ctx = {
+        runQuery: vi.fn().mockResolvedValue({ allowed: true, reason: "ok" }),
+      };
+
+      await expect(
+        authz.can(ctx, "user_1", "documents:read", { type: "", id: "x" })
+      ).rejects.toThrow("scope must have non-empty type when provided");
+
+      await expect(
+        authz.can(ctx, "user_1", "documents:read", { type: "t", id: "" })
+      ).rejects.toThrow("scope must have non-empty id when provided");
+    });
+
+    it("throws for unknown role in assignRole and hasRole", async () => {
+      const component = createMockComponent();
+      const authz = new Authz(component, { permissions, roles });
+      const ctx = {
+        runQuery: vi.fn().mockResolvedValue(false),
+        runMutation: vi.fn().mockResolvedValue("id"),
+      };
+
+      await expect(
+        authz.hasRole(ctx, "user_1", "superadmin" as "admin" & string)
+      ).rejects.toThrow('Unknown role: "superadmin"');
+
+      await expect(
+        authz.assignRole(ctx, "user_1", "superadmin" as "admin" & string)
+      ).rejects.toThrow('Unknown role: "superadmin"');
+    });
+
+    it("throws for invalid expiresAt when provided", async () => {
+      const component = createMockComponent();
+      const authz = new Authz(component, { permissions, roles });
+      const ctx = {
+        runMutation: vi.fn().mockResolvedValue("id"),
+      };
+
+      await expect(
+        authz.assignRole(ctx, "user_1", "admin", undefined, NaN)
+      ).rejects.toThrow("expiresAt must be a finite number");
+
+      await expect(
+        authz.grantPermission(
+          ctx,
+          "user_1",
+          "documents:read",
+          undefined,
+          undefined,
+          Number.POSITIVE_INFINITY
+        )
+      ).rejects.toThrow("expiresAt must be a finite number");
+    });
+
+    it("throws for empty attribute key in setAttribute and removeAttribute", async () => {
+      const component = createMockComponent();
+      const authz = new Authz(component, { permissions, roles });
+      const ctx = {
+        runMutation: vi.fn().mockResolvedValue("id"),
+      };
+
+      await expect(
+        authz.setAttribute(ctx, "user_1", "", "value")
+      ).rejects.toThrow("Attribute key must be a non-empty string");
+
+      await expect(authz.removeAttribute(ctx, "user_1", "   ")).rejects.toThrow(
+        "Attribute key must be a non-empty string"
+      );
+    });
+
+    it("throws for invalid getAuditLog limit when provided", async () => {
+      const component = createMockComponent();
+      const authz = new Authz(component, { permissions, roles });
+      const ctx = {
+        runQuery: vi.fn().mockResolvedValue([]),
+      };
+
+      await expect(
+        authz.getAuditLog(ctx, { limit: -1 })
+      ).rejects.toThrow("limit must be a positive integer when provided");
+
+      await expect(
+        authz.getAuditLog(ctx, { limit: 1.5 })
+      ).rejects.toThrow("limit must be a positive integer when provided");
+    });
+  });
+
+  describe("IndexedAuthz", () => {
+    it("throws for empty userId and invalid permission", async () => {
+      const component = createMockIndexedComponent();
+      const authz = new IndexedAuthz(component, { permissions, roles });
+      const ctx = {
+        runQuery: vi.fn().mockResolvedValue(true),
+      };
+
+      await expect(authz.can(ctx, "", "documents:read")).rejects.toThrow(
+        "userId must be a non-empty string"
+      );
+      await expect(authz.can(ctx, "user_1", "read")).rejects.toThrow(
+        'Invalid permission format: "read". Expected "resource:action"'
+      );
+    });
+
+    it("throws for unknown role and invalid scope", async () => {
+      const component = createMockIndexedComponent();
+      const authz = new IndexedAuthz(component, { permissions, roles });
+      const ctx = {
+        runQuery: vi.fn().mockResolvedValue([]),
+        runMutation: vi.fn().mockResolvedValue("id"),
+      };
+
+      await expect(
+        authz.assignRole(ctx, "user_1", "superadmin" as "admin" & string)
+      ).rejects.toThrow('Unknown role: "superadmin"');
+
+      await expect(
+        authz.getUserRoles(ctx, "user_1", { type: "", id: "x" })
+      ).rejects.toThrow("scope must have non-empty type when provided");
+    });
+
+    it("throws for invalid relation args in hasRelation and addRelation", async () => {
+      const component = createMockIndexedComponent();
+      const authz = new IndexedAuthz(component, { permissions, roles });
+      const ctx = {
+        runQuery: vi.fn().mockResolvedValue(false),
+        runMutation: vi.fn().mockResolvedValue("id"),
+      };
+
+      await expect(
+        authz.hasRelation(ctx, "", "alice", "member", "team", "sales")
+      ).rejects.toThrow("subjectType must be a non-empty string");
+
+      await expect(
+        authz.addRelation(ctx, "user", "alice", "", "team", "sales")
+      ).rejects.toThrow("relation must be a non-empty string");
+    });
+  });
+});
+
+// ============================================================================
 // IndexedAuthz class tests
 // ============================================================================
 

@@ -623,6 +623,23 @@ class IndexedAuthz<P, R> {
 }
 ```
 
+### Argument validation
+
+All public methods on `Authz` and `IndexedAuthz` validate their arguments before calling the component. Invalid inputs throw an `Error` with a clear message so you can fail fast and fix call sites.
+
+| Argument | Rule | Example error |
+|----------|------|----------------|
+| `userId` | Non-empty string, max 512 characters | `"userId must be a non-empty string"` |
+| `permission` | Must be `resource:action` (e.g. `documents:read`) | `"Invalid permission format: \"read\". Expected \"resource:action\""` |
+| `scope` | When provided, `type` and `id` must be non-empty strings | `"scope must have non-empty type when provided"` |
+| `role` | Non-empty string; must be one of the roles passed at construction | `"Unknown role: \"superadmin\""` |
+| `expiresAt` | When provided, must be a finite number (timestamp) | `"expiresAt must be a finite number"` |
+| Attribute `key` | Non-empty string | `"Attribute key must be a non-empty string"` |
+| `getAuditLog` `limit` | When provided, positive integer 1–1000 | `"limit must be a positive integer when provided"` |
+| Relation args | `subjectType`, `subjectId`, `relation`, `objectType`, `objectId` must be non-empty strings | `"subjectType must be a non-empty string"` |
+
+Optional parameters are only validated when present (e.g. omitting `scope` is valid; passing `scope: { type: "", id: "x" }` throws).
+
 ---
 
 ## Inspired by Google Zanzibar

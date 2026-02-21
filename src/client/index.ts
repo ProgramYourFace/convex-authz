@@ -29,6 +29,16 @@ import type {
   GenericQueryCtx,
 } from "convex/server";
 import type { ComponentApi } from "../component/_generated/component.js";
+import {
+  validateUserId,
+  validatePermission,
+  validateScope,
+  validateRole,
+  validateOptionalExpiresAt,
+  validateAttributeKey,
+  validateAuditLimit,
+  validateRelationArgs,
+} from "./validation.js";
 
 // ============================================================================
 // Type Definitions
@@ -295,6 +305,9 @@ export class Authz<
     permission: string,
     scope?: Scope
   ): Promise<boolean> {
+    validateUserId(userId);
+    validatePermission(permission);
+    validateScope(scope);
     const result = await ctx.runQuery(this.component.queries.checkPermission, {
       userId,
       permission,
@@ -314,6 +327,9 @@ export class Authz<
     permission: string,
     scope?: Scope
   ): Promise<void> {
+    validateUserId(userId);
+    validatePermission(permission);
+    validateScope(scope);
     const result = await ctx.runQuery(this.component.queries.checkPermission, {
       userId,
       permission,
@@ -337,6 +353,9 @@ export class Authz<
     role: keyof R & string,
     scope?: Scope
   ): Promise<boolean> {
+    validateUserId(userId);
+    validateRole(role, this.options.roles);
+    validateScope(scope);
     return await ctx.runQuery(this.component.queries.hasRole, {
       userId,
       role,
@@ -348,6 +367,8 @@ export class Authz<
    * Get all roles for a user
    */
   async getUserRoles(ctx: QueryCtx | ActionCtx, userId: string, scope?: Scope) {
+    validateUserId(userId);
+    validateScope(scope);
     return await ctx.runQuery(this.component.queries.getUserRoles, {
       userId,
       scope,
@@ -362,6 +383,8 @@ export class Authz<
     userId: string,
     scope?: Scope
   ) {
+    validateUserId(userId);
+    validateScope(scope);
     return await ctx.runQuery(this.component.queries.getEffectivePermissions, {
       userId,
       rolePermissions: this.buildRolePermissionsMap(),
@@ -373,6 +396,7 @@ export class Authz<
    * Get all attributes for a user
    */
   async getUserAttributes(ctx: QueryCtx | ActionCtx, userId: string) {
+    validateUserId(userId);
     return await ctx.runQuery(this.component.queries.getUserAttributes, {
       userId,
     });
@@ -389,6 +413,10 @@ export class Authz<
     expiresAt?: number,
     actorId?: string
   ): Promise<string> {
+    validateUserId(userId);
+    validateRole(role, this.options.roles);
+    validateScope(scope);
+    validateOptionalExpiresAt(expiresAt);
     return await ctx.runMutation(this.component.mutations.assignRole, {
       userId,
       role,
@@ -409,6 +437,9 @@ export class Authz<
     scope?: Scope,
     actorId?: string
   ): Promise<boolean> {
+    validateUserId(userId);
+    validateRole(role, this.options.roles);
+    validateScope(scope);
     return await ctx.runMutation(this.component.mutations.revokeRole, {
       userId,
       role,
@@ -428,6 +459,8 @@ export class Authz<
     value: unknown,
     actorId?: string
   ): Promise<string> {
+    validateUserId(userId);
+    validateAttributeKey(key);
     return await ctx.runMutation(this.component.mutations.setAttribute, {
       userId,
       key,
@@ -446,6 +479,8 @@ export class Authz<
     key: string,
     actorId?: string
   ): Promise<boolean> {
+    validateUserId(userId);
+    validateAttributeKey(key);
     return await ctx.runMutation(this.component.mutations.removeAttribute, {
       userId,
       key,
@@ -466,6 +501,10 @@ export class Authz<
     expiresAt?: number,
     actorId?: string
   ): Promise<string> {
+    validateUserId(userId);
+    validatePermission(permission);
+    validateScope(scope);
+    validateOptionalExpiresAt(expiresAt);
     return await ctx.runMutation(this.component.mutations.grantPermission, {
       userId,
       permission,
@@ -489,6 +528,10 @@ export class Authz<
     expiresAt?: number,
     actorId?: string
   ): Promise<string> {
+    validateUserId(userId);
+    validatePermission(permission);
+    validateScope(scope);
+    validateOptionalExpiresAt(expiresAt);
     return await ctx.runMutation(this.component.mutations.denyPermission, {
       userId,
       permission,
@@ -511,6 +554,8 @@ export class Authz<
       limit?: number;
     }
   ) {
+    if (options?.userId !== undefined) validateUserId(options.userId);
+    if (options?.limit !== undefined) validateAuditLimit(options.limit);
     return await ctx.runQuery(this.component.queries.getAuditLog, {
       userId: options?.userId,
       action: options?.action as
@@ -567,6 +612,9 @@ export class IndexedAuthz<
     permission: string,
     scope?: Scope
   ): Promise<boolean> {
+    validateUserId(userId);
+    validatePermission(permission);
+    validateScope(scope);
     return await ctx.runQuery(this.component.indexed.checkPermissionFast, {
       userId,
       permission,
@@ -584,6 +632,9 @@ export class IndexedAuthz<
     permission: string,
     scope?: Scope
   ): Promise<void> {
+    validateUserId(userId);
+    validatePermission(permission);
+    validateScope(scope);
     const allowed = await this.can(ctx, userId, permission, scope);
     if (!allowed) {
       throw new Error(
@@ -601,6 +652,9 @@ export class IndexedAuthz<
     role: keyof R & string,
     scope?: Scope
   ): Promise<boolean> {
+    validateUserId(userId);
+    validateRole(role, this.options.roles);
+    validateScope(scope);
     return await ctx.runQuery(this.component.indexed.hasRoleFast, {
       userId,
       role,
@@ -620,6 +674,7 @@ export class IndexedAuthz<
     objectType: string,
     objectId: string
   ): Promise<boolean> {
+    validateRelationArgs(subjectType, subjectId, relation, objectType, objectId);
     return await ctx.runQuery(this.component.indexed.hasRelationFast, {
       subjectType,
       subjectId,
@@ -637,6 +692,8 @@ export class IndexedAuthz<
     userId: string,
     scope?: Scope
   ) {
+    validateUserId(userId);
+    validateScope(scope);
     const scopeKey = scope ? `${scope.type}:${scope.id}` : undefined;
     return await ctx.runQuery(this.component.indexed.getUserPermissionsFast, {
       userId,
@@ -648,6 +705,8 @@ export class IndexedAuthz<
    * Get all roles for a user
    */
   async getUserRoles(ctx: QueryCtx | ActionCtx, userId: string, scope?: Scope) {
+    validateUserId(userId);
+    validateScope(scope);
     const scopeKey = scope ? `${scope.type}:${scope.id}` : undefined;
     return await ctx.runQuery(this.component.indexed.getUserRolesFast, {
       userId,
@@ -666,6 +725,10 @@ export class IndexedAuthz<
     expiresAt?: number,
     assignedBy?: string
   ): Promise<string> {
+    validateUserId(userId);
+    validateRole(roleName, this.options.roles);
+    validateScope(scope);
+    validateOptionalExpiresAt(expiresAt);
     const rolePermissions = flattenRolePermissions(
       this.options.roles as unknown as Record<string, Record<string, string[]>>,
       roleName
@@ -690,6 +753,9 @@ export class IndexedAuthz<
     roleName: keyof R & string,
     scope?: Scope
   ): Promise<boolean> {
+    validateUserId(userId);
+    validateRole(roleName, this.options.roles);
+    validateScope(scope);
     const rolePermissions = flattenRolePermissions(
       this.options.roles as unknown as Record<string, Record<string, string[]>>,
       roleName
@@ -715,6 +781,10 @@ export class IndexedAuthz<
     expiresAt?: number,
     grantedBy?: string
   ): Promise<string> {
+    validateUserId(userId);
+    validatePermission(permission);
+    validateScope(scope);
+    validateOptionalExpiresAt(expiresAt);
     return await ctx.runMutation(this.component.indexed.grantPermissionDirect, {
       userId,
       permission,
@@ -737,6 +807,10 @@ export class IndexedAuthz<
     expiresAt?: number,
     deniedBy?: string
   ): Promise<string> {
+    validateUserId(userId);
+    validatePermission(permission);
+    validateScope(scope);
+    validateOptionalExpiresAt(expiresAt);
     return await ctx.runMutation(this.component.indexed.denyPermissionDirect, {
       userId,
       permission,
@@ -764,6 +838,7 @@ export class IndexedAuthz<
     }>,
     createdBy?: string
   ): Promise<string> {
+    validateRelationArgs(subjectType, subjectId, relation, objectType, objectId);
     return await ctx.runMutation(this.component.indexed.addRelationWithCompute, {
       subjectType,
       subjectId,
@@ -786,6 +861,7 @@ export class IndexedAuthz<
     objectType: string,
     objectId: string
   ): Promise<boolean> {
+    validateRelationArgs(subjectType, subjectId, relation, objectType, objectId);
     return await ctx.runMutation(
       this.component.indexed.removeRelationWithCompute,
       {
