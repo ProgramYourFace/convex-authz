@@ -73,9 +73,10 @@ describe("mutations - additional coverage", () => {
         enableAudit: true,
       });
 
-      const logs = await t.query(api.queries.getAuditLog, {
+      const logsResult = await t.query(api.queries.getAuditLog, {
         userId: "user_123",
       });
+      const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
 
       const revokeLog = logs.find((l) => l.action === "role_revoked");
       expect(revokeLog).toBeDefined();
@@ -234,9 +235,10 @@ describe("mutations - additional coverage", () => {
         enableAudit: true,
       });
 
-      const logs = await t.query(api.queries.getAuditLog, {
+      const logsResult = await t.query(api.queries.getAuditLog, {
         userId: "user_123",
       });
+      const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
 
       const revokeLogs = logs.filter((l) => l.action === "role_revoked");
       expect(revokeLogs).toHaveLength(2);
@@ -285,9 +287,10 @@ describe("mutations - additional coverage", () => {
         enableAudit: true,
       });
 
-      const logs = await t.query(api.queries.getAuditLog, {
+      const logsResult = await t.query(api.queries.getAuditLog, {
         userId: "user_123",
       });
+      const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
 
       expect(logs.some((l) => l.action === "attribute_set")).toBe(true);
     });
@@ -303,9 +306,10 @@ describe("mutations - additional coverage", () => {
         enableAudit: true,
       });
 
-      const logs = await t.query(api.queries.getAuditLog, {
+      const logsResult = await t.query(api.queries.getAuditLog, {
         userId: "user_123",
       });
+      const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
 
       expect(logs.some((l) => l.action === "attribute_set")).toBe(true);
     });
@@ -339,9 +343,10 @@ describe("mutations - additional coverage", () => {
         enableAudit: true,
       });
 
-      const logs = await t.query(api.queries.getAuditLog, {
+      const logsResult = await t.query(api.queries.getAuditLog, {
         userId: "user_123",
       });
+      const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
 
       expect(logs.some((l) => l.action === "attribute_removed")).toBe(true);
     });
@@ -396,9 +401,10 @@ describe("mutations - additional coverage", () => {
         enableAudit: true,
       });
 
-      const logs = await t.query(api.queries.getAuditLog, {
+      const logsResult = await t.query(api.queries.getAuditLog, {
         userId: "user_123",
       });
+      const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
 
       const removeLogs = logs.filter((l) => l.action === "attribute_removed");
       expect(removeLogs).toHaveLength(2);
@@ -458,9 +464,10 @@ describe("mutations - additional coverage", () => {
         enableAudit: true,
       });
 
-      const logs = await t.query(api.queries.getAuditLog, {
+      const logsResult = await t.query(api.queries.getAuditLog, {
         userId: "user_123",
       });
+      const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
 
       expect(logs.some((l) => l.action === "permission_granted")).toBe(true);
     });
@@ -475,9 +482,10 @@ describe("mutations - additional coverage", () => {
         enableAudit: true,
       });
 
-      const logs = await t.query(api.queries.getAuditLog, {
+      const logsResult = await t.query(api.queries.getAuditLog, {
         userId: "user_123",
       });
+      const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
 
       expect(logs.some((l) => l.action === "permission_granted")).toBe(true);
     });
@@ -544,9 +552,10 @@ describe("mutations - additional coverage", () => {
         enableAudit: true,
       });
 
-      const logs = await t.query(api.queries.getAuditLog, {
+      const logsResult = await t.query(api.queries.getAuditLog, {
         userId: "user_123",
       });
+      const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
 
       expect(logs.some((l) => l.action === "permission_denied")).toBe(true);
     });
@@ -561,9 +570,10 @@ describe("mutations - additional coverage", () => {
         enableAudit: true,
       });
 
-      const logs = await t.query(api.queries.getAuditLog, {
+      const logsResult = await t.query(api.queries.getAuditLog, {
         userId: "user_123",
       });
+      const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
 
       expect(logs.some((l) => l.action === "permission_denied")).toBe(true);
     });
@@ -651,9 +661,10 @@ describe("mutations - additional coverage", () => {
         enableAudit: true,
       });
 
-      const logs = await t.query(api.queries.getAuditLog, {
+      const logsResult = await t.query(api.queries.getAuditLog, {
         userId: "user_123",
       });
+      const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
 
       // When removing an allow override, it logs "permission_denied"
       expect(logs.some((l) => l.action === "permission_denied")).toBe(true);
@@ -674,9 +685,10 @@ describe("mutations - additional coverage", () => {
         enableAudit: true,
       });
 
-      const logs = await t.query(api.queries.getAuditLog, {
+      const logsResult = await t.query(api.queries.getAuditLog, {
         userId: "user_123",
       });
+      const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
 
       // When removing a deny override, it logs "permission_granted"
       expect(logs.some((l) => l.action === "permission_granted")).toBe(true);
@@ -693,14 +705,15 @@ describe("mutations - additional coverage", () => {
         result: true,
       });
 
-      const logs = await t.query(api.queries.getAuditLog, {
+      const logsResult = await t.query(api.queries.getAuditLog, {
         userId: "user_123",
       });
+      const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
 
       expect(logs).toHaveLength(1);
       expect(logs[0].action).toBe("permission_check");
-      expect(logs[0].details.permission).toBe("documents:read");
-      expect(logs[0].details.result).toBe(true);
+      expect((logs[0].details as { permission?: string }).permission).toBe("documents:read");
+      expect((logs[0].details as { result?: boolean }).result).toBe(true);
     });
 
     it("should log with scope", async () => {
@@ -714,12 +727,13 @@ describe("mutations - additional coverage", () => {
         reason: "No matching role",
       });
 
-      const logs = await t.query(api.queries.getAuditLog, {
+      const logsResult = await t.query(api.queries.getAuditLog, {
         userId: "user_123",
       });
+      const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
 
-      expect(logs[0].details.scope).toEqual({ type: "team", id: "team_1" });
-      expect(logs[0].details.reason).toBe("No matching role");
+      expect((logs[0].details as { scope?: unknown }).scope).toEqual({ type: "team", id: "team_1" });
+      expect((logs[0].details as { reason?: string }).reason).toBe("No matching role");
     });
   });
 

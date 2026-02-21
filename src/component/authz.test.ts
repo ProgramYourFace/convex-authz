@@ -358,13 +358,14 @@ describe("authz component", () => {
         enableAudit: true,
       });
 
-      const logs = await t.query(api.queries.getAuditLog, {
+      const logsResult = await t.query(api.queries.getAuditLog, {
         userId: "user_123",
       });
+      const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
 
       expect(logs).toHaveLength(1);
       expect(logs[0].action).toBe("role_assigned");
-      expect(logs[0].details.role).toBe("admin");
+      expect((logs[0].details as { role?: string }).role).toBe("admin");
     });
   });
 });

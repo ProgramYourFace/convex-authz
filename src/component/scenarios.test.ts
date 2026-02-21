@@ -835,13 +835,14 @@ describe("Scenario: Audit Trail", () => {
     });
 
     // Get audit log
-    const logs = await t.query(api.queries.getAuditLog, {
+    const logsResult = await t.query(api.queries.getAuditLog, {
       userId: USERS.alice,
     });
+    const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
 
     expect(logs.length).toBeGreaterThanOrEqual(3);
 
-    const actions = logs.map((l: any) => l.action);
+    const actions = logs.map((l) => l.action);
     expect(actions).toContain("role_assigned");
     expect(actions).toContain("role_revoked");
     expect(actions).toContain("permission_granted");

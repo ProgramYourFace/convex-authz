@@ -375,9 +375,10 @@ describe("queries - additional coverage", () => {
         enableAudit: true,
       });
 
-      const logs = await t.query(api.queries.getAuditLog, {
+      const logsResult = await t.query(api.queries.getAuditLog, {
         action: "role_assigned",
       });
+      const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
 
       expect(logs.every((l) => l.action === "role_assigned")).toBe(true);
     });
@@ -397,7 +398,8 @@ describe("queries - additional coverage", () => {
         enableAudit: true,
       });
 
-      const logs = await t.query(api.queries.getAuditLog, {});
+      const logsResult = await t.query(api.queries.getAuditLog, {});
+      const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
 
       expect(logs.length).toBeGreaterThanOrEqual(2);
     });
@@ -424,9 +426,10 @@ describe("queries - additional coverage", () => {
         enableAudit: true,
       });
 
-      const logs = await t.query(api.queries.getAuditLog, {
+      const logsResult = await t.query(api.queries.getAuditLog, {
         limit: 1,
       });
+      const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
 
       expect(logs).toHaveLength(1);
     });
@@ -488,11 +491,8 @@ describe("queries - additional coverage", () => {
       });
 
       expect(result).toHaveProperty("page");
-      if ("page" in result) {
-        expect(result.page.every((e) => e.userId === "user_paginated")).toBe(
-          true
-        );
-      }
+      const page = Array.isArray(result) ? result : result.page;
+      expect(page.every((e) => e.userId === "user_paginated")).toBe(true);
     });
   });
 
