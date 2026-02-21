@@ -322,6 +322,69 @@ const roles = await authz.getUserRoles(ctx, userId);
 
 ---
 
+## Bulk operations and offboarding
+
+For large-scale or enterprise workflows, the API supports bulk permission checks and role updates in a single call (up to 100 items per call).
+
+### Bulk permission check (canAny)
+
+Check whether the user has **any** of the given permissions in one round-trip:
+
+```typescript
+const allowed = await authz.canAny(ctx, userId, [
+  "documents:read",
+  "documents:update",
+  "documents:delete",
+], scope);
+// true if the user has at least one of these permissions
+```
+
+### Bulk role assign and revoke
+
+Assign or revoke multiple roles for one user in a **single transaction**:
+
+```typescript
+// Assign multiple roles at once (max 100 per call)
+const { assigned, assignmentIds } = await authz.assignRoles(ctx, userId, [
+  { role: "admin" },
+  { role: "editor", scope: { type: "team", id: "team_1" } },
+  { role: "viewer", scope: { type: "org", id: "org_1" }, expiresAt: Date.now() + 86400000 },
+], actorId);
+
+// Revoke multiple roles at once (max 100 per call)
+const { revoked } = await authz.revokeRoles(ctx, userId, [
+  { role: "editor", scope: { type: "team", id: "team_1" } },
+  { role: "viewer" },
+], actorId);
+```
+
+### Revoke all roles
+
+Revoke every role for a user (optionally only in a given scope):
+
+```typescript
+const count = await authz.revokeAllRoles(ctx, userId);
+const countScoped = await authz.revokeAllRoles(ctx, userId, { type: "team", id: "team_1" }, actorId);
+```
+
+### Full user offboarding
+
+Remove all roles, permission overrides, and attributes for a user in one call (optionally scoped). Also clears indexed `effectiveRoles` and `effectivePermissions` when present:
+
+```typescript
+const result = await authz.offboardUser(ctx, userId, {
+  scope: { type: "org", id: "org_1" },  // optional: only remove data in this scope
+  actorId: "system",
+  removeAttributes: true,   // default true
+  removeOverrides: true,    // default true
+});
+// result: { rolesRevoked, overridesRemoved, attributesRemoved, effectiveRolesRemoved, effectivePermissionsRemoved }
+```
+
+Bulk arrays (permissions in `canAny`, roles in `assignRoles` / `revokeRoles`) are limited to **100 items** per call; the client and component validate and throw a clear error if exceeded.
+
+---
+
 ## ABAC (Attribute-Based Access Control)
 
 ### Setting User Attributes
@@ -696,14 +759,21 @@ All tables have optimized indexes for common query patterns:
 class Authz<P, R, Policy> {
   // Permission checks
   can(ctx, userId, permission, scope?): Promise<boolean>
+  canAny(ctx, userId, permissions: string[], scope?): Promise<boolean>   // bulk: any of N permissions (max 100)
   require(ctx, userId, permission, scope?): Promise<void>
   
   // Role management
   hasRole(ctx, userId, role, scope?): Promise<boolean>
   assignRole(ctx, userId, role, scope?, expiresAt?, actorId?): Promise<string>
+  assignRoles(ctx, userId, roles: RoleAssignItem[], actorId?): Promise<{ assigned: number; assignmentIds: string[] }>  // bulk, max 100
   revokeRole(ctx, userId, role, scope?, actorId?): Promise<boolean>
+  revokeRoles(ctx, userId, roles: RoleScopeItem[], actorId?): Promise<{ revoked: number }>  // bulk, max 100
+  revokeAllRoles(ctx, userId, scope?, actorId?): Promise<number>
   getUserRoles(ctx, userId, scope?): Promise<Role[]>
   getUserPermissions(ctx, userId, scope?): Promise<PermissionResult>
+  
+  // Offboarding
+  offboardUser(ctx, userId, options?: { scope?, actorId?, removeAttributes?, removeOverrides? }): Promise<OffboardResult>
   
   // Attribute management
   setAttribute(ctx, userId, key, value, actorId?): Promise<string>
@@ -725,6 +795,7 @@ class Authz<P, R, Policy> {
 class IndexedAuthz<P, R> {
   // O(1) checks
   can(ctx, userId, permission, scope?): Promise<boolean>
+  canAny(ctx, userId, permissions: string[], scope?): Promise<boolean>   // bulk permission check (max 100)
   require(ctx, userId, permission, scope?): Promise<void>
   hasRole(ctx, userId, role, scope?): Promise<boolean>
   hasRelation(ctx, subjectType, subjectId, relation, objectType, objectId): Promise<boolean>
@@ -735,7 +806,11 @@ class IndexedAuthz<P, R> {
   
   // Mutations (compute on write)
   assignRole(ctx, userId, role, scope?, expiresAt?, assignedBy?): Promise<string>
+  assignRoles(ctx, userId, roles: RoleAssignItem[], actorId?): Promise<{ assigned: number; assignmentIds: string[] }>  // bulk, max 100
   revokeRole(ctx, userId, role, scope?): Promise<boolean>
+  revokeRoles(ctx, userId, roles: RoleScopeItem[], actorId?): Promise<{ revoked: number }>  // bulk, max 100
+  revokeAllRoles(ctx, userId, scope?, actorId?): Promise<number>
+  offboardUser(ctx, userId, options?): Promise<OffboardResult>
   grantPermission(ctx, userId, permission, scope?, reason?, expiresAt?, grantedBy?): Promise<string>
   denyPermission(ctx, userId, permission, scope?, reason?, expiresAt?, deniedBy?): Promise<string>
   
@@ -760,6 +835,8 @@ All public methods on `Authz` and `IndexedAuthz` validate their arguments before
 | `getAuditLog` `limit` | When provided, positive integer 1–1000 | `"limit must be a positive integer when provided"` |
 | `getAuditLog` `numItems` | When provided (pagination), positive integer 1–1000 | same as `limit` |
 | Relation args | `subjectType`, `subjectId`, `relation`, `objectType`, `objectId` must be non-empty strings | `"subjectType must be a non-empty string"` |
+| `canAny` `permissions` | Non-empty array, each element valid `resource:action`, length ≤ 100 | `"permissions must not exceed 100 items"` |
+| `assignRoles` / `revokeRoles` `roles` | Non-empty array, each role valid, length ≤ 100 | `"roles must not exceed 100 items"` |
 
 Optional parameters are only validated when present (e.g. omitting `scope` is valid; passing `scope: { type: "", id: "x" }` throws).
 

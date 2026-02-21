@@ -52,6 +52,23 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         string,
         Name
       >;
+      assignRolesWithCompute: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          assignedBy?: string;
+          rolePermissionsMap: Record<string, Array<string>>;
+          roles: Array<{
+            expiresAt?: number;
+            metadata?: any;
+            role: string;
+            scope?: { id: string; type: string };
+          }>;
+          userId: string;
+        },
+        { assigned: number; assignmentIds: Array<string> },
+        Name
+      >;
       assignRoleWithCompute: FunctionReference<
         "mutation",
         "internal",
@@ -73,6 +90,18 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           objectId?: string;
           objectType?: string;
           permission: string;
+          userId: string;
+        },
+        boolean,
+        Name
+      >;
+      checkPermissionsFast: FunctionReference<
+        "query",
+        "internal",
+        {
+          objectId?: string;
+          objectType?: string;
+          permissions: Array<string>;
           userId: string;
         },
         boolean,
@@ -174,6 +203,17 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         boolean,
         Name
       >;
+      revokeRolesWithCompute: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          rolePermissionsMap: Record<string, Array<string>>;
+          roles: Array<{ role: string; scope?: { id: string; type: string } }>;
+          userId: string;
+        },
+        { revoked: number },
+        Name
+      >;
       revokeRoleWithCompute: FunctionReference<
         "mutation",
         "internal",
@@ -201,6 +241,23 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           userId: string;
         },
         string,
+        Name
+      >;
+      assignRoles: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          assignedBy?: string;
+          enableAudit?: boolean;
+          roles: Array<{
+            expiresAt?: number;
+            metadata?: any;
+            role: string;
+            scope?: { id: string; type: string };
+          }>;
+          userId: string;
+        },
+        { assigned: number; assignmentIds: Array<string> },
         Name
       >;
       cleanupExpired: FunctionReference<
@@ -251,6 +308,26 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           userId: string;
         },
         null,
+        Name
+      >;
+      offboardUser: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          enableAudit?: boolean;
+          removeAttributes?: boolean;
+          removeOverrides?: boolean;
+          revokedBy?: string;
+          scope?: { id: string; type: string };
+          userId: string;
+        },
+        {
+          attributesRemoved: number;
+          effectivePermissionsRemoved: number;
+          effectiveRolesRemoved: number;
+          overridesRemoved: number;
+          rolesRevoked: number;
+        },
         Name
       >;
       removeAllAttributes: FunctionReference<
@@ -310,6 +387,18 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         boolean,
         Name
       >;
+      revokeRoles: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          enableAudit?: boolean;
+          revokedBy?: string;
+          roles: Array<{ role: string; scope?: { id: string; type: string } }>;
+          userId: string;
+        },
+        { revoked: number },
+        Name
+      >;
       runAuditRetentionCleanup: FunctionReference<
         "mutation",
         "internal",
@@ -359,6 +448,18 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           matchedRole?: string;
           reason: string;
         },
+        Name
+      >;
+      checkPermissions: FunctionReference<
+        "query",
+        "internal",
+        {
+          permissions: Array<string>;
+          rolePermissions: Record<string, Array<string>>;
+          scope?: { id: string; type: string };
+          userId: string;
+        },
+        { allowed: boolean; matchedPermission?: string },
         Name
       >;
       getAuditLog: FunctionReference<

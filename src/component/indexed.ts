@@ -14,6 +14,7 @@
 
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { matchesPermissionPattern } from "./helpers";
 
 // ============================================================================
 // O(1) Permission Check - The Fast Path
@@ -58,6 +59,66 @@ export const checkPermissionFast = query({
     }
 
     return cached.effect === "allow";
+  },
+});
+
+const MAX_BULK_PERMISSIONS = 100;
+const MAX_BULK_ROLES = 100;
+
+/**
+ * Check if user has any of the given permissions (canAny) - batch O(1) lookups.
+ * Queries all effective permissions for userId and scope once, then checks if any requested permission is allowed.
+ */
+export const checkPermissionsFast = query({
+  args: {
+    userId: v.string(),
+    permissions: v.array(v.string()),
+    objectType: v.optional(v.string()),
+    objectId: v.optional(v.string()),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    if (args.permissions.length === 0) return false;
+    if (args.permissions.length > MAX_BULK_PERMISSIONS) {
+      throw new Error(
+        `permissions must not exceed ${MAX_BULK_PERMISSIONS} items (got ${args.permissions.length})`
+      );
+    }
+
+    const scopeKey = args.objectType && args.objectId
+      ? `${args.objectType}:${args.objectId}`
+      : "global";
+
+    const now = Date.now();
+    const rows = await ctx.db
+      .query("effectivePermissions")
+      .withIndex("by_user_scope", (q) =>
+        q.eq("userId", args.userId).eq("scopeKey", scopeKey)
+      )
+      .collect();
+
+    const allowedPerms: string[] = [];
+    const deniedPerms: string[] = [];
+    for (const row of rows) {
+      if (row.expiresAt && row.expiresAt < now) continue;
+      if (row.effect === "allow") allowedPerms.push(row.permission);
+      else if (row.effect === "deny") deniedPerms.push(row.permission);
+    }
+
+    for (const p of args.permissions) {
+      let denied = false;
+      for (const stored of deniedPerms) {
+        if (matchesPermissionPattern(p, stored)) {
+          denied = true;
+          break;
+        }
+      }
+      if (denied) continue;
+      for (const stored of allowedPerms) {
+        if (matchesPermissionPattern(p, stored)) return true;
+      }
+    }
+    return false;
   },
 });
 
@@ -288,6 +349,200 @@ export const revokeRoleWithCompute = mutation({
     }
 
     return true;
+  },
+});
+
+/**
+ * Assign multiple roles and compute permissions in a single transaction.
+ */
+export const assignRolesWithCompute = mutation({
+  args: {
+    userId: v.string(),
+    roles: v.array(
+      v.object({
+        role: v.string(),
+        scope: v.optional(v.object({ type: v.string(), id: v.string() })),
+        expiresAt: v.optional(v.number()),
+        metadata: v.optional(v.any()),
+      })
+    ),
+    rolePermissionsMap: v.record(v.string(), v.array(v.string())),
+    assignedBy: v.optional(v.string()),
+  },
+  returns: v.object({
+    assigned: v.number(),
+    assignmentIds: v.array(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    if (args.roles.length === 0) {
+      return { assigned: 0, assignmentIds: [] };
+    }
+    if (args.roles.length > MAX_BULK_ROLES) {
+      throw new Error(
+        `roles must not exceed ${MAX_BULK_ROLES} items (got ${args.roles.length})`
+      );
+    }
+
+    const assignmentIds: string[] = [];
+    let assigned = 0;
+
+    for (const item of args.roles) {
+      const rolePermissions = args.rolePermissionsMap[item.role] ?? [];
+      const scopeKey = item.scope
+        ? `${item.scope.type}:${item.scope.id}`
+        : "global";
+
+      const existing = await ctx.db
+        .query("effectiveRoles")
+        .withIndex("by_user_role_scope", (q) =>
+          q
+            .eq("userId", args.userId)
+            .eq("role", item.role)
+            .eq("scopeKey", scopeKey)
+        )
+        .unique();
+
+      let roleId: string;
+      if (existing) {
+        await ctx.db.patch(existing._id, {
+          expiresAt: item.expiresAt,
+          updatedAt: Date.now(),
+        });
+        roleId = existing._id as string;
+      } else {
+        roleId = await ctx.db.insert("effectiveRoles", {
+          userId: args.userId,
+          role: item.role,
+          scopeKey,
+          scope: item.scope,
+          expiresAt: item.expiresAt,
+          assignedBy: args.assignedBy,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }) as string;
+      }
+
+      for (const permission of rolePermissions) {
+        const existingPerm = await ctx.db
+          .query("effectivePermissions")
+          .withIndex("by_user_permission_scope", (q) =>
+            q
+              .eq("userId", args.userId)
+              .eq("permission", permission)
+              .eq("scopeKey", scopeKey)
+          )
+          .unique();
+
+        if (existingPerm) {
+          const sources = existingPerm.sources /* v8 ignore next */ || [];
+          if (!sources.includes(item.role)) {
+            sources.push(item.role);
+            await ctx.db.patch(existingPerm._id, {
+              sources,
+              updatedAt: Date.now(),
+            });
+          }
+        } else {
+          await ctx.db.insert("effectivePermissions", {
+            userId: args.userId,
+            permission,
+            scopeKey,
+            scope: item.scope,
+            effect: "allow",
+            sources: [item.role],
+            expiresAt: item.expiresAt,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          });
+        }
+      }
+
+      assignmentIds.push(roleId);
+      assigned++;
+    }
+
+    return { assigned, assignmentIds };
+  },
+});
+
+/**
+ * Revoke multiple roles and recompute permissions in a single transaction.
+ */
+export const revokeRolesWithCompute = mutation({
+  args: {
+    userId: v.string(),
+    roles: v.array(
+      v.object({
+        role: v.string(),
+        scope: v.optional(v.object({ type: v.string(), id: v.string() })),
+      })
+    ),
+    rolePermissionsMap: v.record(v.string(), v.array(v.string())),
+  },
+  returns: v.object({
+    revoked: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    if (args.roles.length === 0) {
+      return { revoked: 0 };
+    }
+    if (args.roles.length > MAX_BULK_ROLES) {
+      throw new Error(
+        `roles must not exceed ${MAX_BULK_ROLES} items (got ${args.roles.length})`
+      );
+    }
+
+    let revoked = 0;
+
+    for (const item of args.roles) {
+      const rolePermissions = args.rolePermissionsMap[item.role] ?? [];
+      const scopeKey = item.scope
+        ? `${item.scope.type}:${item.scope.id}`
+        : "global";
+
+      const existing = await ctx.db
+        .query("effectiveRoles")
+        .withIndex("by_user_role_scope", (q) =>
+          q
+            .eq("userId", args.userId)
+            .eq("role", item.role)
+            .eq("scopeKey", scopeKey)
+        )
+        .unique();
+
+      if (!existing) continue;
+
+      await ctx.db.delete(existing._id);
+      revoked++;
+
+      for (const permission of rolePermissions) {
+        const existingPerm = await ctx.db
+          .query("effectivePermissions")
+          .withIndex("by_user_permission_scope", (q) =>
+            q
+              .eq("userId", args.userId)
+              .eq("permission", permission)
+              .eq("scopeKey", scopeKey)
+          )
+          .unique();
+
+        if (existingPerm) {
+          const sources = (existingPerm.sources /* v8 ignore next */ || []).filter(
+            (s) => s !== item.role
+          );
+          if (sources.length === 0) {
+            await ctx.db.delete(existingPerm._id);
+          } else {
+            await ctx.db.patch(existingPerm._id, {
+              sources,
+              updatedAt: Date.now(),
+            });
+          }
+        }
+      }
+    }
+
+    return { revoked };
   },
 });
 

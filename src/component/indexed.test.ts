@@ -101,6 +101,103 @@ describe("O(1) Indexed Authorization", () => {
       expect(permissions).toHaveLength(0);
     });
 
+    it("checkPermissionsFast (canAny) returns true when user has one of the permissions", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.indexed.assignRoleWithCompute, {
+        userId: "user_123",
+        role: "viewer",
+        rolePermissions: ["documents:read"],
+      });
+
+      const result = await t.query(api.indexed.checkPermissionsFast, {
+        userId: "user_123",
+        permissions: ["documents:delete", "documents:read", "documents:update"],
+      });
+
+      expect(result).toBe(true);
+    });
+
+    it("checkPermissionsFast returns false when user has none", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.indexed.assignRoleWithCompute, {
+        userId: "user_123",
+        role: "viewer",
+        rolePermissions: ["documents:read"],
+      });
+
+      const result = await t.query(api.indexed.checkPermissionsFast, {
+        userId: "user_123",
+        permissions: ["documents:delete", "documents:update"],
+      });
+
+      expect(result).toBe(false);
+    });
+
+    it("assignRolesWithCompute assigns multiple roles in one transaction", async () => {
+      const t = convexTest(schema, modules);
+
+      const rolePermissionsMap: Record<string, string[]> = {
+        admin: ["documents:read", "documents:write", "documents:delete"],
+        editor: ["documents:read", "documents:write"],
+      };
+
+      const result = await t.mutation(api.indexed.assignRolesWithCompute, {
+        userId: "user_123",
+        roles: [
+          { role: "admin" },
+          { role: "editor", scope: { type: "team", id: "team_1" } },
+        ],
+        rolePermissionsMap,
+      });
+
+      expect(result.assigned).toBe(2);
+      expect(result.assignmentIds).toHaveLength(2);
+
+      const canDelete = await t.query(api.indexed.checkPermissionFast, {
+        userId: "user_123",
+        permission: "documents:delete",
+      });
+      expect(canDelete).toBe(true);
+
+      const canWriteScoped = await t.query(api.indexed.checkPermissionFast, {
+        userId: "user_123",
+        permission: "documents:write",
+        objectType: "team",
+        objectId: "team_1",
+      });
+      expect(canWriteScoped).toBe(true);
+    });
+
+    it("revokeRolesWithCompute revokes multiple roles in one transaction", async () => {
+      const t = convexTest(schema, modules);
+
+      const rolePermissionsMap: Record<string, string[]> = {
+        admin: ["documents:read", "documents:delete"],
+        editor: ["documents:read", "documents:write"],
+      };
+
+      await t.mutation(api.indexed.assignRolesWithCompute, {
+        userId: "user_123",
+        roles: [{ role: "admin" }, { role: "editor" }],
+        rolePermissionsMap,
+      });
+
+      const result = await t.mutation(api.indexed.revokeRolesWithCompute, {
+        userId: "user_123",
+        roles: [{ role: "admin" }, { role: "editor" }],
+        rolePermissionsMap,
+      });
+
+      expect(result.revoked).toBe(2);
+
+      const permissions = await t.query(api.indexed.getUserPermissionsFast, {
+        userId: "user_123",
+      });
+      expect(permissions).toHaveLength(0);
+    });
+
     it("should update existing role assignment", async () => {
       const t = convexTest(schema, modules);
 

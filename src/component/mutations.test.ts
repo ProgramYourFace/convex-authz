@@ -245,6 +245,221 @@ describe("mutations - additional coverage", () => {
     });
   });
 
+  describe("assignRoles", () => {
+    it("should assign multiple roles in one transaction", async () => {
+      const t = convexTest(schema, modules);
+
+      const result = await t.mutation(api.mutations.assignRoles, {
+        userId: "user_123",
+        roles: [
+          { role: "admin" },
+          { role: "editor", scope: { type: "team", id: "team_1" } },
+        ],
+        enableAudit: true,
+      });
+
+      expect(result.assigned).toBe(2);
+      expect(result.assignmentIds).toHaveLength(2);
+
+      const roles = await t.query(api.queries.getUserRoles, {
+        userId: "user_123",
+      });
+      expect(roles).toHaveLength(2);
+    });
+
+    it("should throw on duplicate role+scope", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_123",
+        role: "admin",
+      });
+
+      await expect(
+        t.mutation(api.mutations.assignRoles, {
+          userId: "user_123",
+          roles: [{ role: "admin" }, { role: "editor" }],
+        })
+      ).rejects.toThrow(/ALREADY_EXISTS/);
+    });
+
+    it("should throw when roles exceed limit", async () => {
+      const t = convexTest(schema, modules);
+
+      const roles = Array.from({ length: 101 }, (_, i) => ({
+        role: "viewer",
+        scope: { type: "team", id: `team_${i}` },
+      }));
+
+      await expect(
+        t.mutation(api.mutations.assignRoles, {
+          userId: "user_123",
+          roles,
+        })
+      ).rejects.toThrow(/must not exceed 100/);
+    });
+  });
+
+  describe("revokeRoles", () => {
+    it("should revoke multiple roles in one transaction", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_123",
+        role: "admin",
+      });
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_123",
+        role: "editor",
+      });
+
+      const result = await t.mutation(api.mutations.revokeRoles, {
+        userId: "user_123",
+        roles: [{ role: "admin" }, { role: "editor" }],
+        enableAudit: true,
+      });
+
+      expect(result.revoked).toBe(2);
+
+      const roles = await t.query(api.queries.getUserRoles, {
+        userId: "user_123",
+      });
+      expect(roles).toHaveLength(0);
+    });
+
+    it("should only revoke matching scope", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_123",
+        role: "admin",
+        scope: { type: "team", id: "team_1" },
+      });
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_123",
+        role: "admin",
+        scope: { type: "team", id: "team_2" },
+      });
+
+      const result = await t.mutation(api.mutations.revokeRoles, {
+        userId: "user_123",
+        roles: [{ role: "admin", scope: { type: "team", id: "team_1" } }],
+      });
+
+      expect(result.revoked).toBe(1);
+
+      const roles = await t.query(api.queries.getUserRoles, {
+        userId: "user_123",
+      });
+      expect(roles).toHaveLength(1);
+      expect(roles[0].scope).toEqual({ type: "team", id: "team_2" });
+    });
+  });
+
+  describe("offboardUser", () => {
+    it("should remove all roles, overrides, and attributes for user", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_off",
+        role: "admin",
+      });
+      await t.mutation(api.mutations.grantPermission, {
+        userId: "user_off",
+        permission: "documents:read",
+      });
+      await t.mutation(api.mutations.setAttribute, {
+        userId: "user_off",
+        key: "dept",
+        value: "eng",
+      });
+
+      const result = await t.mutation(api.mutations.offboardUser, {
+        userId: "user_off",
+        enableAudit: true,
+      });
+
+      expect(result.rolesRevoked).toBe(1);
+      expect(result.overridesRemoved).toBe(1);
+      expect(result.attributesRemoved).toBe(1);
+
+      const roles = await t.query(api.queries.getUserRoles, {
+        userId: "user_off",
+      });
+      expect(roles).toHaveLength(0);
+
+      const overrides = await t.query(api.queries.getPermissionOverrides, {
+        userId: "user_off",
+      });
+      expect(overrides).toHaveLength(0);
+
+      const attrs = await t.query(api.queries.getUserAttributes, {
+        userId: "user_off",
+      });
+      expect(attrs).toHaveLength(0);
+    });
+
+    it("should respect scope when provided", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_off2",
+        role: "admin",
+        scope: { type: "team", id: "team_1" },
+      });
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_off2",
+        role: "viewer",
+        scope: { type: "team", id: "team_2" },
+      });
+
+      const result = await t.mutation(api.mutations.offboardUser, {
+        userId: "user_off2",
+        scope: { type: "team", id: "team_1" },
+      });
+
+      expect(result.rolesRevoked).toBe(1);
+
+      const roles = await t.query(api.queries.getUserRoles, {
+        userId: "user_off2",
+      });
+      expect(roles).toHaveLength(1);
+      expect(roles[0].role).toBe("viewer");
+      expect(roles[0].scope).toEqual({ type: "team", id: "team_2" });
+    });
+
+    it("should skip attributes and overrides when options false", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_off3",
+        role: "admin",
+      });
+      await t.mutation(api.mutations.setAttribute, {
+        userId: "user_off3",
+        key: "keep",
+        value: "me",
+      });
+
+      await t.mutation(api.mutations.offboardUser, {
+        userId: "user_off3",
+        removeAttributes: false,
+        removeOverrides: false,
+      });
+
+      const roles = await t.query(api.queries.getUserRoles, {
+        userId: "user_off3",
+      });
+      expect(roles).toHaveLength(0);
+
+      const attrs = await t.query(api.queries.getUserAttributes, {
+        userId: "user_off3",
+      });
+      expect(attrs).toHaveLength(1);
+      expect(attrs[0].key).toBe("keep");
+    });
+  });
+
   describe("setAttribute", () => {
     it("should update existing attribute", async () => {
       const t = convexTest(schema, modules);

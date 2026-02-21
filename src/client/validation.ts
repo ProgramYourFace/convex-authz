@@ -8,6 +8,11 @@ import { parsePermission } from "../component/helpers.js";
 const MAX_USER_ID_LENGTH = 512;
 const MAX_AUDIT_LIMIT = 1000;
 
+/** Maximum number of permissions in a single canAny / checkPermissions call. */
+export const MAX_BULK_PERMISSIONS = 100;
+/** Maximum number of roles in a single assignRoles / revokeRoles call. */
+export const MAX_BULK_ROLES = 100;
+
 export interface ScopeLike {
   type: string;
   id: string;
@@ -118,6 +123,96 @@ export function validateAuditLimit(limit: number | undefined): void {
   }
   if (limit > MAX_AUDIT_LIMIT) {
     throw new Error(`limit must not exceed ${MAX_AUDIT_LIMIT}`);
+  }
+}
+
+/**
+ * Validate permissions array for bulk checks: non-empty array, each element valid permission, length ≤ maxLength.
+ */
+export function validatePermissions(
+  permissions: string[],
+  maxLength: number = MAX_BULK_PERMISSIONS
+): void {
+  if (!Array.isArray(permissions)) {
+    throw new Error("permissions must be an array");
+  }
+  if (permissions.length === 0) {
+    throw new Error("permissions must not be empty");
+  }
+  if (permissions.length > maxLength) {
+    throw new Error(
+      `permissions must not exceed ${maxLength} items (got ${permissions.length})`
+    );
+  }
+  for (let i = 0; i < permissions.length; i++) {
+    validatePermission(permissions[i]);
+  }
+}
+
+export interface RoleScopeItem {
+  role: string;
+  scope?: ScopeLike;
+}
+
+export interface RoleAssignItem extends RoleScopeItem {
+  expiresAt?: number;
+  metadata?: unknown;
+}
+
+/**
+ * Validate roles array for bulk assign/revoke: non-empty array, each role valid, length ≤ maxLength.
+ */
+export function validateRoles(
+  roles: Array<{ role: string; scope?: ScopeLike }>,
+  knownRoles?: Set<string> | Record<string, unknown>,
+  maxLength: number = MAX_BULK_ROLES
+): void {
+  if (!Array.isArray(roles)) {
+    throw new Error("roles must be an array");
+  }
+  if (roles.length === 0) {
+    throw new Error("roles must not be empty");
+  }
+  if (roles.length > maxLength) {
+    throw new Error(
+      `roles must not exceed ${maxLength} items (got ${roles.length})`
+    );
+  }
+  for (const item of roles) {
+    if (typeof item !== "object" || item === null || !("role" in item)) {
+      throw new Error("each role item must have a role string");
+    }
+    validateRole(item.role, knownRoles);
+    if (item.scope !== undefined) validateScope(item.scope);
+  }
+}
+
+/**
+ * Validate role assign items (role, scope?, expiresAt?, metadata?) for bulk assign.
+ */
+export function validateRoleAssignItems(
+  roles: RoleAssignItem[],
+  knownRoles?: Set<string> | Record<string, unknown>,
+  maxLength: number = MAX_BULK_ROLES
+): void {
+  if (!Array.isArray(roles)) {
+    throw new Error("roles must be an array");
+  }
+  if (roles.length === 0) {
+    throw new Error("roles must not be empty");
+  }
+  if (roles.length > maxLength) {
+    throw new Error(
+      `roles must not exceed ${maxLength} items (got ${roles.length})`
+    );
+  }
+  for (const item of roles) {
+    if (typeof item !== "object" || item === null || !("role" in item)) {
+      throw new Error("each role item must have a role string");
+    }
+    validateRole(item.role, knownRoles);
+    if (item.scope !== undefined) validateScope(item.scope);
+    if (item.expiresAt !== undefined) validateOptionalExpiresAt(item.expiresAt);
   }
 }
 

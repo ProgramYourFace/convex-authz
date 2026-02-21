@@ -7,6 +7,8 @@ import {
   matchesPermissionPattern,
 } from "./helpers";
 
+const MAX_BULK_PERMISSIONS = 100;
+
 /**
  * Get all role assignments for a user
  */
@@ -286,6 +288,90 @@ export const checkPermission = query({
       allowed: false,
       reason: "No role or override grants this permission",
     };
+  },
+});
+
+/**
+ * Check if a user has any of the given permissions (canAny).
+ * Loads role assignments and overrides once, then evaluates each permission in order.
+ * Returns as soon as one permission is allowed; if all are denied or none granted, returns allowed: false.
+ */
+export const checkPermissions = query({
+  args: {
+    userId: v.string(),
+    permissions: v.array(v.string()),
+    scope: v.optional(
+      v.object({
+        type: v.string(),
+        id: v.string(),
+      })
+    ),
+    rolePermissions: v.record(v.string(), v.array(v.string())),
+  },
+  returns: v.object({
+    allowed: v.boolean(),
+    matchedPermission: v.optional(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    if (args.permissions.length === 0) {
+      return { allowed: false };
+    }
+    if (args.permissions.length > MAX_BULK_PERMISSIONS) {
+      throw new Error(
+        `permissions must not exceed ${MAX_BULK_PERMISSIONS} items (got ${args.permissions.length})`
+      );
+    }
+
+    const overrides = await ctx.db
+      .query("permissionOverrides")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    const validOverrides = overrides.filter((o) => !isExpired(o.expiresAt));
+
+    const roleAssignments = await ctx.db
+      .query("roleAssignments")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    const validAssignments = roleAssignments.filter((a) => {
+      if (isExpired(a.expiresAt)) return false;
+      return matchesScope(a.scope, args.scope);
+    });
+
+    for (const permission of args.permissions) {
+      let denied = false;
+      for (const override of validOverrides) {
+        if (
+          override.effect === "deny" &&
+          matchesPermissionPattern(permission, override.permission) &&
+          matchesScope(override.scope, args.scope)
+        ) {
+          denied = true;
+          break;
+        }
+      }
+      if (denied) continue;
+
+      for (const override of validOverrides) {
+        if (
+          override.effect === "allow" &&
+          matchesPermissionPattern(permission, override.permission) &&
+          matchesScope(override.scope, args.scope)
+        ) {
+          return { allowed: true, matchedPermission: permission };
+        }
+      }
+      for (const assignment of validAssignments) {
+        const rolePerms = args.rolePermissions[assignment.role];
+        if (rolePerms) {
+          for (const rolePerm of rolePerms) {
+            if (matchesPermissionPattern(permission, rolePerm)) {
+              return { allowed: true, matchedPermission: permission };
+            }
+          }
+        }
+      }
+    }
+    return { allowed: false };
   },
 });
 

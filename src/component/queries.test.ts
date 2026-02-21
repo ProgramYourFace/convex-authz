@@ -214,6 +214,101 @@ describe("queries - additional coverage", () => {
     });
   });
 
+  describe("checkPermissions (canAny)", () => {
+    it("should return allowed true when user has at least one permission", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_123",
+        role: "viewer",
+      });
+
+      const result = await t.query(api.queries.checkPermissions, {
+        userId: "user_123",
+        permissions: ["documents:delete", "documents:read", "documents:update"],
+        rolePermissions: {
+          viewer: ["documents:read"],
+        },
+      });
+
+      expect(result.allowed).toBe(true);
+      expect(result.matchedPermission).toBe("documents:read");
+    });
+
+    it("should return allowed false when user has none of the permissions", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_123",
+        role: "viewer",
+      });
+
+      const result = await t.query(api.queries.checkPermissions, {
+        userId: "user_123",
+        permissions: ["documents:delete", "documents:update"],
+        rolePermissions: {
+          viewer: ["documents:read"],
+        },
+      });
+
+      expect(result.allowed).toBe(false);
+      expect(result.matchedPermission).toBeUndefined();
+    });
+
+    it("should respect deny override", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_123",
+        role: "admin",
+      });
+      await t.mutation(api.mutations.denyPermission, {
+        userId: "user_123",
+        permission: "documents:delete",
+      });
+
+      const result = await t.query(api.queries.checkPermissions, {
+        userId: "user_123",
+        permissions: ["documents:delete", "documents:read"],
+        rolePermissions: {
+          admin: ["documents:read", "documents:delete"],
+        },
+      });
+
+      expect(result.allowed).toBe(true);
+      expect(result.matchedPermission).toBe("documents:read");
+    });
+
+    it("should return allowed false for empty permissions array", async () => {
+      const t = convexTest(schema, modules);
+
+      const result = await t.query(api.queries.checkPermissions, {
+        userId: "user_123",
+        permissions: [],
+        rolePermissions: {},
+      });
+
+      expect(result.allowed).toBe(false);
+    });
+
+    it("should throw when permissions exceed limit", async () => {
+      const t = convexTest(schema, modules);
+
+      const permissions = Array.from(
+        { length: 101 },
+        (_, i) => `documents:action${i}`
+      );
+
+      await expect(
+        t.query(api.queries.checkPermissions, {
+          userId: "user_123",
+          permissions,
+          rolePermissions: {},
+        })
+      ).rejects.toThrow(/must not exceed 100/);
+    });
+  });
+
   describe("getEffectivePermissions", () => {
     it("should combine role permissions and overrides with scope", async () => {
       const t = convexTest(schema, modules);

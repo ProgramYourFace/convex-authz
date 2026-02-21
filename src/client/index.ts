@@ -38,6 +38,11 @@ import {
   validateAttributeKey,
   validateAuditLimit,
   validateRelationArgs,
+  validatePermissions,
+  validateRoleAssignItems,
+  validateRoles,
+  type RoleAssignItem,
+  type RoleScopeItem,
 } from "./validation.js";
 
 // ============================================================================
@@ -345,6 +350,29 @@ export class Authz<
   }
 
   /**
+   * Check if user has any of the given permissions (canAny).
+   * Returns true if the user is allowed at least one of the permissions in the given scope.
+   * @param permissions - Array of permission strings (e.g. ["documents:read", "documents:update"]). Max length 100.
+   */
+  async canAny(
+    ctx: QueryCtx | ActionCtx,
+    userId: string,
+    permissions: string[],
+    scope?: Scope
+  ): Promise<boolean> {
+    validateUserId(userId);
+    validatePermissions(permissions);
+    validateScope(scope);
+    const result = await ctx.runQuery(this.component.queries.checkPermissions, {
+      userId,
+      permissions,
+      scope,
+      rolePermissions: this.buildRolePermissionsMap(),
+    });
+    return result.allowed;
+  }
+
+  /**
    * Check if user has a role
    */
   async hasRole(
@@ -445,6 +473,104 @@ export class Authz<
       role,
       scope,
       revokedBy: actorId ?? this.options.defaultActorId,
+      enableAudit: true,
+    });
+  }
+
+  /**
+   * Assign multiple roles to a user in a single transaction.
+   * @param roles - Array of { role, scope?, expiresAt?, metadata? }. Max length 100.
+   */
+  async assignRoles(
+    ctx: MutationCtx | ActionCtx,
+    userId: string,
+    roles: RoleAssignItem[],
+    actorId?: string
+  ): Promise<{ assigned: number; assignmentIds: string[] }> {
+    validateUserId(userId);
+    validateRoleAssignItems(roles, this.options.roles);
+    const assignedBy = actorId ?? this.options.defaultActorId;
+    return await ctx.runMutation(this.component.mutations.assignRoles, {
+      userId,
+      roles: roles.map((r) => ({
+        role: r.role,
+        scope: r.scope,
+        expiresAt: r.expiresAt,
+        metadata: r.metadata,
+      })),
+      assignedBy,
+      enableAudit: true,
+    });
+  }
+
+  /**
+   * Revoke multiple roles from a user in a single transaction.
+   * @param roles - Array of { role, scope? }. Max length 100.
+   */
+  async revokeRoles(
+    ctx: MutationCtx | ActionCtx,
+    userId: string,
+    roles: RoleScopeItem[],
+    actorId?: string
+  ): Promise<{ revoked: number }> {
+    validateUserId(userId);
+    validateRoles(roles, this.options.roles);
+    return await ctx.runMutation(this.component.mutations.revokeRoles, {
+      userId,
+      roles: roles.map((r) => ({ role: r.role, scope: r.scope })),
+      revokedBy: actorId ?? this.options.defaultActorId,
+      enableAudit: true,
+    });
+  }
+
+  /**
+   * Revoke all roles from a user (optionally only in a given scope).
+   * Use for bulk cleanup or partial offboarding.
+   */
+  async revokeAllRoles(
+    ctx: MutationCtx | ActionCtx,
+    userId: string,
+    scope?: Scope,
+    actorId?: string
+  ): Promise<number> {
+    validateUserId(userId);
+    validateScope(scope);
+    return await ctx.runMutation(this.component.mutations.revokeAllRoles, {
+      userId,
+      scope,
+      revokedBy: actorId ?? this.options.defaultActorId,
+      enableAudit: true,
+    });
+  }
+
+  /**
+   * Full user offboarding: remove all roles, permission overrides, and attributes for the user (optionally scoped).
+   * Also clears indexed effectiveRoles/effectivePermissions when present.
+   */
+  async offboardUser(
+    ctx: MutationCtx | ActionCtx,
+    userId: string,
+    options?: {
+      scope?: Scope;
+      actorId?: string;
+      removeAttributes?: boolean;
+      removeOverrides?: boolean;
+    }
+  ): Promise<{
+    rolesRevoked: number;
+    overridesRemoved: number;
+    attributesRemoved: number;
+    effectiveRolesRemoved: number;
+    effectivePermissionsRemoved: number;
+  }> {
+    validateUserId(userId);
+    if (options?.scope) validateScope(options.scope);
+    return await ctx.runMutation(this.component.mutations.offboardUser, {
+      userId,
+      scope: options?.scope,
+      revokedBy: options?.actorId ?? this.options.defaultActorId,
+      removeAttributes: options?.removeAttributes,
+      removeOverrides: options?.removeOverrides,
       enableAudit: true,
     });
   }
@@ -684,6 +810,27 @@ export class IndexedAuthz<
   }
 
   /**
+   * Check if user has any of the given permissions (canAny) - batch O(1) lookups.
+   * @param permissions - Array of permission strings. Max length 100.
+   */
+  async canAny(
+    ctx: QueryCtx | ActionCtx,
+    userId: string,
+    permissions: string[],
+    scope?: Scope
+  ): Promise<boolean> {
+    validateUserId(userId);
+    validatePermissions(permissions);
+    validateScope(scope);
+    return await ctx.runQuery(this.component.indexed.checkPermissionsFast, {
+      userId,
+      permissions,
+      objectType: scope?.type,
+      objectId: scope?.id,
+    });
+  }
+
+  /**
    * Check role - O(1) indexed lookup
    */
   async hasRole(
@@ -810,6 +957,130 @@ export class IndexedAuthz<
   }
 
   /**
+   * Assign multiple roles and pre-compute permissions in a single transaction.
+   * @param roles - Array of { role, scope?, expiresAt?, metadata? }. Max length 100.
+   */
+  async assignRoles(
+    ctx: MutationCtx | ActionCtx,
+    userId: string,
+    roles: RoleAssignItem[],
+    actorId?: string
+  ): Promise<{ assigned: number; assignmentIds: string[] }> {
+    validateUserId(userId);
+    validateRoleAssignItems(roles, this.options.roles);
+    const rolesMap = this.options.roles as unknown as Record<
+      string,
+      Record<string, string[]>
+    >;
+    const rolePermissionsMap: Record<string, string[]> = {};
+    for (const roleName of Object.keys(rolesMap)) {
+      rolePermissionsMap[roleName] = flattenRolePermissions(rolesMap, roleName);
+    }
+    return await ctx.runMutation(
+      this.component.indexed.assignRolesWithCompute,
+      {
+        userId,
+        roles: roles.map((r) => ({
+          role: r.role,
+          scope: r.scope,
+          expiresAt: r.expiresAt,
+          metadata: r.metadata,
+        })),
+        rolePermissionsMap,
+        assignedBy: actorId ?? this.options.defaultActorId,
+      }
+    );
+  }
+
+  /**
+   * Revoke multiple roles and recompute permissions in a single transaction.
+   * @param roles - Array of { role, scope? }. Max length 100.
+   */
+  async revokeRoles(
+    ctx: MutationCtx | ActionCtx,
+    userId: string,
+    roles: RoleScopeItem[],
+    _actorId?: string
+  ): Promise<{ revoked: number }> {
+    validateUserId(userId);
+    validateRoles(roles, this.options.roles);
+    const rolesMap = this.options.roles as unknown as Record<
+      string,
+      Record<string, string[]>
+    >;
+    const rolePermissionsMap: Record<string, string[]> = {};
+    for (const roleName of Object.keys(rolesMap)) {
+      rolePermissionsMap[roleName] = flattenRolePermissions(rolesMap, roleName);
+    }
+    return await ctx.runMutation(
+      this.component.indexed.revokeRolesWithCompute,
+      {
+        userId,
+        roles: roles.map((r) => ({ role: r.role, scope: r.scope })),
+        rolePermissionsMap,
+      }
+    );
+  }
+
+  /**
+   * Revoke all roles from a user (optionally only in a given scope).
+   * Clears both roleAssignments and indexed effectiveRoles/effectivePermissions.
+   */
+  async revokeAllRoles(
+    ctx: MutationCtx | ActionCtx,
+    userId: string,
+    scope?: Scope,
+    actorId?: string
+  ): Promise<number> {
+    validateUserId(userId);
+    validateScope(scope);
+    const result = await ctx.runMutation(
+      this.component.mutations.offboardUser,
+      {
+        userId,
+        scope,
+        revokedBy: actorId ?? this.options.defaultActorId,
+        removeAttributes: false,
+        removeOverrides: false,
+        enableAudit: true,
+      }
+    );
+    return result.rolesRevoked + result.effectiveRolesRemoved;
+  }
+
+  /**
+   * Full user offboarding: remove all roles, overrides, and attributes (optionally scoped).
+   * Clears indexed effectiveRoles/effectivePermissions.
+   */
+  async offboardUser(
+    ctx: MutationCtx | ActionCtx,
+    userId: string,
+    options?: {
+      scope?: Scope;
+      actorId?: string;
+      removeAttributes?: boolean;
+      removeOverrides?: boolean;
+    }
+  ): Promise<{
+    rolesRevoked: number;
+    overridesRemoved: number;
+    attributesRemoved: number;
+    effectiveRolesRemoved: number;
+    effectivePermissionsRemoved: number;
+  }> {
+    validateUserId(userId);
+    if (options?.scope) validateScope(options.scope);
+    return await ctx.runMutation(this.component.mutations.offboardUser, {
+      userId,
+      scope: options?.scope,
+      revokedBy: options?.actorId ?? this.options.defaultActorId,
+      removeAttributes: options?.removeAttributes,
+      removeOverrides: options?.removeOverrides,
+      enableAudit: true,
+    });
+  }
+
+  /**
    * Grant a direct permission
    */
   async grantPermission(
@@ -920,3 +1191,4 @@ export class IndexedAuthz<
 // ============================================================================
 
 export type { ComponentApi } from "../component/_generated/component.js";
+export type { RoleAssignItem, RoleScopeItem } from "./validation.js";

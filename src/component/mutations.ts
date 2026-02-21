@@ -2,6 +2,14 @@ import { v, ConvexError } from "convex/values";
 import { mutation } from "./_generated/server";
 import { isExpired } from "./helpers";
 
+const scopeValidator = v.optional(
+  v.object({
+    type: v.string(),
+    id: v.string(),
+  })
+);
+const MAX_BULK_ROLES = 100;
+
 /**
  * Assign a role to a user
  */
@@ -186,6 +194,283 @@ export const revokeAllRoles = mutation({
     }
 
     return revokedCount;
+  },
+});
+
+/**
+ * Assign multiple roles to a user in a single transaction.
+ */
+export const assignRoles = mutation({
+  args: {
+    userId: v.string(),
+    roles: v.array(
+      v.object({
+        role: v.string(),
+        scope: scopeValidator,
+        expiresAt: v.optional(v.number()),
+        metadata: v.optional(v.any()),
+      })
+    ),
+    assignedBy: v.optional(v.string()),
+    enableAudit: v.optional(v.boolean()),
+  },
+  returns: v.object({
+    assigned: v.number(),
+    assignmentIds: v.array(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    if (args.roles.length === 0) {
+      return { assigned: 0, assignmentIds: [] };
+    }
+    if (args.roles.length > MAX_BULK_ROLES) {
+      throw new Error(
+        `roles must not exceed ${MAX_BULK_ROLES} items (got ${args.roles.length})`
+      );
+    }
+
+    const assignmentIds: string[] = [];
+    let assigned = 0;
+
+    for (const item of args.roles) {
+      const existingAssignments = await ctx.db
+        .query("roleAssignments")
+        .withIndex("by_user_and_role", (q) =>
+          q.eq("userId", args.userId).eq("role", item.role)
+        )
+        .collect();
+
+      const duplicate = existingAssignments.find((a) => {
+        if (isExpired(a.expiresAt)) return false;
+        if (!a.scope && !item.scope) return true;
+        if (!a.scope || !item.scope) return false;
+        return a.scope.type === item.scope.type && a.scope.id === item.scope.id;
+      });
+
+      if (duplicate) {
+        throw new ConvexError({
+          code: "ALREADY_EXISTS",
+          message: `User already has role "${item.role}" with the same scope`,
+        });
+      }
+
+      const assignmentId = await ctx.db.insert("roleAssignments", {
+        userId: args.userId,
+        role: item.role,
+        scope: item.scope,
+        metadata: item.metadata,
+        assignedBy: args.assignedBy,
+        expiresAt: item.expiresAt,
+      });
+      assignmentIds.push(assignmentId as string);
+      assigned++;
+
+      if (args.enableAudit) {
+        await ctx.db.insert("auditLog", {
+          timestamp: Date.now(),
+          action: "role_assigned",
+          userId: args.userId,
+          actorId: args.assignedBy,
+          details: { role: item.role, scope: item.scope },
+        });
+      }
+    }
+
+    return { assigned, assignmentIds };
+  },
+});
+
+/**
+ * Revoke multiple roles from a user in a single transaction.
+ */
+export const revokeRoles = mutation({
+  args: {
+    userId: v.string(),
+    roles: v.array(
+      v.object({
+        role: v.string(),
+        scope: scopeValidator,
+      })
+    ),
+    revokedBy: v.optional(v.string()),
+    enableAudit: v.optional(v.boolean()),
+  },
+  returns: v.object({
+    revoked: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    if (args.roles.length === 0) {
+      return { revoked: 0 };
+    }
+    if (args.roles.length > MAX_BULK_ROLES) {
+      throw new Error(
+        `roles must not exceed ${MAX_BULK_ROLES} items (got ${args.roles.length})`
+      );
+    }
+
+    let revoked = 0;
+
+    for (const item of args.roles) {
+      const assignments = await ctx.db
+        .query("roleAssignments")
+        .withIndex("by_user_and_role", (q) =>
+          q.eq("userId", args.userId).eq("role", item.role)
+        )
+        .collect();
+
+      const toRevoke = assignments.find((a) => {
+        if (!a.scope && !item.scope) return true;
+        if (!a.scope || !item.scope) return false;
+        return a.scope.type === item.scope.type && a.scope.id === item.scope.id;
+      });
+
+      if (!toRevoke) continue;
+
+      await ctx.db.delete(toRevoke._id);
+      revoked++;
+
+      if (args.enableAudit) {
+        await ctx.db.insert("auditLog", {
+          timestamp: Date.now(),
+          action: "role_revoked",
+          userId: args.userId,
+          actorId: args.revokedBy,
+          details: { role: item.role, scope: item.scope },
+        });
+      }
+    }
+
+    return { revoked };
+  },
+});
+
+/**
+ * Full user offboarding: remove all roles, optional permission overrides and attributes,
+ * and clear indexed effectiveRoles/effectivePermissions for this user (and optional scope).
+ */
+export const offboardUser = mutation({
+  args: {
+    userId: v.string(),
+    scope: scopeValidator,
+    revokedBy: v.optional(v.string()),
+    removeAttributes: v.optional(v.boolean()),
+    removeOverrides: v.optional(v.boolean()),
+    enableAudit: v.optional(v.boolean()),
+  },
+  returns: v.object({
+    rolesRevoked: v.number(),
+    overridesRemoved: v.number(),
+    attributesRemoved: v.number(),
+    effectiveRolesRemoved: v.number(),
+    effectivePermissionsRemoved: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const removeAttrs = args.removeAttributes !== false;
+    const removeOverridesFlag = args.removeOverrides !== false;
+    const scopeKey = args.scope
+      ? `${args.scope.type}:${args.scope.id}`
+      : null;
+
+    let rolesRevoked = 0;
+    let overridesRemoved = 0;
+    let attributesRemoved = 0;
+    let effectiveRolesRemoved = 0;
+    let effectivePermissionsRemoved = 0;
+
+    // 1. Role assignments (source table)
+    const assignments = await ctx.db
+      .query("roleAssignments")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    for (const a of assignments) {
+      if (args.scope) {
+        if (!a.scope) continue;
+        if (a.scope.type !== args.scope.type || a.scope.id !== args.scope.id)
+          continue;
+      }
+      await ctx.db.delete(a._id);
+      rolesRevoked++;
+      if (args.enableAudit) {
+        await ctx.db.insert("auditLog", {
+          timestamp: Date.now(),
+          action: "role_revoked",
+          userId: args.userId,
+          actorId: args.revokedBy,
+          details: { role: a.role, scope: a.scope },
+        });
+      }
+    }
+
+    // 2. Permission overrides
+    if (removeOverridesFlag) {
+      const overrides = await ctx.db
+        .query("permissionOverrides")
+        .withIndex("by_user", (q) => q.eq("userId", args.userId))
+        .collect();
+
+      for (const o of overrides) {
+        if (args.scope) {
+          if (!o.scope) continue;
+          if (o.scope.type !== args.scope.type || o.scope.id !== args.scope.id)
+            continue;
+        }
+        await ctx.db.delete(o._id);
+        overridesRemoved++;
+      }
+    }
+
+    // 3. User attributes (no scope)
+    if (removeAttrs) {
+      const attributes = await ctx.db
+        .query("userAttributes")
+        .withIndex("by_user", (q) => q.eq("userId", args.userId))
+        .collect();
+
+      for (const a of attributes) {
+        await ctx.db.delete(a._id);
+        attributesRemoved++;
+        if (args.enableAudit) {
+          await ctx.db.insert("auditLog", {
+            timestamp: Date.now(),
+            action: "attribute_removed",
+            userId: args.userId,
+            actorId: args.revokedBy,
+            details: { attribute: { key: a.key } },
+          });
+        }
+      }
+    }
+
+    // 4. Indexed tables: effectiveRoles, effectivePermissions
+    const effectiveRoles = await ctx.db
+      .query("effectiveRoles")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    for (const r of effectiveRoles) {
+      if (scopeKey !== null && r.scopeKey !== scopeKey) continue;
+      await ctx.db.delete(r._id);
+      effectiveRolesRemoved++;
+    }
+
+    const effectivePerms = await ctx.db
+      .query("effectivePermissions")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    for (const p of effectivePerms) {
+      if (scopeKey !== null && p.scopeKey !== scopeKey) continue;
+      await ctx.db.delete(p._id);
+      effectivePermissionsRemoved++;
+    }
+
+    return {
+      rolesRevoked,
+      overridesRemoved,
+      attributesRemoved,
+      effectiveRolesRemoved,
+      effectivePermissionsRemoved,
+    };
   },
 });
 

@@ -194,6 +194,7 @@ describe("Authz class", () => {
     return {
       queries: {
         checkPermission: "queries.checkPermission",
+        checkPermissions: "queries.checkPermissions",
         hasRole: "queries.hasRole",
         getUserRoles: "queries.getUserRoles",
         getEffectivePermissions: "queries.getEffectivePermissions",
@@ -202,7 +203,11 @@ describe("Authz class", () => {
       },
       mutations: {
         assignRole: "mutations.assignRole",
+        assignRoles: "mutations.assignRoles",
         revokeRole: "mutations.revokeRole",
+        revokeRoles: "mutations.revokeRoles",
+        revokeAllRoles: "mutations.revokeAllRoles",
+        offboardUser: "mutations.offboardUser",
         setAttribute: "mutations.setAttribute",
         removeAttribute: "mutations.removeAttribute",
         grantPermission: "mutations.grantPermission",
@@ -461,6 +466,44 @@ describe("Authz class", () => {
     });
   });
 
+  describe("canAny", () => {
+    it("should call runQuery with checkPermissions and return result.allowed", async () => {
+      const component = createMockComponent();
+      const authz = new Authz(component, { permissions, roles });
+
+      const ctx = {
+        runQuery: vi.fn().mockResolvedValue({
+          allowed: true,
+          matchedPermission: "documents:read",
+        }),
+      };
+
+      const result = await authz.canAny(ctx, "user_123", [
+        "documents:delete",
+        "documents:read",
+      ]);
+      expect(result).toBe(true);
+      expect(ctx.runQuery).toHaveBeenCalledWith(
+        component.queries.checkPermissions,
+        expect.objectContaining({
+          userId: "user_123",
+          permissions: ["documents:delete", "documents:read"],
+          scope: undefined,
+        })
+      );
+    });
+
+    it("should reject empty permissions array", async () => {
+      const component = createMockComponent();
+      const authz = new Authz(component, { permissions, roles });
+      const ctx = { runQuery: vi.fn() };
+
+      await expect(
+        authz.canAny(ctx, "user_123", [])
+      ).rejects.toThrow("permissions must not be empty");
+    });
+  });
+
   describe("assignRole", () => {
     it("should assign role via runMutation", async () => {
       const component = createMockComponent();
@@ -604,6 +647,114 @@ describe("Authz class", () => {
         component.mutations.revokeRole,
         expect.objectContaining({
           revokedBy: "default_actor",
+        })
+      );
+    });
+  });
+
+  describe("assignRoles", () => {
+    it("should call runMutation with assignRoles", async () => {
+      const component = createMockComponent();
+      const authz = new Authz(component, { permissions, roles });
+
+      const ctx = {
+        runMutation: vi.fn().mockResolvedValue({
+          assigned: 2,
+          assignmentIds: ["id1", "id2"],
+        }),
+      };
+
+      const result = await authz.assignRoles(ctx, "user_123", [
+        { role: "admin" },
+        { role: "viewer", scope: { type: "team", id: "t1" } },
+      ]);
+      expect(result.assigned).toBe(2);
+      expect(result.assignmentIds).toEqual(["id1", "id2"]);
+      expect(ctx.runMutation).toHaveBeenCalledWith(
+        component.mutations.assignRoles,
+        expect.objectContaining({
+          userId: "user_123",
+          roles: [
+            { role: "admin", scope: undefined, expiresAt: undefined, metadata: undefined },
+            { role: "viewer", scope: { type: "team", id: "t1" }, expiresAt: undefined, metadata: undefined },
+          ],
+        })
+      );
+    });
+  });
+
+  describe("revokeRoles", () => {
+    it("should call runMutation with revokeRoles", async () => {
+      const component = createMockComponent();
+      const authz = new Authz(component, { permissions, roles });
+
+      const ctx = {
+        runMutation: vi.fn().mockResolvedValue({ revoked: 2 }),
+      };
+
+      const result = await authz.revokeRoles(ctx, "user_123", [
+        { role: "admin" },
+        { role: "viewer" },
+      ]);
+      expect(result.revoked).toBe(2);
+      expect(ctx.runMutation).toHaveBeenCalledWith(
+        component.mutations.revokeRoles,
+        expect.objectContaining({
+          userId: "user_123",
+          roles: [{ role: "admin", scope: undefined }, { role: "viewer", scope: undefined }],
+        })
+      );
+    });
+  });
+
+  describe("revokeAllRoles", () => {
+    it("should call runMutation with revokeAllRoles", async () => {
+      const component = createMockComponent();
+      const authz = new Authz(component, { permissions, roles });
+
+      const ctx = {
+        runMutation: vi.fn().mockResolvedValue(3),
+      };
+
+      const result = await authz.revokeAllRoles(ctx, "user_123");
+      expect(result).toBe(3);
+      expect(ctx.runMutation).toHaveBeenCalledWith(
+        component.mutations.revokeAllRoles,
+        expect.objectContaining({
+          userId: "user_123",
+          scope: undefined,
+        })
+      );
+    });
+  });
+
+  describe("offboardUser", () => {
+    it("should call runMutation with offboardUser", async () => {
+      const component = createMockComponent();
+      const authz = new Authz(component, { permissions, roles });
+
+      const ctx = {
+        runMutation: vi.fn().mockResolvedValue({
+          rolesRevoked: 1,
+          overridesRemoved: 0,
+          attributesRemoved: 2,
+          effectiveRolesRemoved: 1,
+          effectivePermissionsRemoved: 3,
+        }),
+      };
+
+      const result = await authz.offboardUser(ctx, "user_123", {
+        scope: { type: "team", id: "t1" },
+        actorId: "actor_1",
+      });
+      expect(result.rolesRevoked).toBe(1);
+      expect(ctx.runMutation).toHaveBeenCalledWith(
+        component.mutations.offboardUser,
+        expect.objectContaining({
+          userId: "user_123",
+          scope: { type: "team", id: "t1" },
+          revokedBy: "actor_1",
+          enableAudit: true,
         })
       );
     });
@@ -974,6 +1125,7 @@ describe("input validation", () => {
     return {
       queries: {
         checkPermission: "queries.checkPermission",
+        checkPermissions: "queries.checkPermissions",
         hasRole: "queries.hasRole",
         getUserRoles: "queries.getUserRoles",
         getEffectivePermissions: "queries.getEffectivePermissions",
@@ -982,7 +1134,11 @@ describe("input validation", () => {
       },
       mutations: {
         assignRole: "mutations.assignRole",
+        assignRoles: "mutations.assignRoles",
         revokeRole: "mutations.revokeRole",
+        revokeRoles: "mutations.revokeRoles",
+        revokeAllRoles: "mutations.revokeAllRoles",
+        offboardUser: "mutations.offboardUser",
         setAttribute: "mutations.setAttribute",
         removeAttribute: "mutations.removeAttribute",
         grantPermission: "mutations.grantPermission",
@@ -995,16 +1151,22 @@ describe("input validation", () => {
     return {
       indexed: {
         checkPermissionFast: "indexed.checkPermissionFast",
+        checkPermissionsFast: "indexed.checkPermissionsFast",
         hasRoleFast: "indexed.hasRoleFast",
         hasRelationFast: "indexed.hasRelationFast",
         getUserPermissionsFast: "indexed.getUserPermissionsFast",
         getUserRolesFast: "indexed.getUserRolesFast",
         assignRoleWithCompute: "indexed.assignRoleWithCompute",
+        assignRolesWithCompute: "indexed.assignRolesWithCompute",
         revokeRoleWithCompute: "indexed.revokeRoleWithCompute",
+        revokeRolesWithCompute: "indexed.revokeRolesWithCompute",
         grantPermissionDirect: "indexed.grantPermissionDirect",
         denyPermissionDirect: "indexed.denyPermissionDirect",
         addRelationWithCompute: "indexed.addRelationWithCompute",
         removeRelationWithCompute: "indexed.removeRelationWithCompute",
+      },
+      mutations: {
+        offboardUser: "mutations.offboardUser",
       },
     } as unknown as ComponentApi;
   }
@@ -1202,16 +1364,22 @@ describe("IndexedAuthz class", () => {
     return {
       indexed: {
         checkPermissionFast: "indexed.checkPermissionFast",
+        checkPermissionsFast: "indexed.checkPermissionsFast",
         hasRoleFast: "indexed.hasRoleFast",
         hasRelationFast: "indexed.hasRelationFast",
         getUserPermissionsFast: "indexed.getUserPermissionsFast",
         getUserRolesFast: "indexed.getUserRolesFast",
         assignRoleWithCompute: "indexed.assignRoleWithCompute",
+        assignRolesWithCompute: "indexed.assignRolesWithCompute",
         revokeRoleWithCompute: "indexed.revokeRoleWithCompute",
+        revokeRolesWithCompute: "indexed.revokeRolesWithCompute",
         grantPermissionDirect: "indexed.grantPermissionDirect",
         denyPermissionDirect: "indexed.denyPermissionDirect",
         addRelationWithCompute: "indexed.addRelationWithCompute",
         removeRelationWithCompute: "indexed.removeRelationWithCompute",
+      },
+      mutations: {
+        offboardUser: "mutations.offboardUser",
       },
     } as unknown as ComponentApi;
   }
@@ -1588,6 +1756,138 @@ describe("IndexedAuthz class", () => {
         component.indexed.revokeRoleWithCompute,
         expect.objectContaining({
           scope: { type: "team", id: "team_1" },
+        })
+      );
+    });
+  });
+
+  describe("canAny", () => {
+    it("should call runQuery with checkPermissionsFast", async () => {
+      const component = createMockComponent();
+      const authz = new IndexedAuthz(component, { permissions, roles });
+
+      const ctx = {
+        runQuery: vi.fn().mockResolvedValue(true),
+      };
+
+      const result = await authz.canAny(ctx, "user_123", [
+        "documents:read",
+        "documents:delete",
+      ]);
+      expect(result).toBe(true);
+      expect(ctx.runQuery).toHaveBeenCalledWith(
+        component.indexed.checkPermissionsFast,
+        expect.objectContaining({
+          userId: "user_123",
+          permissions: ["documents:read", "documents:delete"],
+        })
+      );
+    });
+  });
+
+  describe("assignRoles", () => {
+    it("should call runMutation with assignRolesWithCompute", async () => {
+      const component = createMockComponent();
+      const authz = new IndexedAuthz(component, { permissions, roles });
+
+      const ctx = {
+        runMutation: vi.fn().mockResolvedValue({
+          assigned: 2,
+          assignmentIds: ["id1", "id2"],
+        }),
+      };
+
+      const result = await authz.assignRoles(ctx, "user_123", [
+        { role: "admin" },
+        { role: "viewer" },
+      ]);
+      expect(result.assigned).toBe(2);
+      expect(ctx.runMutation).toHaveBeenCalledWith(
+        component.indexed.assignRolesWithCompute,
+        expect.objectContaining({
+          userId: "user_123",
+          roles: expect.any(Array),
+          rolePermissionsMap: expect.any(Object),
+        })
+      );
+    });
+  });
+
+  describe("revokeRoles", () => {
+    it("should call runMutation with revokeRolesWithCompute", async () => {
+      const component = createMockComponent();
+      const authz = new IndexedAuthz(component, { permissions, roles });
+
+      const ctx = {
+        runMutation: vi.fn().mockResolvedValue({ revoked: 2 }),
+      };
+
+      const result = await authz.revokeRoles(ctx, "user_123", [
+        { role: "admin" },
+        { role: "viewer" },
+      ]);
+      expect(result.revoked).toBe(2);
+      expect(ctx.runMutation).toHaveBeenCalledWith(
+        component.indexed.revokeRolesWithCompute,
+        expect.objectContaining({
+          userId: "user_123",
+          roles: expect.any(Array),
+          rolePermissionsMap: expect.any(Object),
+        })
+      );
+    });
+  });
+
+  describe("revokeAllRoles", () => {
+    it("should call offboardUser with removeAttributes and removeOverrides false", async () => {
+      const component = createMockComponent();
+      const authz = new IndexedAuthz(component, { permissions, roles });
+
+      const ctx = {
+        runMutation: vi.fn().mockResolvedValue({
+          rolesRevoked: 0,
+          effectiveRolesRemoved: 2,
+          overridesRemoved: 0,
+          attributesRemoved: 0,
+          effectivePermissionsRemoved: 5,
+        }),
+      };
+
+      const result = await authz.revokeAllRoles(ctx, "user_123");
+      expect(result).toBe(2);
+      expect(ctx.runMutation).toHaveBeenCalledWith(
+        component.mutations.offboardUser,
+        expect.objectContaining({
+          userId: "user_123",
+          removeAttributes: false,
+          removeOverrides: false,
+        })
+      );
+    });
+  });
+
+  describe("offboardUser", () => {
+    it("should call runMutation with offboardUser", async () => {
+      const component = createMockComponent();
+      const authz = new IndexedAuthz(component, { permissions, roles });
+
+      const ctx = {
+        runMutation: vi.fn().mockResolvedValue({
+          rolesRevoked: 1,
+          overridesRemoved: 0,
+          attributesRemoved: 0,
+          effectiveRolesRemoved: 1,
+          effectivePermissionsRemoved: 3,
+        }),
+      };
+
+      const result = await authz.offboardUser(ctx, "user_123");
+      expect(result.rolesRevoked).toBe(1);
+      expect(ctx.runMutation).toHaveBeenCalledWith(
+        component.mutations.offboardUser,
+        expect.objectContaining({
+          userId: "user_123",
+          enableAudit: true,
         })
       );
     });
