@@ -776,6 +776,44 @@ describe("mutations - additional coverage", () => {
     });
   });
 
+  describe("runScheduledCleanup", () => {
+    it("should purge expired role assignments and overrides and return counts", async () => {
+      const t = convexTest(schema, modules);
+      const pastTime = Date.now() - 10000;
+
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_1",
+        role: "admin",
+        expiresAt: pastTime,
+      });
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_2",
+        role: "editor",
+      });
+      await t.mutation(api.mutations.grantPermission, {
+        userId: "user_1",
+        permission: "documents:read",
+        expiresAt: pastTime,
+      });
+
+      const result = await t.mutation(api.mutations.runScheduledCleanup, {});
+
+      expect(result.expiredRoleAssignments).toBe(1);
+      expect(result.expiredOverrides).toBe(1);
+      expect(result.expiredEffectiveRoles).toBeGreaterThanOrEqual(0);
+      expect(result.expiredEffectivePermissions).toBeGreaterThanOrEqual(0);
+    });
+
+    it("should return all zeros when nothing is expired", async () => {
+      const t = convexTest(schema, modules);
+      const result = await t.mutation(api.mutations.runScheduledCleanup, {});
+      expect(result.expiredRoleAssignments).toBe(0);
+      expect(result.expiredOverrides).toBe(0);
+      expect(result.expiredEffectiveRoles).toBe(0);
+      expect(result.expiredEffectivePermissions).toBe(0);
+    });
+  });
+
   describe("assignRole - expired duplicate handling", () => {
     it("should allow assigning role if previous assignment expired", async () => {
       const t = convexTest(schema, modules);

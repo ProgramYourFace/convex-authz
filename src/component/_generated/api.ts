@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as cronSetup from "../cronSetup.js";
 import type * as helpers from "../helpers.js";
 import type * as indexed from "../indexed.js";
 import type * as mutations from "../mutations.js";
@@ -22,6 +23,7 @@ import type {
 import { anyApi, componentsGeneric } from "convex/server";
 
 const fullApi: ApiFromModules<{
+  cronSetup: typeof cronSetup;
   helpers: typeof helpers;
   indexed: typeof indexed;
   mutations: typeof mutations;
@@ -55,4 +57,6 @@ export const internal: FilterApi<
   FunctionReference<any, "internal">
 > = anyApi as any;
 
-export const components = componentsGeneric() as unknown as {};
+export const components = componentsGeneric() as unknown as {
+  crons: import("@convex-dev/crons/_generated/component.js").ComponentApi<"crons">;
+};

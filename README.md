@@ -913,9 +913,25 @@ The audit log is invaluable for:
 - Debugging access issues
 - Security incident investigation
 
-### 6. Use Authz as a Global Singleton
+### 6. Cleanup of Expired Data (Scheduled via Component)
 
-Authz is a **global component** — install it once and share a single client instance across your entire app. Do not create multiple `Authz` instances.
+Expired role assignments and permission overrides (and their indexed rows) are purged by a **scheduled cleanup job** that you enable once—no need to add `convex/crons.ts` yourself. The component embeds [@convex-dev/crons](https://www.convex.dev/components/crons); run this **once** after installing the component to register the daily job:
+
+```bash
+npx convex run authz/cronSetup:ensureCleanupCronRegistered
+```
+
+Or from an init script that runs on deploy (e.g. `convex/init.ts` invoked via `convex dev --run init`):
+
+```typescript
+await ctx.runMutation(components.authz.cronSetup.ensureCleanupCronRegistered, {});
+```
+
+The job runs every 24 hours and cleans `roleAssignments`, `permissionOverrides`, `effectiveRoles`, and `effectivePermissions`. Optional: you can instead define the cleanup in your app's `convex/crons.ts` or run `components.authz.mutations.runScheduledCleanup` manually.
+
+### 7. Use Authz as a Global Singleton
+
+Authz is a **global component** — install it once and share a single client instance across your entire app. Do not create multiple `Authz` instances per app.
 
 ```
 convex/

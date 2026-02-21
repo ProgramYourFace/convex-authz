@@ -23,6 +23,15 @@ import type { FunctionReference } from "convex/server";
  */
 export type ComponentApi<Name extends string | undefined = string | undefined> =
   {
+    cronSetup: {
+      ensureCleanupCronRegistered: FunctionReference<
+        "mutation",
+        "internal",
+        {},
+        null,
+        Name
+      >;
+    };
     indexed: {
       addRelationWithCompute: FunctionReference<
         "mutation",
@@ -299,6 +308,18 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           userId: string;
         },
         boolean,
+        Name
+      >;
+      runScheduledCleanup: FunctionReference<
+        "mutation",
+        "internal",
+        {},
+        {
+          expiredEffectivePermissions: number;
+          expiredEffectiveRoles: number;
+          expiredOverrides: number;
+          expiredRoleAssignments: number;
+        },
         Name
       >;
       setAttribute: FunctionReference<

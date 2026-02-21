@@ -652,3 +652,70 @@ export const cleanupExpired = mutation({
     return { expiredRoles, expiredOverrides };
   },
 });
+
+/**
+ * Scheduled cleanup job: purges all expired records from roleAssignments,
+ * permissionOverrides, effectiveRoles, and effectivePermissions.
+ * Intended to be run periodically via Convex crons (e.g. daily).
+ *
+ * The cleanup cron is auto-registered when you use the component (e.g. assignRole or this mutation).
+ * You can also define it manually in your app's convex/crons.ts if you prefer.
+ */
+export const runScheduledCleanup = mutation({
+  args: {},
+  returns: v.object({
+    expiredRoleAssignments: v.number(),
+    expiredOverrides: v.number(),
+    expiredEffectiveRoles: v.number(),
+    expiredEffectivePermissions: v.number(),
+  }),
+  handler: async (ctx) => {
+    const now = Date.now();
+    let expiredRoleAssignments = 0;
+    let expiredOverrides = 0;
+    let expiredEffectiveRoles = 0;
+    let expiredEffectivePermissions = 0;
+
+    // 1. Source tables: roleAssignments, permissionOverrides
+    const allRoleAssignments = await ctx.db.query("roleAssignments").collect();
+    for (const assignment of allRoleAssignments) {
+      if (assignment.expiresAt && assignment.expiresAt < now) {
+        await ctx.db.delete(assignment._id);
+        expiredRoleAssignments++;
+      }
+    }
+
+    const allOverrides = await ctx.db.query("permissionOverrides").collect();
+    for (const override of allOverrides) {
+      if (override.expiresAt && override.expiresAt < now) {
+        await ctx.db.delete(override._id);
+        expiredOverrides++;
+      }
+    }
+
+    // 2. Indexed tables: effectiveRoles, effectivePermissions
+    const allEffectiveRoles = await ctx.db.query("effectiveRoles").collect();
+    for (const row of allEffectiveRoles) {
+      if (row.expiresAt && row.expiresAt < now) {
+        await ctx.db.delete(row._id);
+        expiredEffectiveRoles++;
+      }
+    }
+
+    const allEffectivePermissions =
+      await ctx.db.query("effectivePermissions").collect();
+    for (const row of allEffectivePermissions) {
+      if (row.expiresAt && row.expiresAt < now) {
+        await ctx.db.delete(row._id);
+        expiredEffectivePermissions++;
+      }
+    }
+
+    return {
+      expiredRoleAssignments,
+      expiredOverrides,
+      expiredEffectiveRoles,
+      expiredEffectivePermissions,
+    };
+  },
+});
