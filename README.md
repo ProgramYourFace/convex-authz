@@ -128,6 +128,107 @@ export const updateDocument = mutation({
 
 ---
 
+## React integration
+
+The package provides React hooks and a `PermissionGate` component so your UI can check permissions and roles reactively. Your app must expose Convex queries that wrap the Authz component (e.g. `checkPermission`, `getUserRoles`). The hooks call those queries via Convex’s `useQuery`, so permission and role changes stay up to date without polling.
+
+### 1. Expose Convex queries
+
+Define queries that delegate to your authz client, for example:
+
+```typescript
+// convex/app.ts (or similar)
+import { query } from "./_generated/server";
+import { v } from "convex/values";
+import { authz } from "./authz";
+
+export const checkPermission = query({
+  args: {
+    userId: v.string(),
+    permission: v.string(),
+    scope: v.optional(v.object({ type: v.string(), id: v.string() })),
+  },
+  handler: async (ctx, args) => {
+    return authz.can(ctx, args.userId, args.permission, args.scope);
+  },
+});
+
+export const getUserRoles = query({
+  args: {
+    userId: v.string(),
+    scope: v.optional(v.object({ type: v.string(), id: v.string() })),
+  },
+  handler: async (ctx, args) => {
+    return authz.getUserRoles(ctx, args.userId, args.scope);
+  },
+});
+```
+
+### 2. Wrap your app with AuthzProvider
+
+Pass your Convex query refs (and optionally a default user id) to the provider:
+
+```tsx
+import { AuthzProvider } from "@djpanda/convex-authz/react";
+import { api } from "./convex/_generated/api";
+
+<AuthzProvider
+  queryRefs={{
+    checkPermission: api.app.checkPermission,
+    getUserRoles: api.app.getUserRoles,
+  }}
+  defaultUserId={currentUserId}  // optional; hooks can pass userId in options
+>
+  <App />
+</AuthzProvider>
+```
+
+### 3. Use hooks and PermissionGate
+
+- **useCanUser(permission, options?)** — Returns `{ allowed, isLoading, error }`. Options: `{ userId?, scope? }`. Uses `defaultUserId` from the provider when `userId` is omitted.
+- **useUserRoles(options?)** — Returns `{ roles, isLoading, error }`. Options: `{ userId?, scope? }`.
+- **useRequirePermission(permission, options?)** — Throws when the user is not allowed (use an error boundary to show a denied state).
+- **PermissionGate** — Renders `children` when allowed, `fallback` when denied, and `loadingFallback` (optional) while loading.
+
+```tsx
+import {
+  useCanUser,
+  useUserRoles,
+  useRequirePermission,
+  PermissionGate,
+} from "@djpanda/convex-authz/react";
+
+function DocumentList() {
+  const { allowed, isLoading } = useCanUser("documents:read");
+
+  if (isLoading) return <Spinner />;
+  if (!allowed) return <p>You cannot view documents.</p>;
+  return <div>{/* list */}</div>;
+}
+
+function AdminPanel() {
+  useRequirePermission("settings:manage"); // throws if denied; wrap in error boundary
+  return <div>Admin content</div>;
+}
+
+function EditButton({ docId }: { docId: string }) {
+  return (
+    <PermissionGate
+      permission="documents:update"
+      scope={{ type: "document", id: docId }}
+      fallback={<span>No access</span>}
+      loadingFallback={<span>Checking…</span>}
+    >
+      <button>Edit</button>
+    </PermissionGate>
+  );
+}
+```
+
+Convex’s reactivity ensures that when permissions or roles change on the backend, the hooks and `PermissionGate` re-run and the UI updates automatically.
+
+---
+
 ## Architecture
 
 ```

@@ -80,6 +80,7 @@
     "react": "^18.3.1 || ^19.0.0"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.0.0",
     "@convex-dev/eslint-plugin": "^1.1.1",
     "@edge-runtime/vm": "^5.0.0",
     "@eslint/eslintrc": "^3.3.1",
@@ -102,6 +103,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "jsdom": "^25.0.0",
     "lucide-react": "^0.555.0",
     "npm-run-all2": "8.0.4",
     "path-exists-cli": "2.0.0",

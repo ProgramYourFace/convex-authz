@@ -221,6 +221,39 @@ export const checkPermission = query({
   },
 });
 
+/** Used by @djpanda/convex-authz React hooks (useCanUser). Accepts string userId and optional scope. */
+export const checkPermissionScoped = query({
+  args: {
+    userId: v.string(),
+    permission: v.string(),
+    scope: v.optional(v.object({ type: v.string(), id: v.string() })),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    return await authz.can(ctx, args.userId, args.permission, args.scope);
+  },
+});
+
+/** Used by @djpanda/convex-authz React hooks (useUserRoles). Returns roles array. */
+export const getRoles = query({
+  args: {
+    userId: v.string(),
+    scope: v.optional(v.object({ type: v.string(), id: v.string() })),
+  },
+  returns: v.array(
+    v.object({
+      _id: v.string(),
+      role: v.string(),
+      scope: v.optional(v.object({ type: v.string(), id: v.string() })),
+      expiresAt: v.optional(v.number()),
+      metadata: v.optional(v.any()),
+    })
+  ),
+  handler: async (ctx, args) => {
+    return await authz.getUserRoles(ctx, args.userId, args.scope);
+  },
+});
+
 export const checkAllPermissions = query({
   args: {
     userId: v.id("users"),

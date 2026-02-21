@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
+import { useCanUser, PermissionGate } from "@djpanda/convex-authz/react";
 import {
   Card,
   CardContent,
@@ -40,6 +41,17 @@ export function PermissionTesterPage() {
   const userWithRoles = useQuery(
     api.app.getUserWithRoles,
     selectedUserId ? { userId: selectedUserId } : "skip"
+  );
+
+  const scope = selectedOrgId
+    ? { type: "org" as const, id: String(selectedOrgId) }
+    : undefined;
+  const { allowed: canReadDocuments, isLoading: canReadLoading } = useCanUser(
+    "documents:read",
+    {
+      userId: selectedUserId ? String(selectedUserId) : undefined,
+      scope,
+    }
   );
 
   const permissions = useQuery(
@@ -166,6 +178,47 @@ export function PermissionTesterPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Quick check via useCanUser hook */}
+      {selectedUserId && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Hook: useCanUser</CardTitle>
+            <CardDescription>
+              documents:read for selected user
+              {scope ? ` in ${orgs.find((o) => o._id === selectedOrgId)?.name}` : " (global)"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex items-center gap-4">
+            {canReadLoading ? (
+              <span className="text-muted-foreground">Checking…</span>
+            ) : canReadDocuments ? (
+              <Badge variant="success">
+                <CheckCircle2 className="size-3 mr-1" />
+                Allowed
+              </Badge>
+            ) : (
+              <Badge variant="destructive">
+                <XCircle className="size-3 mr-1" />
+                Denied
+              </Badge>
+            )}
+            <PermissionGate
+              permission="documents:update"
+              userId={String(selectedUserId)}
+              scope={scope}
+              fallback={
+                <Badge variant="outline">No edit access</Badge>
+              }
+              loadingFallback={
+                <span className="text-muted-foreground text-sm">Checking…</span>
+              }
+            >
+              <Badge variant="secondary">Can edit documents</Badge>
+            </PermissionGate>
+          </CardContent>
+        </Card>
+      )}
 
       {/* User Info */}
       {userWithRoles && (
