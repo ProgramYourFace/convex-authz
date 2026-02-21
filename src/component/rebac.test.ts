@@ -422,6 +422,65 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
       expect(result.allowed).toBe(false);
     });
 
+    it("should enforce maxDepth strictly: depth-3 path fails with maxDepth 2, succeeds with maxDepth 3", async () => {
+      const t = convexTest(schema, modules);
+
+      // Chain: user -> team -> project -> account (need depth 3 to reach account)
+      await t.mutation(api.rebac.addRelation, {
+        subjectType: "user",
+        subjectId: "alice",
+        relation: "member",
+        objectType: "team",
+        objectId: "sales",
+      });
+      await t.mutation(api.rebac.addRelation, {
+        subjectType: "team",
+        subjectId: "sales",
+        relation: "owner",
+        objectType: "project",
+        objectId: "alpha",
+      });
+      await t.mutation(api.rebac.addRelation, {
+        subjectType: "project",
+        subjectId: "alpha",
+        relation: "parent",
+        objectType: "account",
+        objectId: "acme",
+      });
+
+      const rules = {
+        "account:viewer": [
+          { through: "project", via: "parent", inherit: "viewer" },
+        ],
+        "project:viewer": [
+          { through: "team", via: "owner", inherit: "member" },
+        ],
+      };
+
+      const withDepth2 = await t.query(api.rebac.checkRelationWithTraversal, {
+        subjectType: "user",
+        subjectId: "alice",
+        relation: "viewer",
+        objectType: "account",
+        objectId: "acme",
+        traversalRules: rules,
+        maxDepth: 2,
+      });
+      expect(withDepth2.allowed).toBe(false);
+      expect(withDepth2.reason).toBe("No relationship path found");
+
+      const withDepth3 = await t.query(api.rebac.checkRelationWithTraversal, {
+        subjectType: "user",
+        subjectId: "alice",
+        relation: "viewer",
+        objectType: "account",
+        objectId: "acme",
+        traversalRules: rules,
+        maxDepth: 3,
+      });
+      expect(withDepth3.allowed).toBe(true);
+    });
+
     it("should return 'No relationship path found' when traversal finds nothing", async () => {
       const t = convexTest(schema, modules);
 
@@ -591,8 +650,8 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         maxDepth: 10,
       });
 
-      // Should not loop forever, and should return false
       expect(result.allowed).toBe(false);
+      expect(result.reason).toBe("No relationship path found");
     });
   });
 });

@@ -215,6 +215,12 @@ export const getObjectRelations = query({
  * - Account contains Deal
  * - Therefore: User can view Deal
  *
+ * **maxDepth** (default 5): Maximum traversal depth; nodes at depth >= maxDepth are not expanded.
+ *
+ * **Cycle detection**: A visited set keyed by `objectType:objectId:relation` ensures each
+ * (object, relation) pair is processed at most once, so cycles do not cause infinite
+ * loops or stack overflow.
+ *
  * @param rules - Traversal rules like:
  *   { "deal:viewer": [{ through: "account", via: "parent", inherit: "viewer" }] }
  */
@@ -302,6 +308,7 @@ export const checkRelationWithTraversal = query({
 
       if (current.depth >= maxDepth) continue;
 
+      // Skip already-visited (objectType, objectId, relation) to prevent cycles from causing infinite traversal
       const visitKey = `${current.objectType}:${current.objectId}:${current.relation}`;
       if (visited.has(visitKey)) continue;
       visited.add(visitKey);
@@ -357,7 +364,8 @@ export const checkRelationWithTraversal = query({
         );
 
         for (const parent of parents) {
-          // The parent becomes the new object to check
+          const nextVisitKey = `${parent.subjectType}:${parent.subjectId}:${rule.inherit}`;
+          if (visited.has(nextVisitKey)) continue;
           queue.push({
             objectType: parent.subjectType,
             objectId: parent.subjectId,

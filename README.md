@@ -374,6 +374,8 @@ const result = await ctx.runQuery(components.authz.rebac.checkRelationWithTraver
 // }
 ```
 
+Traversal uses a **maxDepth** limit (default 5) and tracks visited `(objectType, objectId, relation)` nodes so that circular relationships do not cause infinite loops.
+
 ### CRM Example
 
 ```typescript
