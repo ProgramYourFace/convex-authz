@@ -404,25 +404,45 @@ const attributes = await authz.getUserAttributes(ctx, userId);
 
 ### Defining Policies
 
+The `condition` function may return either a `boolean` or a `Promise<boolean>`, so you can use async logic (e.g. querying the database or calling external APIs).
+
 ```typescript
-import { definePolicies } from "@djpanda/convex-authz";
+import { definePolicies, evaluatePolicyCondition } from "@djpanda/convex-authz";
 
 const policies = definePolicies({
   "documents:update": {
-    // User can update if they own the document
+    // User can update if they own the document (sync)
     condition: (ctx) => ctx.resource?.ownerId === ctx.subject.userId,
     message: "Only document owners can update",
   },
   "reports:view": {
-    // Only engineering department with clearance >= 3
+    // Only engineering department with clearance >= 3 (sync)
     condition: (ctx) => 
       ctx.subject.attributes.department === "engineering" &&
       (ctx.subject.attributes.clearanceLevel as number) >= 3,
     message: "Requires engineering department with clearance level 3+",
   },
+  "documents:delete": {
+    // Async: e.g. check external service or fetch extra data
+    condition: async (ctx) => {
+      const doc = await getDocument(ctx.resource?.id);
+      return doc != null && doc.ownerId === ctx.subject.userId;
+    },
+    message: "Only document owners can delete",
+  },
 });
 
 const authz = new Authz(components.authz, { permissions, roles, policies });
+```
+
+When you **evaluate** a policy (e.g. after RBAC allows), always **await** the condition so both sync and async policies work. Use `evaluatePolicyCondition` to normalize to a Promise:
+
+```typescript
+const policy = policies["documents:update"];
+if (policy) {
+  const allowed = await evaluatePolicyCondition(policy.condition, policyCtx);
+  if (!allowed) throw new Error(policy.message ?? "Permission denied");
+}
 ```
 
 ### Policy Context
@@ -444,6 +464,8 @@ interface PolicyContext {
   action: string; // The permission being checked
 }
 ```
+
+**API note:** Existing sync conditions remain valid. There is no breaking change; only the return type is widened to allow `Promise<boolean>` for async policies.
 
 ---
 

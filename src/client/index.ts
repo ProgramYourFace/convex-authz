@@ -66,11 +66,12 @@ export type RoleDefinition<P extends PermissionDefinition> = Record<
 
 /**
  * Policy definition for ABAC
+ * Condition may be sync or async (e.g. for DB or API checks).
  */
 export type PolicyDefinition = Record<
   string,
   {
-    condition: (ctx: PolicyContext) => boolean;
+    condition: (ctx: PolicyContext) => boolean | Promise<boolean>;
     message?: string;
   }
 >;
@@ -222,6 +223,16 @@ export function definePolicies<Policy extends PolicyDefinition>(
   policies: Policy
 ): Policy {
   return policies;
+}
+
+/**
+ * Evaluate a policy condition (sync or async). Always returns a Promise so callers can await uniformly.
+ */
+export function evaluatePolicyCondition(
+  condition: (ctx: PolicyContext) => boolean | Promise<boolean>,
+  ctx: PolicyContext
+): Promise<boolean> {
+  return Promise.resolve(condition(ctx));
 }
 
 /**

@@ -3,10 +3,12 @@ import {
   definePermissions,
   defineRoles,
   definePolicies,
+  evaluatePolicyCondition,
   flattenRolePermissions,
   Authz,
   IndexedAuthz,
 } from "./index.js";
+import type { PolicyContext } from "./index.js";
 import type { ComponentApi } from "../component/_generated/component.js";
 
 // ============================================================================
@@ -137,6 +139,52 @@ describe("client helpers", () => {
       });
 
       expect(policies.isAdmin.message).toBe("Must be admin");
+    });
+
+    it("should accept async policy condition", () => {
+      const policies = definePolicies({
+        asyncCheck: {
+          condition: async () => true,
+          message: "Async policy",
+        },
+      });
+      expect(policies.asyncCheck.message).toBe("Async policy");
+    });
+
+    it("should accept policy condition that returns Promise", () => {
+      const policies = definePolicies({
+        promiseCheck: {
+          condition: () => Promise.resolve(false),
+          message: "Promise-returning policy",
+        },
+      });
+      expect(policies.promiseCheck.message).toBe("Promise-returning policy");
+    });
+  });
+
+  describe("evaluatePolicyCondition", () => {
+    const baseCtx: PolicyContext = {
+      subject: { userId: "u1", roles: [], attributes: {} },
+      action: "test",
+    };
+
+    it("should return resolved value for sync condition", async () => {
+      const result = evaluatePolicyCondition(() => true, baseCtx);
+      expect(result).toBeInstanceOf(Promise);
+      expect(await result).toBe(true);
+      expect(await evaluatePolicyCondition(() => false, baseCtx)).toBe(false);
+    });
+
+    it("should return resolved value for async condition", async () => {
+      const result = evaluatePolicyCondition(
+        () => Promise.resolve(false),
+        baseCtx
+      );
+      expect(result).toBeInstanceOf(Promise);
+      expect(await result).toBe(false);
+      expect(
+        await evaluatePolicyCondition(async () => true, baseCtx)
+      ).toBe(true);
     });
   });
 
