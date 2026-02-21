@@ -814,6 +814,75 @@ describe("mutations - additional coverage", () => {
     });
   });
 
+  describe("runAuditRetentionCleanup", () => {
+    it("should return zeros when no policy args and no env", async () => {
+      const t = convexTest(schema, modules);
+      const result = await t.mutation(api.mutations.runAuditRetentionCleanup, {});
+      expect(result.deletedByAge).toBe(0);
+      expect(result.deletedByCount).toBe(0);
+    });
+
+    it("should not delete when maxAgeDays is 0", async () => {
+      const t = convexTest(schema, modules);
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_1",
+        role: "admin",
+        enableAudit: true,
+      });
+      const result = await t.mutation(api.mutations.runAuditRetentionCleanup, {
+        maxAgeDays: 0,
+      });
+      expect(result.deletedByAge).toBe(0);
+    });
+
+    it("should not delete when maxEntries is 0", async () => {
+      const t = convexTest(schema, modules);
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_1",
+        role: "admin",
+        enableAudit: true,
+      });
+      const result = await t.mutation(api.mutations.runAuditRetentionCleanup, {
+        maxEntries: 0,
+      });
+      expect(result.deletedByCount).toBe(0);
+    });
+
+    it("should cap entries when maxEntries is set", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_1",
+        role: "admin",
+        enableAudit: true,
+      });
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_1",
+        role: "editor",
+        enableAudit: true,
+      });
+      await t.mutation(api.mutations.grantPermission, {
+        userId: "user_1",
+        permission: "documents:read",
+        enableAudit: true,
+      });
+
+      const before = await t.query(api.queries.getAuditLog, {});
+      const initialCount = Array.isArray(before) ? before.length : before.page.length;
+      expect(initialCount).toBeGreaterThanOrEqual(2);
+
+      const result = await t.mutation(api.mutations.runAuditRetentionCleanup, {
+        maxEntries: 1,
+      });
+
+      expect(result.deletedByCount).toBeGreaterThanOrEqual(1);
+
+      const after = await t.query(api.queries.getAuditLog, {});
+      const afterCount = Array.isArray(after) ? after.length : after.page.length;
+      expect(afterCount).toBe(1);
+    });
+  });
+
   describe("assignRole - expired duplicate handling", () => {
     it("should allow assigning role if previous assignment expired", async () => {
       const t = convexTest(schema, modules);

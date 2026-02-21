@@ -577,6 +577,8 @@ The following actions are automatically logged:
 
 ### Querying the Audit Log
 
+Without pagination options, `getAuditLog` returns a simple array (optional `limit`, default 100):
+
 ```typescript
 // Get all logs for a user
 const logs = await authz.getAuditLog(ctx, {
@@ -589,6 +591,23 @@ const roleChanges = await authz.getAuditLog(ctx, {
   action: "role_assigned",
   limit: 100,
 });
+```
+
+For scalable browsing, use **cursor-based pagination** by passing `numItems` (and optionally `cursor` for the next page). The return value is then `{ page, isDone, continueCursor }`:
+
+```typescript
+// First page
+const result = await authz.getAuditLog(ctx, { numItems: 50 });
+if (!Array.isArray(result)) {
+  console.log(result.page);
+  if (!result.isDone) {
+    // Next page
+    const next = await authz.getAuditLog(ctx, {
+      numItems: 50,
+      cursor: result.continueCursor,
+    });
+  }
+}
 ```
 
 ### Log Entry Structure
@@ -696,7 +715,7 @@ class Authz<P, R, Policy> {
   denyPermission(ctx, userId, permission, scope?, reason?, expiresAt?, actorId?): Promise<string>
   
   // Audit
-  getAuditLog(ctx, options?): Promise<AuditEntry[]>
+  getAuditLog(ctx, options?): Promise<AuditEntry[] | { page: AuditEntry[]; isDone: boolean; continueCursor: string }>
 }
 ```
 
@@ -739,6 +758,7 @@ All public methods on `Authz` and `IndexedAuthz` validate their arguments before
 | `expiresAt` | When provided, must be a finite number (timestamp) | `"expiresAt must be a finite number"` |
 | Attribute `key` | Non-empty string | `"Attribute key must be a non-empty string"` |
 | `getAuditLog` `limit` | When provided, positive integer 1–1000 | `"limit must be a positive integer when provided"` |
+| `getAuditLog` `numItems` | When provided (pagination), positive integer 1–1000 | same as `limit` |
 | Relation args | `subjectType`, `subjectId`, `relation`, `objectType`, `objectId` must be non-empty strings | `"subjectType must be a non-empty string"` |
 
 Optional parameters are only validated when present (e.g. omitting `scope` is valid; passing `scope: { type: "", id: "x" }` throws).
@@ -928,6 +948,17 @@ await ctx.runMutation(components.authz.cronSetup.ensureCleanupCronRegistered, {}
 ```
 
 The job runs every 24 hours and cleans `roleAssignments`, `permissionOverrides`, `effectiveRoles`, and `effectivePermissions`. Optional: you can instead define the cleanup in your app's `convex/crons.ts` or run `components.authz.mutations.runScheduledCleanup` manually.
+
+### 6.1. Audit log retention
+
+To avoid unbounded growth of the audit log (compliance and cost), the same cron registration also schedules a **daily audit retention job**. Configure it with Convex environment variables (Dashboard or CLI):
+
+| Variable | Description |
+|----------|-------------|
+| `AUDIT_RETENTION_DAYS` | Delete entries older than this many days (e.g. `90`). Omit or `0` = do not prune by age. |
+| `AUDIT_RETENTION_MAX_ENTRIES` | Cap total entries by deleting oldest until count ≤ this value (e.g. `100000`). Omit or `0` = do not prune by count. |
+
+Set at least one to enable retention. The job runs every 24 hours (same `ensureCleanupCronRegistered` flow). You can also run `components.authz.mutations.runAuditRetentionCleanup` manually with optional args `{ maxAgeDays?, maxEntries? }` to override env for that run.
 
 ### 7. Use Authz as a Global Singleton
 

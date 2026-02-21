@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { query } from "./_generated/server";
 import {
   isExpired,
@@ -403,37 +404,60 @@ export const getUsersWithRole = query({
   },
 });
 
+const auditLogActionValidator = v.union(
+  v.literal("permission_check"),
+  v.literal("role_assigned"),
+  v.literal("role_revoked"),
+  v.literal("permission_granted"),
+  v.literal("permission_denied"),
+  v.literal("attribute_set"),
+  v.literal("attribute_removed")
+);
+
+const auditEntryShape = v.object({
+  _id: v.string(),
+  timestamp: v.number(),
+  action: v.string(),
+  userId: v.string(),
+  actorId: v.optional(v.string()),
+  details: v.any(),
+});
+
 /**
- * Get recent audit log entries
+ * Get recent audit log entries.
+ * With paginationOpts returns { page, isDone, continueCursor }; otherwise returns an array (limit default 100).
  */
 export const getAuditLog = query({
   args: {
     userId: v.optional(v.string()),
-    action: v.optional(
-      v.union(
-        v.literal("permission_check"),
-        v.literal("role_assigned"),
-        v.literal("role_revoked"),
-        v.literal("permission_granted"),
-        v.literal("permission_denied"),
-        v.literal("attribute_set"),
-        v.literal("attribute_removed")
-      )
-    ),
+    action: v.optional(auditLogActionValidator),
     limit: v.optional(v.number()),
+    paginationOpts: v.optional(paginationOptsValidator),
   },
-  returns: v.array(
+  returns: v.union(
+    v.array(auditEntryShape),
     v.object({
-      _id: v.string(),
-      timestamp: v.number(),
-      action: v.string(),
-      userId: v.string(),
-      actorId: v.optional(v.string()),
-      details: v.any(),
+      page: v.array(auditEntryShape),
+      isDone: v.boolean(),
+      continueCursor: v.string(),
     })
   ),
   handler: async (ctx, args) => {
-    const limit = args.limit ?? 100;
+    const mapEntry = (e: {
+      _id: unknown;
+      timestamp: number;
+      action: string;
+      userId: string;
+      actorId?: string;
+      details: unknown;
+    }) => ({
+      _id: e._id as string,
+      timestamp: e.timestamp,
+      action: e.action,
+      userId: e.userId,
+      actorId: e.actorId,
+      details: e.details,
+    });
 
     let dbQuery;
     if (args.userId !== undefined) {
@@ -448,15 +472,19 @@ export const getAuditLog = query({
       dbQuery = ctx.db.query("auditLog").withIndex("by_timestamp");
     }
 
-    const entries = await dbQuery.order("desc").take(limit);
+    const ordered = dbQuery.order("desc");
 
-    return entries.map((e) => ({
-      _id: e._id as string,
-      timestamp: e.timestamp,
-      action: e.action,
-      userId: e.userId,
-      actorId: e.actorId,
-      details: e.details,
-    }));
+    if (args.paginationOpts !== undefined) {
+      const result = await ordered.paginate(args.paginationOpts);
+      return {
+        page: result.page.map(mapEntry),
+        isDone: result.isDone,
+        continueCursor: result.continueCursor,
+      };
+    }
+
+    const limit = args.limit ?? 100;
+    const entries = await ordered.take(limit);
+    return entries.map(mapEntry);
   },
 });

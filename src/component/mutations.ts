@@ -719,3 +719,75 @@ export const runScheduledCleanup = mutation({
     };
   },
 });
+
+const BATCH_SIZE = 500;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function getOptionalEnvNumber(name: string): number | undefined {
+  try {
+    const env = typeof process !== "undefined" ? process.env : undefined;
+    const raw = env && (env[name] as string | undefined);
+    if (raw === undefined || raw === "") return undefined;
+    const n = parseInt(String(raw), 10);
+    return Number.isFinite(n) ? n : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Audit log retention cleanup: deletes entries by max age and/or caps total entries.
+ * Config from args (when provided) or env AUDIT_RETENTION_DAYS and AUDIT_RETENTION_MAX_ENTRIES.
+ * Omit or 0 = skip that policy. Intended to be run daily via cron (e.g. authz-audit-retention).
+ */
+export const runAuditRetentionCleanup = mutation({
+  args: v.object({
+    maxAgeDays: v.optional(v.number()),
+    maxEntries: v.optional(v.number()),
+  }),
+  returns: v.object({
+    deletedByAge: v.number(),
+    deletedByCount: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const maxAgeDays: number | undefined =
+      args.maxAgeDays ?? getOptionalEnvNumber("AUDIT_RETENTION_DAYS");
+    const maxEntries: number | undefined =
+      args.maxEntries ?? getOptionalEnvNumber("AUDIT_RETENTION_MAX_ENTRIES");
+
+    let deletedByAge = 0;
+    let deletedByCount = 0;
+
+    if (maxAgeDays !== undefined && maxAgeDays > 0) {
+      const cutoff = Date.now() - maxAgeDays * MS_PER_DAY;
+      while (true) {
+        const batch = await ctx.db
+          .query("auditLog")
+          .withIndex("by_timestamp", (q) => q.lt("timestamp", cutoff))
+          .order("asc")
+          .take(BATCH_SIZE);
+        if (batch.length === 0) break;
+        for (const doc of batch) {
+          await ctx.db.delete(doc._id);
+          deletedByAge++;
+        }
+      }
+    }
+
+    if (maxEntries !== undefined && maxEntries > 0) {
+      const all = await ctx.db.query("auditLog").collect();
+      const count = all.length;
+      if (count > maxEntries) {
+        const toDelete = count - maxEntries;
+        const byTimestamp = all.sort((a, b) => a.timestamp - b.timestamp);
+        const toRemove = byTimestamp.slice(0, toDelete);
+        for (const doc of toRemove) {
+          await ctx.db.delete(doc._id);
+          deletedByCount++;
+        }
+      }
+    }
+
+    return { deletedByAge, deletedByCount };
+  },
+});

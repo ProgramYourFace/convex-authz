@@ -310,6 +310,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         boolean,
         Name
       >;
+      runAuditRetentionCleanup: FunctionReference<
+        "mutation",
+        "internal",
+        { maxAgeDays?: number; maxEntries?: number },
+        { deletedByAge: number; deletedByCount: number },
+        Name
+      >;
       runScheduledCleanup: FunctionReference<
         "mutation",
         "internal",
@@ -367,16 +374,36 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             | "attribute_set"
             | "attribute_removed";
           limit?: number;
+          paginationOpts?: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
           userId?: string;
         },
-        Array<{
-          _id: string;
-          action: string;
-          actorId?: string;
-          details: any;
-          timestamp: number;
-          userId: string;
-        }>,
+        | Array<{
+            _id: string;
+            action: string;
+            actorId?: string;
+            details: any;
+            timestamp: number;
+            userId: string;
+          }>
+        | {
+            continueCursor: string;
+            isDone: boolean;
+            page: Array<{
+              _id: string;
+              action: string;
+              actorId?: string;
+              details: any;
+              timestamp: number;
+              userId: string;
+            }>;
+          },
         Name
       >;
       getEffectivePermissions: FunctionReference<

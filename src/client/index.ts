@@ -544,7 +544,9 @@ export class Authz<
   }
 
   /**
-   * Get audit log entries
+   * Get audit log entries.
+   * Pass cursor and numItems for cursor-based pagination (returns { page, isDone, continueCursor }).
+   * Omit both for legacy behavior (returns array, optional limit).
    */
   async getAuditLog(
     ctx: QueryCtx | ActionCtx,
@@ -552,10 +554,47 @@ export class Authz<
       userId?: string;
       action?: string;
       limit?: number;
+      /** Page size when using pagination (1–1000). Use with cursor for next page. */
+      numItems?: number;
+      /** Cursor from previous page to fetch next page. */
+      cursor?: string | null;
     }
-  ) {
+  ): Promise<
+    | Array<{
+        _id: string;
+        timestamp: number;
+        action: string;
+        userId: string;
+        actorId?: string;
+        details: unknown;
+      }>
+    | {
+        page: Array<{
+          _id: string;
+          timestamp: number;
+          action: string;
+          userId: string;
+          actorId?: string;
+          details: unknown;
+        }>;
+        isDone: boolean;
+        continueCursor: string;
+      }
+  > {
     if (options?.userId !== undefined) validateUserId(options.userId);
     if (options?.limit !== undefined) validateAuditLimit(options.limit);
+    if (options?.numItems !== undefined) validateAuditLimit(options.numItems);
+
+    const usePagination =
+      options?.numItems !== undefined || options?.cursor !== undefined;
+
+    const paginationOpts = usePagination
+      ? {
+          numItems: options?.numItems ?? 100,
+          cursor: options?.cursor ?? null,
+        }
+      : undefined;
+
     return await ctx.runQuery(this.component.queries.getAuditLog, {
       userId: options?.userId,
       action: options?.action as
@@ -568,6 +607,7 @@ export class Authz<
         | "attribute_removed"
         | undefined,
       limit: options?.limit,
+      paginationOpts,
     });
   }
 }

@@ -430,6 +430,70 @@ describe("queries - additional coverage", () => {
 
       expect(logs).toHaveLength(1);
     });
+
+    it("should return paginated result when paginationOpts provided", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_123",
+        role: "admin",
+        enableAudit: true,
+      });
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_123",
+        role: "editor",
+        enableAudit: true,
+      });
+      await t.mutation(api.mutations.grantPermission, {
+        userId: "user_123",
+        permission: "documents:read",
+        enableAudit: true,
+      });
+
+      const result = await t.query(api.queries.getAuditLog, {
+        paginationOpts: { numItems: 2, cursor: null },
+      });
+
+      expect(result).toHaveProperty("page");
+      expect(result).toHaveProperty("isDone");
+      expect(result).toHaveProperty("continueCursor");
+      if ("page" in result) {
+        expect(Array.isArray(result.page)).toBe(true);
+        expect(result.page.length).toBeLessThanOrEqual(2);
+        if (result.page.length === 2 && !result.isDone) {
+          const next = await t.query(api.queries.getAuditLog, {
+            paginationOpts: {
+              numItems: 2,
+              cursor: result.continueCursor,
+            },
+          });
+          expect(next).toHaveProperty("page");
+          if ("page" in next) expect(next.page.length).toBeLessThanOrEqual(2);
+        }
+      }
+    });
+
+    it("should support pagination with userId filter", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_paginated",
+        role: "admin",
+        enableAudit: true,
+      });
+
+      const result = await t.query(api.queries.getAuditLog, {
+        userId: "user_paginated",
+        paginationOpts: { numItems: 10, cursor: null },
+      });
+
+      expect(result).toHaveProperty("page");
+      if ("page" in result) {
+        expect(result.page.every((e) => e.userId === "user_paginated")).toBe(
+          true
+        );
+      }
+    });
   });
 
   describe("hasRole - branch coverage", () => {

@@ -865,7 +865,56 @@ describe("Authz class", () => {
       expect(result).toEqual([]);
       expect(ctx.runQuery).toHaveBeenCalledWith(
         component.queries.getAuditLog,
-        { userId: undefined, action: undefined, limit: undefined }
+        expect.objectContaining({
+          userId: undefined,
+          action: undefined,
+          limit: undefined,
+        })
+      );
+    });
+
+    it("should request pagination when numItems provided", async () => {
+      const component = createMockComponent();
+      const authz = new Authz(component, { permissions, roles });
+
+      const paginatedResponse = {
+        page: [{ _id: "1", timestamp: 1, action: "role_assigned", userId: "u", details: {} }],
+        isDone: true,
+        continueCursor: "cursor1",
+      };
+
+      const ctx = {
+        runQuery: vi.fn().mockResolvedValue(paginatedResponse),
+      };
+
+      const result = await authz.getAuditLog(ctx, { numItems: 50 });
+      expect(result).toEqual(paginatedResponse);
+      expect(ctx.runQuery).toHaveBeenCalledWith(
+        component.queries.getAuditLog,
+        expect.objectContaining({
+          paginationOpts: { numItems: 50, cursor: null },
+        })
+      );
+    });
+
+    it("should request next page when cursor provided", async () => {
+      const component = createMockComponent();
+      const authz = new Authz(component, { permissions, roles });
+
+      const ctx = {
+        runQuery: vi.fn().mockResolvedValue({
+          page: [],
+          isDone: true,
+          continueCursor: "next",
+        }),
+      };
+
+      await authz.getAuditLog(ctx, { cursor: "prevCursor", numItems: 100 });
+      expect(ctx.runQuery).toHaveBeenCalledWith(
+        component.queries.getAuditLog,
+        expect.objectContaining({
+          paginationOpts: { numItems: 100, cursor: "prevCursor" },
+        })
       );
     });
 

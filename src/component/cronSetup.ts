@@ -9,14 +9,16 @@ import { mutation } from "./_generated/server";
 import { api, components } from "./_generated/api";
 import { Crons } from "@convex-dev/crons";
 
-const CRON_NAME = "authz-cleanup-expired";
+const CRON_NAME_EXPIRED = "authz-cleanup-expired";
+const CRON_NAME_AUDIT_RETENTION = "authz-audit-retention";
 const INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
- * Idempotently register the scheduled cleanup cron with the crons component.
+ * Idempotently register the scheduled cleanup crons with the crons component.
+ * Registers (1) expired roles/overrides cleanup and (2) audit log retention.
  * Safe to call on every deploy or from any mutation; only registers if not already present.
- * When the authz component is used (e.g. assignRole, runScheduledCleanup), schedule this
- * once so the cron is auto-set without the app defining crons.ts.
+ * When the authz component is used (e.g. assignRole, runScheduledCleanup), schedule these
+ * once so the crons are auto-set without the app defining crons.ts.
  * No-ops when the crons component is not available (e.g. in convex-test without registering crons).
  */
 export const ensureCleanupCronRegistered = mutation({
@@ -25,14 +27,28 @@ export const ensureCleanupCronRegistered = mutation({
   handler: async (ctx) => {
     try {
       const crons = new Crons(components.crons);
-      const existing = await crons.get(ctx, { name: CRON_NAME });
-      if (existing === null) {
+
+      const existingExpired = await crons.get(ctx, { name: CRON_NAME_EXPIRED });
+      if (existingExpired === null) {
         await crons.register(
           ctx,
           { kind: "interval", ms: INTERVAL_MS },
           api.mutations.runScheduledCleanup,
           {},
-          CRON_NAME
+          CRON_NAME_EXPIRED
+        );
+      }
+
+      const existingAudit = await crons.get(ctx, {
+        name: CRON_NAME_AUDIT_RETENTION,
+      });
+      if (existingAudit === null) {
+        await crons.register(
+          ctx,
+          { kind: "interval", ms: INTERVAL_MS },
+          api.mutations.runAuditRetentionCleanup,
+          {},
+          CRON_NAME_AUDIT_RETENTION
         );
       }
     } catch (err) {
