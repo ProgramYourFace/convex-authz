@@ -214,6 +214,132 @@ describe("queries - additional coverage", () => {
     });
   });
 
+  describe("checkPermission - wildcard and pattern matching", () => {
+    it("should allow when override is resource wildcard (documents:*)", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.mutations.grantPermission, {
+        userId: "user_123",
+        permission: "documents:*",
+      });
+
+      const readResult = await t.query(api.queries.checkPermission, {
+        userId: "user_123",
+        permission: "documents:read",
+        rolePermissions: {},
+      });
+      expect(readResult.allowed).toBe(true);
+
+      const deleteResult = await t.query(api.queries.checkPermission, {
+        userId: "user_123",
+        permission: "documents:delete",
+        rolePermissions: {},
+      });
+      expect(deleteResult.allowed).toBe(true);
+
+      const otherResult = await t.query(api.queries.checkPermission, {
+        userId: "user_123",
+        permission: "settings:read",
+        rolePermissions: {},
+      });
+      expect(otherResult.allowed).toBe(false);
+    });
+
+    it("should allow when override is action wildcard (*:read)", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.mutations.grantPermission, {
+        userId: "user_123",
+        permission: "*:read",
+      });
+
+      const docRead = await t.query(api.queries.checkPermission, {
+        userId: "user_123",
+        permission: "documents:read",
+        rolePermissions: {},
+      });
+      expect(docRead.allowed).toBe(true);
+
+      const settingsRead = await t.query(api.queries.checkPermission, {
+        userId: "user_123",
+        permission: "settings:read",
+        rolePermissions: {},
+      });
+      expect(settingsRead.allowed).toBe(true);
+
+      const docWrite = await t.query(api.queries.checkPermission, {
+        userId: "user_123",
+        permission: "documents:write",
+        rolePermissions: {},
+      });
+      expect(docWrite.allowed).toBe(false);
+    });
+
+    it("should allow when override is full wildcard (*)", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.mutations.grantPermission, {
+        userId: "user_123",
+        permission: "*",
+      });
+
+      const result = await t.query(api.queries.checkPermission, {
+        userId: "user_123",
+        permission: "documents:read",
+        rolePermissions: {},
+      });
+      expect(result.allowed).toBe(true);
+
+      const anyResult = await t.query(api.queries.checkPermission, {
+        userId: "user_123",
+        permission: "any:action",
+        rolePermissions: {},
+      });
+      expect(anyResult.allowed).toBe(true);
+    });
+
+    it("should allow when role has wildcard permission (documents:*)", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_123",
+        role: "poweruser",
+      });
+
+      const result = await t.query(api.queries.checkPermission, {
+        userId: "user_123",
+        permission: "documents:delete",
+        rolePermissions: {
+          poweruser: ["documents:*"],
+        },
+      });
+      expect(result.allowed).toBe(true);
+    });
+
+    it("should deny when deny override uses wildcard (documents:*)", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_123",
+        role: "admin",
+      });
+      await t.mutation(api.mutations.denyPermission, {
+        userId: "user_123",
+        permission: "documents:*",
+      });
+
+      const result = await t.query(api.queries.checkPermission, {
+        userId: "user_123",
+        permission: "documents:read",
+        rolePermissions: {
+          admin: ["documents:read", "documents:delete"],
+        },
+      });
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toMatch(/denied|deny/i);
+    });
+  });
+
   describe("checkPermissions (canAny)", () => {
     it("should return allowed true when user has at least one permission", async () => {
       const t = convexTest(schema, modules);

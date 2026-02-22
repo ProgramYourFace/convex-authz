@@ -342,6 +342,45 @@ const isTeamAdmin = await authz.hasRole(ctx, userId, "admin", {
 });
 ```
 
+### Wildcard and pattern-matching permissions
+
+Permission checks and overrides support **wildcard patterns** so you can grant or deny whole families of permissions in one go.
+
+**Pattern format:** `resource:action`. Either `resource` or `action` (or both) may be `*`:
+
+| Pattern       | Meaning                         | Example matches                |
+|---------------|---------------------------------|--------------------------------|
+| `*`           | All permissions                 | `documents:read`, `settings:manage` |
+| `documents:*` | All actions on `documents`      | `documents:read`, `documents:update` |
+| `*:read`      | Read on any resource            | `documents:read`, `settings:read`   |
+| `*:*`         | All permissions (same as `*`)   | any `resource:action`         |
+
+**Checking:** When you call `can(ctx, userId, "documents:read")` or `require(ctx, userId, "documents:read")`, the backend treats any stored role or override that *matches* that permission as granting it. So if the user has a role with `documents:*` or an override `*:read`, they are allowed for `documents:read`.
+
+**Allocation:** You can pass a pattern into `grantPermission` and `denyPermission`:
+
+```typescript
+// Grant all document actions
+await authz.grantPermission(ctx, userId, "documents:*", undefined, "Full document access");
+
+// Deny read on any resource
+await authz.denyPermission(ctx, userId, "*:read", undefined, "Read access revoked");
+```
+
+**Role definitions:** When the component evaluates permissions, it matches the requested permission against each role’s permission list using the same pattern rules. So if a role’s permissions include `"documents:*"` (in the flattened role–permission map), then `can(ctx, userId, "documents:read")` is allowed. With `defineRoles` you typically list concrete actions per resource (e.g. `documents: ["read", "update"]`); to use patterns in roles you would supply a role-permission map that includes pattern strings for that role.
+
+**Client-side helper:** To test whether a pattern matches a permission without calling the backend, use the exported helper:
+
+```typescript
+import { matchesPermissionPattern } from "@djpanda/convex-authz";
+
+matchesPermissionPattern("documents:read", "documents:*"); // true
+matchesPermissionPattern("documents:read", "*:read");      // true
+matchesPermissionPattern("settings:read", "documents:*"); // false
+```
+
+The same wildcard behavior applies to **IndexedAuthz** (grant/deny and can/require).
+
 ### Getting User Roles
 
 ```typescript

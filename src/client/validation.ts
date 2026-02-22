@@ -35,12 +35,17 @@ export function validateUserId(userId: string): void {
 }
 
 /**
- * Validate permission format: "resource:action". Uses parsePermission from helpers.
+ * Validate permission or permission pattern.
+ * Accepts:
+ * - Concrete permission: "resource:action" (e.g. "documents:read")
+ * - Wildcard patterns: "resource:*", "*:action", "*:*", or "*" (match all)
+ * Uses parsePermission from helpers; "*" is accepted as a valid pattern.
  */
 export function validatePermission(permission: string): void {
   if (typeof permission !== "string") {
     throw new Error("permission must be a string");
   }
+  if (permission === "*") return;
   parsePermission(permission);
 }
 

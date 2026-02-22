@@ -7,6 +7,9 @@ import {
   flattenRolePermissions,
   Authz,
   IndexedAuthz,
+  matchesPermissionPattern,
+  parsePermission,
+  buildPermission,
 } from "./index.js";
 import type { PolicyContext } from "./index.js";
 import type { ComponentApi } from "../component/_generated/component.js";
@@ -353,6 +356,166 @@ describe("client helpers", () => {
       expect(adminPerms).toHaveLength(6);
       const viewerPerms = flattenRolePermissions(roles, "viewer");
       expect(viewerPerms).toEqual(["documents:read"]);
+    });
+  });
+});
+
+// ============================================================================
+// Wildcard and pattern-matching permissions (API surface)
+// ============================================================================
+
+describe("wildcard and pattern matching", () => {
+  describe("exported helpers", () => {
+    it("matchesPermissionPattern matches resource wildcard", () => {
+      expect(matchesPermissionPattern("documents:read", "documents:*")).toBe(true);
+      expect(matchesPermissionPattern("documents:delete", "documents:*")).toBe(true);
+      expect(matchesPermissionPattern("settings:read", "documents:*")).toBe(false);
+    });
+
+    it("matchesPermissionPattern matches action wildcard", () => {
+      expect(matchesPermissionPattern("documents:read", "*:read")).toBe(true);
+      expect(matchesPermissionPattern("settings:read", "*:read")).toBe(true);
+      expect(matchesPermissionPattern("documents:write", "*:read")).toBe(false);
+    });
+
+    it("matchesPermissionPattern matches full wildcard", () => {
+      expect(matchesPermissionPattern("documents:read", "*")).toBe(true);
+      expect(matchesPermissionPattern("any:action", "*")).toBe(true);
+    });
+
+    it("parsePermission and buildPermission round-trip", () => {
+      const { resource, action } = parsePermission("documents:read");
+      expect(resource).toBe("documents");
+      expect(action).toBe("read");
+      expect(buildPermission("documents", "read")).toBe("documents:read");
+    });
+
+    it("parsePermission throws for invalid format", () => {
+      expect(() => parsePermission("read")).toThrow(/Expected "resource:action"/);
+      expect(() => parsePermission("a:b:c")).toThrow(/Expected "resource:action"/);
+    });
+  });
+
+  describe("Authz grant/deny accept wildcard patterns", () => {
+    function createMockComponent() {
+      return {
+        queries: {
+          checkPermission: "queries.checkPermission",
+          checkPermissions: "queries.checkPermissions",
+          hasRole: "queries.hasRole",
+          getUserRoles: "queries.getUserRoles",
+          getEffectivePermissions: "queries.getEffectivePermissions",
+          getUserAttributes: "queries.getUserAttributes",
+          getAuditLog: "queries.getAuditLog",
+        },
+        mutations: {
+          assignRole: "mutations.assignRole",
+          assignRoles: "mutations.assignRoles",
+          revokeRole: "mutations.revokeRole",
+          revokeRoles: "mutations.revokeRoles",
+          revokeAllRoles: "mutations.revokeAllRoles",
+          offboardUser: "mutations.offboardUser",
+          setAttribute: "mutations.setAttribute",
+          removeAttribute: "mutations.removeAttribute",
+          grantPermission: "mutations.grantPermission",
+          denyPermission: "mutations.denyPermission",
+        },
+      } as unknown as ComponentApi;
+    }
+
+    const permissions = definePermissions({
+      documents: { create: true, read: true, update: true, delete: true },
+    });
+    const roles = defineRoles(permissions, {
+      admin: { documents: ["create", "read", "update", "delete"] },
+      viewer: { documents: ["read"] },
+    });
+
+    it("grantPermission accepts documents:* and passes it to mutation", async () => {
+      const component = createMockComponent();
+      const authz = new Authz(component, { permissions, roles });
+      const ctx = {
+        runMutation: vi.fn().mockResolvedValue("override_id"),
+      };
+      await authz.grantPermission(ctx, "user_123", "documents:*", undefined, "Full access");
+      expect(ctx.runMutation).toHaveBeenCalledWith(
+        component.mutations.grantPermission,
+        expect.objectContaining({ permission: "documents:*", reason: "Full access" })
+      );
+    });
+
+    it("grantPermission accepts * and passes it to mutation", async () => {
+      const component = createMockComponent();
+      const authz = new Authz(component, { permissions, roles });
+      const ctx = {
+        runMutation: vi.fn().mockResolvedValue("override_id"),
+      };
+      await authz.grantPermission(ctx, "user_123", "*");
+      expect(ctx.runMutation).toHaveBeenCalledWith(
+        component.mutations.grantPermission,
+        expect.objectContaining({ permission: "*" })
+      );
+    });
+
+    it("denyPermission accepts documents:* and passes it to mutation", async () => {
+      const component = createMockComponent();
+      const authz = new Authz(component, { permissions, roles });
+      const ctx = {
+        runMutation: vi.fn().mockResolvedValue("override_id"),
+      };
+      await authz.denyPermission(ctx, "user_123", "documents:*", undefined, "Revoke all");
+      expect(ctx.runMutation).toHaveBeenCalledWith(
+        component.mutations.denyPermission,
+        expect.objectContaining({ permission: "documents:*", reason: "Revoke all" })
+      );
+    });
+  });
+
+  describe("IndexedAuthz grant/deny accept wildcard patterns", () => {
+    function createMockIndexedComponent() {
+      return {
+        queries: { checkPermissionFast: "indexed.checkPermissionFast", checkPermissionsFast: "indexed.checkPermissionsFast" },
+        mutations: { grantPermissionDirect: "indexed.grantPermissionDirect", denyPermissionDirect: "indexed.denyPermissionDirect" },
+        indexed: {
+          checkPermissionFast: "indexed.checkPermissionFast",
+          checkPermissionsFast: "indexed.checkPermissionsFast",
+          grantPermissionDirect: "indexed.grantPermissionDirect",
+          denyPermissionDirect: "indexed.denyPermissionDirect",
+        },
+      } as unknown as ComponentApi;
+    }
+    const permissions = definePermissions({
+      documents: { create: true, read: true, update: true, delete: true },
+    });
+    const roles = defineRoles(permissions, {
+      admin: { documents: ["create", "read", "update", "delete"] },
+      viewer: { documents: ["read"] },
+    });
+
+    it("grantPermission accepts documents:* and passes it to indexed mutation", async () => {
+      const component = createMockIndexedComponent();
+      const authz = new IndexedAuthz(component, { permissions, roles });
+      const ctx = {
+        runMutation: vi.fn().mockResolvedValue("override_id"),
+      };
+      await authz.grantPermission(ctx, "user_123", "documents:*", undefined, "Full access");
+      expect(ctx.runMutation).toHaveBeenCalledWith(
+        component.indexed.grantPermissionDirect,
+        expect.objectContaining({ permission: "documents:*" })
+      );
+    });
+
+    it("denyPermission accepts *:read and passes it to indexed mutation", async () => {
+      const component = createMockIndexedComponent();
+      const authz = new IndexedAuthz(component, { permissions, roles });
+      const ctx = {
+        runMutation: vi.fn().mockResolvedValue("override_id"),
+      };
+      await authz.denyPermission(ctx, "user_123", "*:read");
+      expect(ctx.runMutation).toHaveBeenCalledWith(
+        component.indexed.denyPermissionDirect,
+        expect.objectContaining({ permission: "*:read" })
+      );
     });
   });
 });

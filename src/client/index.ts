@@ -373,7 +373,11 @@ export class Authz<
   }
 
   /**
-   * Check if user has permission
+   * Check if user has permission.
+   * Permission checks support wildcard matching: if the user has a role or override with a pattern
+   * (e.g. "documents:*", "*:read", or "*"), it is treated as granting that permission when the
+   * pattern matches the requested permission.
+   * @param permission - Concrete permission "resource:action" (e.g. "documents:read")
    */
   async can(
     ctx: QueryCtx | ActionCtx,
@@ -395,7 +399,9 @@ export class Authz<
   }
 
   /**
-   * Require permission or throw error
+   * Require permission or throw error.
+   * Supports the same wildcard matching as {@link Authz.can}.
+   * @param permission - Concrete permission "resource:action" (e.g. "documents:read")
    */
   async require(
     ctx: QueryCtx | ActionCtx,
@@ -718,7 +724,10 @@ export class Authz<
   }
 
   /**
-   * Grant a direct permission override
+   * Grant a direct permission override.
+   * Permission can be a concrete permission ("documents:read") or a wildcard pattern
+   * ("documents:*", "*:read", "*:*", or "*") to allow all matching permissions.
+   * @param permission - Permission or pattern (e.g. "documents:read", "documents:*", "*:read", "*")
    */
   async grantPermission(
     ctx: MutationCtx | ActionCtx,
@@ -745,7 +754,9 @@ export class Authz<
   }
 
   /**
-   * Deny a permission (explicit deny override)
+   * Deny a permission (explicit deny override).
+   * Permission can be a concrete permission or a wildcard pattern (e.g. "documents:*", "*:read", "*").
+   * @param permission - Permission or pattern to deny
    */
   async denyPermission(
     ctx: MutationCtx | ActionCtx,
@@ -872,7 +883,10 @@ export class IndexedAuthz<
   ) {}
 
   /**
-   * Check permission - O(1) indexed lookup
+   * Check permission - O(1) indexed lookup.
+   * Supports wildcard matching: stored patterns (e.g. "documents:*", "*:read") match concrete
+   * permissions when the pattern matches the requested permission.
+   * @param permission - Concrete permission "resource:action" (e.g. "documents:read")
    */
   async can(
     ctx: QueryCtx | ActionCtx,
@@ -892,7 +906,9 @@ export class IndexedAuthz<
   }
 
   /**
-   * Require permission or throw - O(1)
+   * Require permission or throw - O(1).
+   * Supports the same wildcard matching as {@link IndexedAuthz.can}.
+   * @param permission - Concrete permission "resource:action" (e.g. "documents:read")
    */
   async require(
     ctx: QueryCtx | ActionCtx,
@@ -1213,7 +1229,10 @@ export class IndexedAuthz<
   }
 
   /**
-   * Grant a direct permission
+   * Grant a direct permission.
+   * Permission can be concrete ("documents:read") or a wildcard pattern
+   * ("documents:*", "*:read", "*:*", or "*") to allow all matching permissions.
+   * @param permission - Permission or pattern (e.g. "documents:read", "documents:*", "*:read", "*")
    */
   async grantPermission(
     ctx: MutationCtx | ActionCtx,
@@ -1239,7 +1258,9 @@ export class IndexedAuthz<
   }
 
   /**
-   * Deny a permission
+   * Deny a permission (explicit deny override).
+   * Permission can be a concrete permission or a wildcard pattern (e.g. "documents:*", "*:read", "*").
+   * @param permission - Permission or pattern to deny
    */
   async denyPermission(
     ctx: MutationCtx | ActionCtx,
@@ -1324,3 +1345,28 @@ export class IndexedAuthz<
 
 export type { ComponentApi } from "../component/_generated/component.js";
 export type { RoleAssignItem, RoleScopeItem } from "./validation.js";
+
+/**
+ * Check if a concrete permission matches a permission pattern (supports wildcards).
+ * Use this for client-side logic when you need to test whether a stored pattern
+ * would grant a given permission.
+ *
+ * Patterns:
+ * - `"*"` matches every permission
+ * - `"resource:*"` matches all actions on that resource (e.g. `"documents:*"` matches `documents:read`, `documents:write`)
+ * - `"*:action"` matches that action on any resource (e.g. `"*:read"` matches `documents:read`, `settings:read`)
+ * - `"*:*"` matches every permission
+ *
+ * @example
+ * ```ts
+ * import { matchesPermissionPattern } from "@djpanda/convex-authz";
+ * matchesPermissionPattern("documents:read", "documents:*"); // true
+ * matchesPermissionPattern("documents:read", "*:read");     // true
+ * matchesPermissionPattern("documents:write", "*:read");   // false
+ * ```
+ */
+export {
+  matchesPermissionPattern,
+  parsePermission,
+  buildPermission,
+} from "../component/helpers.js";

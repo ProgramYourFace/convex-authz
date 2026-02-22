@@ -837,6 +837,37 @@ describe("mutations - additional coverage", () => {
       expect(overrides).toHaveLength(1);
       expect(overrides[0].scope).toEqual({ type: "team", id: "team_1" });
     });
+
+    it("should accept wildcard pattern (documents:*)", async () => {
+      const t = convexTest(schema, modules);
+
+      const id = await t.mutation(api.mutations.grantPermission, {
+        userId: "user_123",
+        permission: "documents:*",
+        reason: "Full document access",
+      });
+
+      expect(id).toBeDefined();
+      const overrides = await t.query(api.queries.getPermissionOverrides, {
+        userId: "user_123",
+      });
+      expect(overrides.some((o) => o.permission === "documents:*")).toBe(true);
+    });
+
+    it("should accept full wildcard pattern (*)", async () => {
+      const t = convexTest(schema, modules);
+
+      const id = await t.mutation(api.mutations.grantPermission, {
+        userId: "user_123",
+        permission: "*",
+      });
+
+      expect(id).toBeDefined();
+      const overrides = await t.query(api.queries.getPermissionOverrides, {
+        userId: "user_123",
+      });
+      expect(overrides.some((o) => o.permission === "*")).toBe(true);
+    });
   });
 
   describe("denyPermission", () => {
@@ -906,6 +937,24 @@ describe("mutations - additional coverage", () => {
       const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
 
       expect(logs.some((l) => l.action === "permission_denied")).toBe(true);
+    });
+
+    it("should accept wildcard pattern (documents:*)", async () => {
+      const t = convexTest(schema, modules);
+
+      const id = await t.mutation(api.mutations.denyPermission, {
+        userId: "user_123",
+        permission: "documents:*",
+        reason: "Revoke all document access",
+      });
+
+      expect(id).toBeDefined();
+      const overrides = await t.query(api.queries.getPermissionOverrides, {
+        userId: "user_123",
+      });
+      expect(overrides.some((o) => o.permission === "documents:*" && o.effect === "deny")).toBe(
+        true
+      );
     });
   });
 
