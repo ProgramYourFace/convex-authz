@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Role inheritance and composition**: Roles can be defined with optional `inherits` (single parent) and/or `includes` (multiple roles). Effective permissions are the union of inherited/included and direct permissions. Resolved at client build time with cycle and unknown-role validation. The keys `inherits` and `includes` are reserved in role definitions. Existing permission-only role definitions are unchanged.
+
 ## 0.1.7
 
 - Update version to 0.1.4 in package-lock.json

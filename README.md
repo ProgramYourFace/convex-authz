@@ -98,6 +98,35 @@ const roles = defineRoles(permissions, {
 export const authz = new Authz(components.authz, { permissions, roles });
 ```
 
+#### Role inheritance and composition
+
+Roles can be defined in terms of other roles to avoid repeating permission lists:
+
+- **`inherits`** – one parent role; effective permissions = parent’s permissions ∪ this role’s direct permissions.
+- **`includes`** – multiple roles; effective permissions = union of all included roles’ permissions ∪ this role’s direct permissions.
+
+Example with inheritance (admin > editor > viewer):
+
+```typescript
+const roles = defineRoles(permissions, {
+  viewer: { documents: ["read"] },
+  editor: { inherits: "viewer", documents: ["create", "update"] },
+  admin: { inherits: "editor", documents: ["delete"], settings: ["manage"] },
+});
+```
+
+Example with composition (combine roles):
+
+```typescript
+const roles = defineRoles(permissions, {
+  editor: { documents: ["create", "read", "update"] },
+  billing_admin: { billing: ["view", "manage"] },
+  billing_manager: { includes: ["editor", "billing_admin"], settings: ["view"] },
+});
+```
+
+**Note:** `inherits` and `includes` are reserved keys in role definitions; do not use them as permission resource names.
+
 ### 3. Use in Your Functions
 
 ```typescript

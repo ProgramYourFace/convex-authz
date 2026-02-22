@@ -55,13 +55,21 @@ import {
  */
 export type PermissionDefinition = Record<string, Record<string, boolean>>;
 
+/** Reserved keys in role definitions; do not use as permission resource names. */
+const RESERVED_ROLE_KEYS = ["inherits", "includes"] as const;
+
 /**
  * Role definition structure
- * Maps role names to their granted permissions
+ * Maps role names to their granted permissions.
+ * Roles may optionally inherit one role (`inherits`) and/or include multiple roles (`includes`).
+ * Effective permissions are the union of inherited/included and direct permissions.
  */
 export type RoleDefinition<P extends PermissionDefinition> = Record<
   string,
-  { [K in keyof P]?: ReadonlyArray<keyof P[K]> }
+  {
+    inherits?: string;
+    includes?: readonly string[];
+  } & { [K in keyof P]?: ReadonlyArray<keyof P[K]> }
 >;
 
 /**
@@ -193,22 +201,25 @@ export function defineRoles<P extends PermissionDefinition>(
   ...roleDefs: RoleDefinition<P>[]
 ): RoleDefinition<P> {
   if (roleDefs.length === 1) return roleDefs[0];
-  const result: Record<string, Record<string, unknown[]>> = {};
+  const result: Record<string, Record<string, unknown>> = {};
   for (const def of roleDefs) {
     for (const [roleName, rolePerms] of Object.entries(def)) {
+      const r = rolePerms as Record<string, unknown>;
       if (!result[roleName]) {
-        result[roleName] = {
-          ...(rolePerms as Record<string, unknown[]>),
-        };
+        result[roleName] = { ...r };
       } else {
-        for (const [resource, actions] of Object.entries(
-          rolePerms as Record<string, unknown[]>
-        )) {
-          const existing = (result[roleName][resource] ?? []) as string[];
-          const incoming = actions as string[];
-          result[roleName][resource] = [
-            ...new Set([...existing, ...incoming]),
-          ];
+        const existing = result[roleName] as Record<string, unknown>;
+        if (r.inherits !== undefined) existing.inherits = r.inherits;
+        if (Array.isArray(r.includes)) {
+          const prev = (existing.includes as string[] | undefined) ?? [];
+          existing.includes = [...new Set([...prev, ...r.includes])];
+        }
+        for (const [key, value] of Object.entries(r)) {
+          if (RESERVED_ROLE_KEYS.includes(key as (typeof RESERVED_ROLE_KEYS)[number]))
+            continue;
+          const existingArr = (existing[key] ?? []) as string[];
+          const incomingArr = Array.isArray(value) ? (value as string[]) : [];
+          existing[key] = [...new Set([...existingArr, ...incomingArr])];
         }
       }
     }
@@ -236,24 +247,73 @@ export function evaluatePolicyCondition(
 }
 
 /**
- * Flatten role permissions into an array of permission strings
+ * Resolve effective permissions for a role, following inherits and includes with cycle detection.
+ * @internal
  */
-export function flattenRolePermissions(
-  roles: Record<string, Record<string, string[]>>,
-  roleName: string
+function resolveRolePermissions(
+  roles: Record<string, Record<string, unknown>>,
+  roleName: string,
+  visited: Set<string>
 ): string[] {
+  if (!Object.prototype.hasOwnProperty.call(roles, roleName)) return [];
+  if (visited.has(roleName)) {
+    throw new Error(
+      `Role inheritance cycle detected involving role "${roleName}"`
+    );
+  }
+  visited.add(roleName);
   const rolePerms = roles[roleName];
-  if (!rolePerms) return [];
+  const perms = new Set<string>();
 
-  const permissions: string[] = [];
-  for (const [resource, actions] of Object.entries(rolePerms)) {
-    if (Array.isArray(actions)) {
-      for (const action of actions) {
-        permissions.push(`${resource}:${String(action)}`);
+  try {
+    const inherits = rolePerms.inherits;
+    if (inherits !== undefined && inherits !== null) {
+      const ref = String(inherits);
+      if (!Object.prototype.hasOwnProperty.call(roles, ref)) {
+        throw new Error(
+          `Role "${roleName}" inherits unknown role "${ref}"`
+        );
+      }
+      for (const p of resolveRolePermissions(roles, ref, visited)) perms.add(p);
+    }
+    const includes = rolePerms.includes;
+    if (Array.isArray(includes)) {
+      for (const ref of includes) {
+        const r = String(ref);
+        if (!Object.prototype.hasOwnProperty.call(roles, r)) {
+          throw new Error(
+            `Role "${roleName}" includes unknown role "${r}"`
+          );
+        }
+        for (const p of resolveRolePermissions(roles, r, visited)) perms.add(p);
       }
     }
+    for (const [resource, actions] of Object.entries(rolePerms)) {
+      if (
+        RESERVED_ROLE_KEYS.includes(resource as (typeof RESERVED_ROLE_KEYS)[number])
+      )
+        continue;
+      if (Array.isArray(actions)) {
+        for (const action of actions) perms.add(`${resource}:${String(action)}`);
+      }
+    }
+    return [...perms];
+  } finally {
+    visited.delete(roleName);
   }
-  return permissions;
+}
+
+/**
+ * Flatten role permissions into an array of permission strings.
+ * Resolves inheritance (`inherits`) and composition (`includes`) so that
+ * effective permissions include those from inherited/included roles.
+ */
+export function flattenRolePermissions(
+  roles: Record<string, Record<string, unknown>>,
+  roleName: string
+): string[] {
+  const visited = new Set<string>();
+  return resolveRolePermissions(roles, roleName, visited);
 }
 
 // ============================================================================

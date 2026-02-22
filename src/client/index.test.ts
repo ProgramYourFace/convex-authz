@@ -127,6 +127,36 @@ describe("client helpers", () => {
       expect(merged.admin.documents).toEqual(["read"]);
       expect(merged.admin.settings).toEqual(["view"]);
     });
+
+    it("should merge role defs with inherits (last wins)", () => {
+      const permsWithUpdateDelete = definePermissions({
+        documents: { create: true, read: true, update: true, delete: true },
+        settings: { view: true, manage: true },
+      });
+      const r1 = {
+        editor: { documents: ["create", "read", "update"] as const },
+        admin: { inherits: "editor" as const, documents: ["delete"] as const },
+      };
+      const r2 = {
+        admin: { inherits: "editor" as const, settings: ["manage"] as const },
+      };
+      const merged = defineRoles(permsWithUpdateDelete, r1, r2);
+      expect(merged.admin.inherits).toBe("editor");
+      expect(merged.admin.documents).toEqual(["delete"]);
+      expect(merged.admin.settings).toEqual(["manage"]);
+    });
+
+    it("should merge includes arrays and deduplicate", () => {
+      const r1 = {
+        editor: { documents: ["read", "create"] as const },
+        composite: { includes: ["editor"] as const },
+      };
+      const r2 = {
+        composite: { includes: ["editor", "editor"] as const },
+      };
+      const merged = defineRoles(permissions, r1, r2);
+      expect(merged.composite.includes).toEqual(["editor"]);
+    });
   });
 
   describe("definePolicies", () => {
@@ -229,6 +259,101 @@ describe("client helpers", () => {
       // Non-array value should be skipped
       expect(perms).toEqual([]);
     });
+
+    it("should resolve inherits: role gets inherited permissions plus own", () => {
+      const roles = {
+        viewer: { documents: ["read"] },
+        editor: {
+          inherits: "viewer",
+          documents: ["create", "update"],
+        },
+      };
+      const perms = flattenRolePermissions(roles, "editor");
+      expect(perms).toContain("documents:read");
+      expect(perms).toContain("documents:create");
+      expect(perms).toContain("documents:update");
+      expect(perms).toHaveLength(3);
+    });
+
+    it("should resolve includes: role gets union of included roles plus own", () => {
+      const roles = {
+        editor: { documents: ["read", "create", "update"] },
+        billing_admin: { billing: ["view", "manage"] },
+        billing_manager: {
+          includes: ["editor", "billing_admin"],
+          settings: ["view"],
+        },
+      };
+      const perms = flattenRolePermissions(roles, "billing_manager");
+      expect(perms).toContain("documents:read");
+      expect(perms).toContain("documents:create");
+      expect(perms).toContain("billing:view");
+      expect(perms).toContain("billing:manage");
+      expect(perms).toContain("settings:view");
+      expect(perms).toHaveLength(6);
+    });
+
+    it("should resolve chain of three (admin inherits manager inherits editor)", () => {
+      const roles = {
+        editor: { documents: ["read", "create", "update"] },
+        manager: { inherits: "editor", documents: ["archive"] },
+        admin: { inherits: "manager", documents: ["delete"], settings: ["manage"] },
+      };
+      const perms = flattenRolePermissions(roles, "admin");
+      expect(perms).toContain("documents:read");
+      expect(perms).toContain("documents:create");
+      expect(perms).toContain("documents:update");
+      expect(perms).toContain("documents:archive");
+      expect(perms).toContain("documents:delete");
+      expect(perms).toContain("settings:manage");
+      expect(perms).toHaveLength(6);
+    });
+
+    it("should throw when inherits references unknown role", () => {
+      const roles = {
+        admin: { inherits: "nonexistent", documents: ["read"] },
+      };
+      expect(() => flattenRolePermissions(roles, "admin")).toThrow(
+        'Role "admin" inherits unknown role "nonexistent"'
+      );
+    });
+
+    it("should throw when includes references unknown role", () => {
+      const roles = {
+        composite: { includes: ["editor", "ghost"], documents: ["read"] },
+        editor: { documents: ["read"] },
+      };
+      expect(() => flattenRolePermissions(roles, "composite")).toThrow(
+        'Role "composite" includes unknown role "ghost"'
+      );
+    });
+
+    it("should throw on role inheritance cycle", () => {
+      const roles = {
+        a: { inherits: "b", documents: ["read"] },
+        b: { inherits: "a", documents: ["create"] },
+      };
+      expect(() => flattenRolePermissions(roles, "a")).toThrow(
+        /Role inheritance cycle detected/
+      );
+    });
+
+    it("should behave as before when role has no inherits or includes", () => {
+      const roles = {
+        admin: {
+          documents: ["create", "read", "update", "delete"],
+          settings: ["view", "manage"],
+        },
+        viewer: { documents: ["read"] },
+      };
+      const adminPerms = flattenRolePermissions(roles, "admin");
+      expect(adminPerms).toContain("documents:create");
+      expect(adminPerms).toContain("documents:read");
+      expect(adminPerms).toContain("settings:manage");
+      expect(adminPerms).toHaveLength(6);
+      const viewerPerms = flattenRolePermissions(roles, "viewer");
+      expect(viewerPerms).toEqual(["documents:read"]);
+    });
   });
 });
 
@@ -322,6 +447,34 @@ describe("Authz class", () => {
           scope: { type: "team", id: "team_456" },
         })
       );
+    });
+
+    it("should pass resolved inherited permissions in rolePermissions", async () => {
+      const permissionsWithDocs = definePermissions({
+        documents: { create: true, read: true, update: true, delete: true },
+      });
+      const rolesWithInheritance = defineRoles(permissionsWithDocs, {
+        viewer: { documents: ["read"] },
+        editor: { inherits: "viewer", documents: ["create", "update"] },
+        admin: { inherits: "editor", documents: ["delete"] },
+      });
+      const component = createMockComponent();
+      const authz = new Authz(component, {
+        permissions: permissionsWithDocs,
+        roles: rolesWithInheritance,
+      });
+      const ctx = {
+        runQuery: vi.fn().mockResolvedValue({ allowed: true, reason: "Granted" }),
+      };
+
+      const result = await authz.can(ctx, "user_123", "documents:update");
+      expect(result).toBe(true);
+      const call = (ctx.runQuery as ReturnType<typeof vi.fn>).mock.calls[0];
+      const rolePermissions = call[1].rolePermissions as Record<string, string[]>;
+      expect(rolePermissions.admin).toContain("documents:read");
+      expect(rolePermissions.admin).toContain("documents:create");
+      expect(rolePermissions.admin).toContain("documents:update");
+      expect(rolePermissions.admin).toContain("documents:delete");
     });
   });
 
