@@ -398,7 +398,7 @@ const countScoped = await authz.revokeAllRoles(ctx, userId, { type: "team", id: 
 
 ### Full user offboarding
 
-Remove all roles, permission overrides, and attributes for a user in one call (optionally scoped). Also clears indexed `effectiveRoles` and `effectivePermissions` when present:
+Remove all roles, permission overrides, attributes, and optionally ReBAC relationships for a user in one call (optionally scoped). Also clears indexed `effectiveRoles`, `effectivePermissions`, and `effectiveRelationships` when present:
 
 ```typescript
 const result = await authz.offboardUser(ctx, userId, {
@@ -406,8 +406,23 @@ const result = await authz.offboardUser(ctx, userId, {
   actorId: "system",
   removeAttributes: true,   // default true
   removeOverrides: true,    // default true
+  removeRelationships: true, // default true when no scope (full offboard)
 });
-// result: { rolesRevoked, overridesRemoved, attributesRemoved, effectiveRolesRemoved, effectivePermissionsRemoved }
+// result: { rolesRevoked, overridesRemoved, attributesRemoved, relationshipsRemoved, effectiveRolesRemoved, effectivePermissionsRemoved, effectiveRelationshipsRemoved }
+```
+
+When **scope is omitted**, the call performs a full deprovision: all roles, overrides, attributes, and all ReBAC relationships where the user is the subject are removed. When scope is provided, only data in that scope is removed and relationships are left unchanged.
+
+### User deprovisioning (full wipe)
+
+For security incident response, enterprise offboarding, or single-button deactivation, use **deprovisionUser** to atomically wipe all roles, attributes, relationships, and permission overrides for a user (no scope, no options):
+
+```typescript
+const result = await authz.deprovisionUser(ctx, userId, {
+  actorId: "security-team",
+  enableAudit: true,
+});
+// result: { rolesRevoked, overridesRemoved, attributesRemoved, relationshipsRemoved, effectiveRolesRemoved, effectivePermissionsRemoved, effectiveRelationshipsRemoved }
 ```
 
 Bulk arrays (permissions in `canAny`, roles in `assignRoles` / `revokeRoles`) are limited to **100 items** per call; the client and component validate and throw a clear error if exceeded.
@@ -824,7 +839,8 @@ class Authz<P, R, Policy> {
   getUserPermissions(ctx, userId, scope?): Promise<PermissionResult>
   
   // Offboarding
-  offboardUser(ctx, userId, options?: { scope?, actorId?, removeAttributes?, removeOverrides? }): Promise<OffboardResult>
+  offboardUser(ctx, userId, options?: { scope?, actorId?, removeAttributes?, removeOverrides?, removeRelationships? }): Promise<OffboardResult>
+  deprovisionUser(ctx, userId, options?: { actorId?, enableAudit? }): Promise<OffboardResult>  // full wipe: roles, overrides, attributes, relationships
   
   // Attribute management
   setAttribute(ctx, userId, key, value, actorId?): Promise<string>
@@ -862,6 +878,7 @@ class IndexedAuthz<P, R> {
   revokeRoles(ctx, userId, roles: RoleScopeItem[], actorId?): Promise<{ revoked: number }>  // bulk, max 100
   revokeAllRoles(ctx, userId, scope?, actorId?): Promise<number>
   offboardUser(ctx, userId, options?): Promise<OffboardResult>
+  deprovisionUser(ctx, userId, options?: { actorId?, enableAudit? }): Promise<OffboardResult>
   grantPermission(ctx, userId, permission, scope?, reason?, expiresAt?, grantedBy?): Promise<string>
   denyPermission(ctx, userId, permission, scope?, reason?, expiresAt?, deniedBy?): Promise<string>
   

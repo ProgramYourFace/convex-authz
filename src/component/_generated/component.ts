@@ -282,6 +282,21 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         string,
         Name
       >;
+      deprovisionUser: FunctionReference<
+        "mutation",
+        "internal",
+        { enableAudit?: boolean; revokedBy?: string; userId: string },
+        {
+          attributesRemoved: number;
+          effectivePermissionsRemoved: number;
+          effectiveRelationshipsRemoved: number;
+          effectiveRolesRemoved: number;
+          overridesRemoved: number;
+          relationshipsRemoved: number;
+          rolesRevoked: number;
+        },
+        Name
+      >;
       grantPermission: FunctionReference<
         "mutation",
         "internal",
@@ -317,6 +332,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           enableAudit?: boolean;
           removeAttributes?: boolean;
           removeOverrides?: boolean;
+          removeRelationships?: boolean;
           revokedBy?: string;
           scope?: { id: string; type: string };
           userId: string;
@@ -324,8 +340,10 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         {
           attributesRemoved: number;
           effectivePermissionsRemoved: number;
+          effectiveRelationshipsRemoved: number;
           effectiveRolesRemoved: number;
           overridesRemoved: number;
+          relationshipsRemoved: number;
           rolesRevoked: number;
         },
         Name

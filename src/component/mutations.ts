@@ -343,9 +343,177 @@ export const revokeRoles = mutation({
   },
 });
 
+type OffboardUserArgs = {
+  userId: string;
+  scope?: { type: string; id: string };
+  revokedBy?: string;
+  removeAttributes?: boolean;
+  removeOverrides?: boolean;
+  removeRelationships?: boolean;
+  enableAudit?: boolean;
+};
+
+async function offboardUserImpl(
+  ctx: { db: import("convex/server").GenericMutationCtx<import("./_generated/dataModel").DataModel>["db"] },
+  args: OffboardUserArgs
+): Promise<{
+  rolesRevoked: number;
+  overridesRemoved: number;
+  attributesRemoved: number;
+  relationshipsRemoved: number;
+  effectiveRolesRemoved: number;
+  effectivePermissionsRemoved: number;
+  effectiveRelationshipsRemoved: number;
+}> {
+  const removeAttrs = args.removeAttributes !== false;
+  const removeOverridesFlag = args.removeOverrides !== false;
+  const removeRels = args.removeRelationships !== false;
+  const scopeKey = args.scope
+    ? `${args.scope.type}:${args.scope.id}`
+    : null;
+  const fullDeprovision = args.scope === undefined;
+
+  let rolesRevoked = 0;
+  let overridesRemoved = 0;
+  let attributesRemoved = 0;
+  let relationshipsRemoved = 0;
+  let effectiveRolesRemoved = 0;
+  let effectivePermissionsRemoved = 0;
+  let effectiveRelationshipsRemoved = 0;
+
+  // 1. Role assignments (source table)
+  const assignments = await ctx.db
+    .query("roleAssignments")
+    .withIndex("by_user", (q) => q.eq("userId", args.userId))
+    .collect();
+
+  for (const a of assignments) {
+    if (args.scope) {
+      if (!a.scope) continue;
+      if (a.scope.type !== args.scope.type || a.scope.id !== args.scope.id)
+        continue;
+    }
+    await ctx.db.delete(a._id);
+    rolesRevoked++;
+    if (args.enableAudit) {
+      await ctx.db.insert("auditLog", {
+        timestamp: Date.now(),
+        action: "role_revoked",
+        userId: args.userId,
+        actorId: args.revokedBy,
+        details: { role: a.role, scope: a.scope },
+      });
+    }
+  }
+
+  // 2. Permission overrides
+  if (removeOverridesFlag) {
+    const overrides = await ctx.db
+      .query("permissionOverrides")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    for (const o of overrides) {
+      if (args.scope) {
+        if (!o.scope) continue;
+        if (o.scope.type !== args.scope.type || o.scope.id !== args.scope.id)
+          continue;
+      }
+      await ctx.db.delete(o._id);
+      overridesRemoved++;
+    }
+  }
+
+  // 3. User attributes (no scope)
+  if (removeAttrs) {
+    const attributes = await ctx.db
+      .query("userAttributes")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    for (const a of attributes) {
+      await ctx.db.delete(a._id);
+      attributesRemoved++;
+      if (args.enableAudit) {
+        await ctx.db.insert("auditLog", {
+          timestamp: Date.now(),
+          action: "attribute_removed",
+          userId: args.userId,
+          actorId: args.revokedBy,
+          details: { attribute: { key: a.key } },
+        });
+      }
+    }
+  }
+
+  // 4. ReBAC relationships (only on full deprovision, no scope)
+  if (fullDeprovision && removeRels) {
+    const relationships = await ctx.db
+      .query("relationships")
+      .withIndex("by_subject", (q) =>
+        q.eq("subjectType", "user").eq("subjectId", args.userId)
+      )
+      .collect();
+
+    for (const r of relationships) {
+      await ctx.db.delete(r._id);
+      relationshipsRemoved++;
+    }
+
+    const userSubjectKey = `user:${args.userId}`;
+    const effectiveRels = await ctx.db
+      .query("effectiveRelationships")
+      .withIndex("by_subject", (q) => q.eq("subjectKey", userSubjectKey))
+      .collect();
+
+    for (const er of effectiveRels) {
+      await ctx.db.delete(er._id);
+      effectiveRelationshipsRemoved++;
+    }
+  }
+
+  // 5. Indexed tables: effectiveRoles, effectivePermissions
+  const effectiveRoles = await ctx.db
+    .query("effectiveRoles")
+    .withIndex("by_user", (q) => q.eq("userId", args.userId))
+    .collect();
+
+  for (const r of effectiveRoles) {
+    if (scopeKey !== null && r.scopeKey !== scopeKey) continue;
+    await ctx.db.delete(r._id);
+    effectiveRolesRemoved++;
+  }
+
+  const effectivePerms = await ctx.db
+    .query("effectivePermissions")
+    .withIndex("by_user", (q) => q.eq("userId", args.userId))
+    .collect();
+
+  for (const p of effectivePerms) {
+    if (scopeKey !== null && p.scopeKey !== scopeKey) continue;
+    await ctx.db.delete(p._id);
+    effectivePermissionsRemoved++;
+  }
+
+  return {
+    rolesRevoked,
+    overridesRemoved,
+    attributesRemoved,
+    relationshipsRemoved,
+    effectiveRolesRemoved,
+    effectivePermissionsRemoved,
+    effectiveRelationshipsRemoved,
+  };
+}
+
 /**
  * Full user offboarding: remove all roles, optional permission overrides and attributes,
- * and clear indexed effectiveRoles/effectivePermissions for this user (and optional scope).
+ * ReBAC relationships (when no scope), and clear indexed effectiveRoles/effectivePermissions
+ * and effectiveRelationships for this user (and optional scope).
+ *
+ * When scope is omitted, performs a full deprovision: roles, overrides, attributes,
+ * and all relationships where the user is the subject are removed. Use for
+ * security incident response, enterprise offboarding, or single-button deactivation.
  */
 export const offboardUser = mutation({
   args: {
@@ -354,124 +522,52 @@ export const offboardUser = mutation({
     revokedBy: v.optional(v.string()),
     removeAttributes: v.optional(v.boolean()),
     removeOverrides: v.optional(v.boolean()),
+    removeRelationships: v.optional(v.boolean()),
     enableAudit: v.optional(v.boolean()),
   },
   returns: v.object({
     rolesRevoked: v.number(),
     overridesRemoved: v.number(),
     attributesRemoved: v.number(),
+    relationshipsRemoved: v.number(),
     effectiveRolesRemoved: v.number(),
     effectivePermissionsRemoved: v.number(),
+    effectiveRelationshipsRemoved: v.number(),
   }),
-  handler: async (ctx, args) => {
-    const removeAttrs = args.removeAttributes !== false;
-    const removeOverridesFlag = args.removeOverrides !== false;
-    const scopeKey = args.scope
-      ? `${args.scope.type}:${args.scope.id}`
-      : null;
+  handler: async (ctx, args) => offboardUserImpl(ctx, args),
+});
 
-    let rolesRevoked = 0;
-    let overridesRemoved = 0;
-    let attributesRemoved = 0;
-    let effectiveRolesRemoved = 0;
-    let effectivePermissionsRemoved = 0;
-
-    // 1. Role assignments (source table)
-    const assignments = await ctx.db
-      .query("roleAssignments")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .collect();
-
-    for (const a of assignments) {
-      if (args.scope) {
-        if (!a.scope) continue;
-        if (a.scope.type !== args.scope.type || a.scope.id !== args.scope.id)
-          continue;
-      }
-      await ctx.db.delete(a._id);
-      rolesRevoked++;
-      if (args.enableAudit) {
-        await ctx.db.insert("auditLog", {
-          timestamp: Date.now(),
-          action: "role_revoked",
-          userId: args.userId,
-          actorId: args.revokedBy,
-          details: { role: a.role, scope: a.scope },
-        });
-      }
-    }
-
-    // 2. Permission overrides
-    if (removeOverridesFlag) {
-      const overrides = await ctx.db
-        .query("permissionOverrides")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId))
-        .collect();
-
-      for (const o of overrides) {
-        if (args.scope) {
-          if (!o.scope) continue;
-          if (o.scope.type !== args.scope.type || o.scope.id !== args.scope.id)
-            continue;
-        }
-        await ctx.db.delete(o._id);
-        overridesRemoved++;
-      }
-    }
-
-    // 3. User attributes (no scope)
-    if (removeAttrs) {
-      const attributes = await ctx.db
-        .query("userAttributes")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId))
-        .collect();
-
-      for (const a of attributes) {
-        await ctx.db.delete(a._id);
-        attributesRemoved++;
-        if (args.enableAudit) {
-          await ctx.db.insert("auditLog", {
-            timestamp: Date.now(),
-            action: "attribute_removed",
-            userId: args.userId,
-            actorId: args.revokedBy,
-            details: { attribute: { key: a.key } },
-          });
-        }
-      }
-    }
-
-    // 4. Indexed tables: effectiveRoles, effectivePermissions
-    const effectiveRoles = await ctx.db
-      .query("effectiveRoles")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .collect();
-
-    for (const r of effectiveRoles) {
-      if (scopeKey !== null && r.scopeKey !== scopeKey) continue;
-      await ctx.db.delete(r._id);
-      effectiveRolesRemoved++;
-    }
-
-    const effectivePerms = await ctx.db
-      .query("effectivePermissions")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .collect();
-
-    for (const p of effectivePerms) {
-      if (scopeKey !== null && p.scopeKey !== scopeKey) continue;
-      await ctx.db.delete(p._id);
-      effectivePermissionsRemoved++;
-    }
-
-    return {
-      rolesRevoked,
-      overridesRemoved,
-      attributesRemoved,
-      effectiveRolesRemoved,
-      effectivePermissionsRemoved,
-    };
+/**
+ * Full user deprovisioning: wipes all roles, attributes, relationships, and
+ * permission overrides for a given userId in one atomic call. Convenience
+ * wrapper around offboardUser with no scope and all removal options enabled.
+ * Use for security incident response, enterprise offboarding, or single-button
+ * deactivation.
+ */
+export const deprovisionUser = mutation({
+  args: {
+    userId: v.string(),
+    revokedBy: v.optional(v.string()),
+    enableAudit: v.optional(v.boolean()),
   },
+  returns: v.object({
+    rolesRevoked: v.number(),
+    overridesRemoved: v.number(),
+    attributesRemoved: v.number(),
+    relationshipsRemoved: v.number(),
+    effectiveRolesRemoved: v.number(),
+    effectivePermissionsRemoved: v.number(),
+    effectiveRelationshipsRemoved: v.number(),
+  }),
+  handler: async (ctx, args) =>
+    offboardUserImpl(ctx, {
+      userId: args.userId,
+      revokedBy: args.revokedBy,
+      removeAttributes: true,
+      removeOverrides: true,
+      removeRelationships: true,
+      enableAudit: args.enableAudit,
+    }),
 });
 
 /**

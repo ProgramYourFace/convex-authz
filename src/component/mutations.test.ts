@@ -382,6 +382,8 @@ describe("mutations - additional coverage", () => {
       expect(result.rolesRevoked).toBe(1);
       expect(result.overridesRemoved).toBe(1);
       expect(result.attributesRemoved).toBe(1);
+      expect(result.relationshipsRemoved).toBe(0);
+      expect(result.effectiveRelationshipsRemoved).toBe(0);
 
       const roles = await t.query(api.queries.getUserRoles, {
         userId: "user_off",
@@ -397,6 +399,66 @@ describe("mutations - additional coverage", () => {
         userId: "user_off",
       });
       expect(attrs).toHaveLength(0);
+    });
+
+    it("should remove ReBAC relationships on full offboard (no scope)", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_rel",
+        role: "viewer",
+      });
+      await t.mutation(api.rebac.addRelation, {
+        subjectType: "user",
+        subjectId: "user_rel",
+        relation: "member",
+        objectType: "team",
+        objectId: "team_1",
+      });
+
+      const result = await t.mutation(api.mutations.offboardUser, {
+        userId: "user_rel",
+      });
+
+      expect(result.rolesRevoked).toBe(1);
+      expect(result.relationshipsRemoved).toBe(1);
+
+      const relations = await t.query(api.rebac.getSubjectRelations, {
+        subjectType: "user",
+        subjectId: "user_rel",
+      });
+      expect(relations).toHaveLength(0);
+    });
+
+    it("should not remove relationships when scope is provided", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.rebac.addRelation, {
+        subjectType: "user",
+        subjectId: "user_scoped_rel",
+        relation: "member",
+        objectType: "team",
+        objectId: "team_1",
+      });
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_scoped_rel",
+        role: "admin",
+        scope: { type: "team", id: "team_1" },
+      });
+
+      const result = await t.mutation(api.mutations.offboardUser, {
+        userId: "user_scoped_rel",
+        scope: { type: "team", id: "team_1" },
+      });
+
+      expect(result.rolesRevoked).toBe(1);
+      expect(result.relationshipsRemoved).toBe(0);
+
+      const relations = await t.query(api.rebac.getSubjectRelations, {
+        subjectType: "user",
+        subjectId: "user_scoped_rel",
+      });
+      expect(relations).toHaveLength(1);
     });
 
     it("should respect scope when provided", async () => {
@@ -457,6 +519,59 @@ describe("mutations - additional coverage", () => {
       });
       expect(attrs).toHaveLength(1);
       expect(attrs[0].key).toBe("keep");
+    });
+  });
+
+  describe("deprovisionUser", () => {
+    it("should wipe all roles, overrides, attributes, and relationships in one call", async () => {
+      const t = convexTest(schema, modules);
+
+      await t.mutation(api.mutations.assignRole, {
+        userId: "user_dep",
+        role: "admin",
+      });
+      await t.mutation(api.mutations.grantPermission, {
+        userId: "user_dep",
+        permission: "documents:read",
+      });
+      await t.mutation(api.mutations.setAttribute, {
+        userId: "user_dep",
+        key: "dept",
+        value: "eng",
+      });
+      await t.mutation(api.rebac.addRelation, {
+        subjectType: "user",
+        subjectId: "user_dep",
+        relation: "member",
+        objectType: "team",
+        objectId: "team_1",
+      });
+
+      const result = await t.mutation(api.mutations.deprovisionUser, {
+        userId: "user_dep",
+        enableAudit: true,
+      });
+
+      expect(result.rolesRevoked).toBe(1);
+      expect(result.overridesRemoved).toBe(1);
+      expect(result.attributesRemoved).toBe(1);
+      expect(result.relationshipsRemoved).toBe(1);
+
+      const roles = await t.query(api.queries.getUserRoles, { userId: "user_dep" });
+      expect(roles).toHaveLength(0);
+      const overrides = await t.query(api.queries.getPermissionOverrides, {
+        userId: "user_dep",
+      });
+      expect(overrides).toHaveLength(0);
+      const attrs = await t.query(api.queries.getUserAttributes, {
+        userId: "user_dep",
+      });
+      expect(attrs).toHaveLength(0);
+      const relations = await t.query(api.rebac.getSubjectRelations, {
+        subjectType: "user",
+        subjectId: "user_dep",
+      });
+      expect(relations).toHaveLength(0);
     });
   });
 

@@ -615,8 +615,9 @@ export class Authz<
   }
 
   /**
-   * Full user offboarding: remove all roles, permission overrides, and attributes for the user (optionally scoped).
-   * Also clears indexed effectiveRoles/effectivePermissions when present.
+   * Full user offboarding: remove all roles, permission overrides, attributes, and optionally
+   * ReBAC relationships for the user (optionally scoped). Also clears indexed
+   * effectiveRoles/effectivePermissions/effectiveRelationships when present.
    */
   async offboardUser(
     ctx: MutationCtx | ActionCtx,
@@ -626,13 +627,16 @@ export class Authz<
       actorId?: string;
       removeAttributes?: boolean;
       removeOverrides?: boolean;
+      removeRelationships?: boolean;
     }
   ): Promise<{
     rolesRevoked: number;
     overridesRemoved: number;
     attributesRemoved: number;
+    relationshipsRemoved: number;
     effectiveRolesRemoved: number;
     effectivePermissionsRemoved: number;
+    effectiveRelationshipsRemoved: number;
   }> {
     validateUserId(userId);
     if (options?.scope) validateScope(options.scope);
@@ -642,7 +646,34 @@ export class Authz<
       revokedBy: options?.actorId ?? this.options.defaultActorId,
       removeAttributes: options?.removeAttributes,
       removeOverrides: options?.removeOverrides,
+      removeRelationships: options?.removeRelationships,
       enableAudit: true,
+    });
+  }
+
+  /**
+   * Full user deprovisioning: wipes all roles, attributes, relationships, and permission
+   * overrides for a given userId in one atomic call. Use for security incident response,
+   * enterprise offboarding, or single-button deactivation.
+   */
+  async deprovisionUser(
+    ctx: MutationCtx | ActionCtx,
+    userId: string,
+    options?: { actorId?: string; enableAudit?: boolean }
+  ): Promise<{
+    rolesRevoked: number;
+    overridesRemoved: number;
+    attributesRemoved: number;
+    relationshipsRemoved: number;
+    effectiveRolesRemoved: number;
+    effectivePermissionsRemoved: number;
+    effectiveRelationshipsRemoved: number;
+  }> {
+    validateUserId(userId);
+    return await ctx.runMutation(this.component.mutations.deprovisionUser, {
+      userId,
+      revokedBy: options?.actorId ?? this.options.defaultActorId,
+      enableAudit: options?.enableAudit ?? true,
     });
   }
 
@@ -1120,8 +1151,9 @@ export class IndexedAuthz<
   }
 
   /**
-   * Full user offboarding: remove all roles, overrides, and attributes (optionally scoped).
-   * Clears indexed effectiveRoles/effectivePermissions.
+   * Full user offboarding: remove all roles, overrides, attributes, and optionally
+   * relationships (optionally scoped). Clears indexed effectiveRoles/effectivePermissions/
+   * effectiveRelationships.
    */
   async offboardUser(
     ctx: MutationCtx | ActionCtx,
@@ -1131,13 +1163,16 @@ export class IndexedAuthz<
       actorId?: string;
       removeAttributes?: boolean;
       removeOverrides?: boolean;
+      removeRelationships?: boolean;
     }
   ): Promise<{
     rolesRevoked: number;
     overridesRemoved: number;
     attributesRemoved: number;
+    relationshipsRemoved: number;
     effectiveRolesRemoved: number;
     effectivePermissionsRemoved: number;
+    effectiveRelationshipsRemoved: number;
   }> {
     validateUserId(userId);
     if (options?.scope) validateScope(options.scope);
@@ -1147,7 +1182,33 @@ export class IndexedAuthz<
       revokedBy: options?.actorId ?? this.options.defaultActorId,
       removeAttributes: options?.removeAttributes,
       removeOverrides: options?.removeOverrides,
+      removeRelationships: options?.removeRelationships,
       enableAudit: true,
+    });
+  }
+
+  /**
+   * Full user deprovisioning: wipes all roles, attributes, relationships, and permission
+   * overrides for a given userId in one atomic call.
+   */
+  async deprovisionUser(
+    ctx: MutationCtx | ActionCtx,
+    userId: string,
+    options?: { actorId?: string; enableAudit?: boolean }
+  ): Promise<{
+    rolesRevoked: number;
+    overridesRemoved: number;
+    attributesRemoved: number;
+    relationshipsRemoved: number;
+    effectiveRolesRemoved: number;
+    effectivePermissionsRemoved: number;
+    effectiveRelationshipsRemoved: number;
+  }> {
+    validateUserId(userId);
+    return await ctx.runMutation(this.component.mutations.deprovisionUser, {
+      userId,
+      revokedBy: options?.actorId ?? this.options.defaultActorId,
+      enableAudit: options?.enableAudit ?? true,
     });
   }
 
