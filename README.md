@@ -4,6 +4,7 @@ A comprehensive, production-ready authorization component for [Convex](https://c
 
 [![npm version](https://badge.fury.io/js/@djpanda%2Fconvex-authz.svg)](https://www.npmjs.com/package/@djpanda/convex-authz)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Convex Approved](https://www.convex.dev/components/badge/djpanda/convex-tenants)](https://www.convex.dev/components/djpanda/convex-tenants)
 
 ## Features
 
