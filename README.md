@@ -265,24 +265,25 @@ Convex’s reactivity ensures that when permissions or roles change on the backe
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           @djpanda/convex-authz                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
+│                                                                             │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────────────┐   │
 │  │      RBAC        │  │      ABAC        │  │         ReBAC            │   │
 │  │  Role-Based      │  │  Attribute-Based │  │  Relationship-Based      │   │
+│  │  Access Control  │  │  Access Control  │  │  Access Control          │   │
 │  │                  │  │                  │  │                          │   │
 │  │  • Roles         │  │  • User attrs    │  │  • Tuples (S, R, O)      │   │
-│  │  • Permissions   │  │  • Policies      │  │  • Graph traversal      │   │
-│  │  • Scopes        │  │  • Conditions    │  │  • Inheritance          │   │
+│  │  • Permissions   │  │  • Policies      │  │  • Graph traversal       │   │
+│  │  • Scopes        │  │  • Conditions    │  │  • Inheritance           │   │
 │  └──────────────────┘  └──────────────────┘  └──────────────────────────┘   │
-│           │                    │                         │                   │
-│           ▼                    ▼                         ▼                   │
+│           │                    │                         │                  │
+│           ▼                    ▼                         ▼                  │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
-│  │                    O(1) Indexed Permission Cache                      │   │
-│  │                                                                       │   │
+│  │                    O(1) Indexed Permission Cache                     │   │
+│  │                                                                      │   │
 │  │   effectivePermissions  │  effectiveRoles  │  effectiveRelationships │   │
 │  │   [user, perm, scope]   │  [user, role]    │  [subject, rel, object] │   │
 │  └──────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
+│                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
