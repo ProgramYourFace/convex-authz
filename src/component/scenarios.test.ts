@@ -16,6 +16,7 @@ import schema from "./schema.js";
 import { api } from "./_generated/api.js";
 
 const modules = import.meta.glob("./**/*.ts");
+const TENANT = "test-tenant";
 
 // ============================================================================
 // Test Data: Multi-Tenant SaaS Structure
@@ -104,6 +105,7 @@ describe("Scenario: Multi-Organization Isolation", () => {
 
     // Setup: Alice is admin of ACME
     await t.mutation(api.mutations.assignRole, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
       scope: { type: "org", id: ORGS.acme },
@@ -111,6 +113,7 @@ describe("Scenario: Multi-Organization Isolation", () => {
 
     // Setup: Diana is admin of BetaCo
     await t.mutation(api.mutations.assignRole, {
+      tenantId: TENANT,
       userId: USERS.diana,
       role: "admin",
       scope: { type: "org", id: ORGS.betaco },
@@ -118,6 +121,7 @@ describe("Scenario: Multi-Organization Isolation", () => {
 
     // Alice can access ACME
     const aliceAcme = await t.query(api.queries.hasRole, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
       scope: { type: "org", id: ORGS.acme },
@@ -126,6 +130,7 @@ describe("Scenario: Multi-Organization Isolation", () => {
 
     // Alice CANNOT access BetaCo
     const aliceBetaco = await t.query(api.queries.hasRole, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
       scope: { type: "org", id: ORGS.betaco },
@@ -134,6 +139,7 @@ describe("Scenario: Multi-Organization Isolation", () => {
 
     // Diana can access BetaCo
     const dianaBetaco = await t.query(api.queries.hasRole, {
+      tenantId: TENANT,
       userId: USERS.diana,
       role: "admin",
       scope: { type: "org", id: ORGS.betaco },
@@ -142,6 +148,7 @@ describe("Scenario: Multi-Organization Isolation", () => {
 
     // Diana CANNOT access ACME
     const dianaAcme = await t.query(api.queries.hasRole, {
+      tenantId: TENANT,
       userId: USERS.diana,
       role: "admin",
       scope: { type: "org", id: ORGS.acme },
@@ -154,12 +161,14 @@ describe("Scenario: Multi-Organization Isolation", () => {
 
     // Alice has global viewer role
     await t.mutation(api.mutations.assignRole, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "viewer",
     });
 
     // Alice has scoped admin role for ACME only
     await t.mutation(api.mutations.assignRole, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
       scope: { type: "org", id: ORGS.acme },
@@ -167,6 +176,7 @@ describe("Scenario: Multi-Organization Isolation", () => {
 
     // Check: Alice is viewer globally
     const isViewerGlobal = await t.query(api.queries.hasRole, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "viewer",
     });
@@ -174,6 +184,7 @@ describe("Scenario: Multi-Organization Isolation", () => {
 
     // Check: Alice is admin of ACME specifically
     const isAdminAcme = await t.query(api.queries.hasRole, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
       scope: { type: "org", id: ORGS.acme },
@@ -182,6 +193,7 @@ describe("Scenario: Multi-Organization Isolation", () => {
 
     // Check: Alice is NOT admin globally
     const isAdminGlobal = await t.query(api.queries.hasRole, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
     });
@@ -189,6 +201,7 @@ describe("Scenario: Multi-Organization Isolation", () => {
 
     // Check: Alice is NOT admin of BetaCo
     const isAdminBetaco = await t.query(api.queries.hasRole, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
       scope: { type: "org", id: ORGS.betaco },
@@ -207,6 +220,7 @@ describe("Scenario: Team-Based Access Control", () => {
 
     // Setup: Alice is member of Engineering team
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
       relation: "member",
@@ -216,6 +230,7 @@ describe("Scenario: Team-Based Access Control", () => {
 
     // Setup: Engineering team owns Project Alpha
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: TYPES.team,
       subjectId: TEAMS.acmeEng,
       relation: "owner",
@@ -225,6 +240,7 @@ describe("Scenario: Team-Based Access Control", () => {
 
     // Check: Alice can view Project Alpha through traversal
     const result = await t.query(api.rebac.checkRelationWithTraversal, {
+      tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
       relation: "viewer",
@@ -245,6 +261,7 @@ describe("Scenario: Team-Based Access Control", () => {
 
     // Setup: Charlie is member of Sales team (not Engineering)
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.charlie,
       relation: "member",
@@ -254,6 +271,7 @@ describe("Scenario: Team-Based Access Control", () => {
 
     // Setup: Engineering team owns Project Alpha
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: TYPES.team,
       subjectId: TEAMS.acmeEng,
       relation: "owner",
@@ -263,6 +281,7 @@ describe("Scenario: Team-Based Access Control", () => {
 
     // Check: Charlie CANNOT view Project Alpha
     const result = await t.query(api.rebac.checkRelationWithTraversal, {
+      tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.charlie,
       relation: "viewer",
@@ -283,6 +302,7 @@ describe("Scenario: Team-Based Access Control", () => {
 
     // Setup: Alice is admin of Engineering team
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
       relation: "admin",
@@ -292,6 +312,7 @@ describe("Scenario: Team-Based Access Control", () => {
 
     // Setup: Bob is member of Engineering team
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.bob,
       relation: "member",
@@ -301,6 +322,7 @@ describe("Scenario: Team-Based Access Control", () => {
 
     // Setup: Engineering team owns Project Alpha
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: TYPES.team,
       subjectId: TEAMS.acmeEng,
       relation: "owner",
@@ -310,6 +332,7 @@ describe("Scenario: Team-Based Access Control", () => {
 
     // Check: Alice (admin) can edit Project Alpha
     const aliceEdit = await t.query(api.rebac.checkRelationWithTraversal, {
+      tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
       relation: "editor",
@@ -325,6 +348,7 @@ describe("Scenario: Team-Based Access Control", () => {
 
     // Check: Bob (member) CANNOT edit Project Alpha
     const bobEdit = await t.query(api.rebac.checkRelationWithTraversal, {
+      tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.bob,
       relation: "editor",
@@ -353,6 +377,7 @@ describe("Scenario: Nested Resource Hierarchy (Org → Team → Project → Docu
 
     // Alice is member of Engineering
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
       relation: "member",
@@ -362,6 +387,7 @@ describe("Scenario: Nested Resource Hierarchy (Org → Team → Project → Docu
 
     // Engineering owns Project Alpha
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: TYPES.team,
       subjectId: TEAMS.acmeEng,
       relation: "owner",
@@ -371,6 +397,7 @@ describe("Scenario: Nested Resource Hierarchy (Org → Team → Project → Docu
 
     // Project Alpha contains Document A1
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: TYPES.project,
       subjectId: PROJECTS.alpha,
       relation: "parent",
@@ -380,6 +407,7 @@ describe("Scenario: Nested Resource Hierarchy (Org → Team → Project → Docu
 
     // Check: Alice can view Document A1 through 3-hop traversal
     const result = await t.query(api.rebac.checkRelationWithTraversal, {
+      tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
       relation: "viewer",
@@ -415,6 +443,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
 
     // Alice is admin with full access
     await t.mutation(api.indexed.assignRoleWithCompute, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
       rolePermissions: ["documents:read", "documents:write", "documents:delete"],
@@ -422,6 +451,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
 
     // But specifically denied delete on a sensitive document
     await t.mutation(api.indexed.denyPermissionDirect, {
+      tenantId: TENANT,
       userId: USERS.alice,
       permission: "documents:delete",
       scope: { type: "document", id: "sensitive-doc" },
@@ -430,6 +460,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
 
     // Alice can delete globally
     const canDeleteGlobal = await t.query(api.indexed.checkPermissionFast, {
+      tenantId: TENANT,
       userId: USERS.alice,
       permission: "documents:delete",
     });
@@ -437,6 +468,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
 
     // But NOT the sensitive document
     const canDeleteSensitive = await t.query(api.indexed.checkPermissionFast, {
+      tenantId: TENANT,
       userId: USERS.alice,
       permission: "documents:delete",
       objectType: "document",
@@ -454,6 +486,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
 
     // Grant temporary access that has already expired
     await t.mutation(api.indexed.grantPermissionDirect, {
+      tenantId: TENANT,
       userId: USERS.eve,
       permission: "documents:read",
       scope: { type: TYPES.project, id: PROJECTS.alpha },
@@ -463,6 +496,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
 
     // Expired permission should be denied
     const canReadExpired = await t.query(api.indexed.checkPermissionFast, {
+      tenantId: TENANT,
       userId: USERS.eve,
       permission: "documents:read",
       objectType: TYPES.project,
@@ -472,6 +506,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
 
     // Grant access that expires in the future
     await t.mutation(api.indexed.grantPermissionDirect, {
+      tenantId: TENANT,
       userId: USERS.eve,
       permission: "documents:write",
       scope: { type: TYPES.project, id: PROJECTS.alpha },
@@ -481,6 +516,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
 
     // Valid permission should be allowed
     const canWrite = await t.query(api.indexed.checkPermissionFast, {
+      tenantId: TENANT,
       userId: USERS.eve,
       permission: "documents:write",
       objectType: TYPES.project,
@@ -496,6 +532,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
     // But has specific grants for Project Alpha
 
     await t.mutation(api.indexed.grantPermissionDirect, {
+      tenantId: TENANT,
       userId: USERS.eve,
       permission: "documents:read",
       scope: { type: TYPES.project, id: PROJECTS.alpha },
@@ -504,6 +541,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
 
     // Eve can read Project Alpha docs
     const canRead = await t.query(api.indexed.checkPermissionFast, {
+      tenantId: TENANT,
       userId: USERS.eve,
       permission: "documents:read",
       objectType: TYPES.project,
@@ -513,6 +551,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
 
     // Eve CANNOT read Project Beta docs
     const canReadBeta = await t.query(api.indexed.checkPermissionFast, {
+      tenantId: TENANT,
       userId: USERS.eve,
       permission: "documents:read",
       objectType: TYPES.project,
@@ -522,6 +561,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
 
     // Eve CANNOT write to Project Alpha (no write grant)
     const canWrite = await t.query(api.indexed.checkPermissionFast, {
+      tenantId: TENANT,
       userId: USERS.eve,
       permission: "documents:write",
       objectType: TYPES.project,
@@ -545,17 +585,20 @@ describe("Scenario: Users with Multiple Roles", () => {
     // - Member of Team Sales
 
     await t.mutation(api.mutations.assignRole, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "viewer",
     });
 
     await t.mutation(api.mutations.assignRole, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
       scope: { type: TYPES.team, id: TEAMS.acmeEng },
     });
 
     await t.mutation(api.mutations.assignRole, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "member",
       scope: { type: TYPES.team, id: TEAMS.acmeSales },
@@ -563,6 +606,7 @@ describe("Scenario: Users with Multiple Roles", () => {
 
     // Get all Alice's roles
     const roles = await t.query(api.queries.getUserRoles, {
+      tenantId: TENANT,
       userId: USERS.alice,
     });
 
@@ -592,6 +636,7 @@ describe("Scenario: Users with Multiple Roles", () => {
 
     // Alice has viewer role (read only)
     await t.mutation(api.indexed.assignRoleWithCompute, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "viewer",
       rolePermissions: ["documents:read"],
@@ -599,6 +644,7 @@ describe("Scenario: Users with Multiple Roles", () => {
 
     // Alice also has editor role (read + write)
     await t.mutation(api.indexed.assignRoleWithCompute, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "editor",
       rolePermissions: ["documents:read", "documents:write"],
@@ -606,6 +652,7 @@ describe("Scenario: Users with Multiple Roles", () => {
 
     // Alice should have union of all permissions
     const permissions = await t.query(api.indexed.getUserPermissionsFast, {
+      tenantId: TENANT,
       userId: USERS.alice,
     });
 
@@ -631,6 +678,7 @@ describe("Scenario: Security Boundaries", () => {
 
     // Frank has no roles, no relationships, no grants
     const canRead = await t.query(api.queries.checkPermission, {
+      tenantId: TENANT,
       userId: USERS.frank,
       permission: "documents:read",
       rolePermissions: {
@@ -648,6 +696,7 @@ describe("Scenario: Security Boundaries", () => {
 
     // Alice is admin
     await t.mutation(api.indexed.assignRoleWithCompute, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
       rolePermissions: ["documents:read", "documents:write", "documents:delete"],
@@ -655,6 +704,7 @@ describe("Scenario: Security Boundaries", () => {
 
     // Verify Alice has permissions
     let canDelete = await t.query(api.indexed.checkPermissionFast, {
+      tenantId: TENANT,
       userId: USERS.alice,
       permission: "documents:delete",
     });
@@ -662,6 +712,7 @@ describe("Scenario: Security Boundaries", () => {
 
     // Revoke admin role
     await t.mutation(api.indexed.revokeRoleWithCompute, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
       rolePermissions: ["documents:read", "documents:write", "documents:delete"],
@@ -669,6 +720,7 @@ describe("Scenario: Security Boundaries", () => {
 
     // Alice should no longer have permissions
     canDelete = await t.query(api.indexed.checkPermissionFast, {
+      tenantId: TENANT,
       userId: USERS.alice,
       permission: "documents:delete",
     });
@@ -676,6 +728,7 @@ describe("Scenario: Security Boundaries", () => {
 
     // Verify all permissions are gone
     const permissions = await t.query(api.indexed.getUserPermissionsFast, {
+      tenantId: TENANT,
       userId: USERS.alice,
     });
     expect(permissions).toHaveLength(0);
@@ -686,6 +739,7 @@ describe("Scenario: Security Boundaries", () => {
 
     // Setup: alice -> member -> acme-eng -> owner -> alpha
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
       relation: "member",
@@ -694,6 +748,7 @@ describe("Scenario: Security Boundaries", () => {
     });
 
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: TYPES.team,
       subjectId: TEAMS.acmeEng,
       relation: "owner",
@@ -703,6 +758,7 @@ describe("Scenario: Security Boundaries", () => {
 
     // Verify access
     let result = await t.query(api.rebac.checkRelationWithTraversal, {
+      tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
       relation: "viewer",
@@ -718,6 +774,7 @@ describe("Scenario: Security Boundaries", () => {
 
     // Remove alice from team
     await t.mutation(api.rebac.removeRelation, {
+      tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
       relation: "member",
@@ -727,6 +784,7 @@ describe("Scenario: Security Boundaries", () => {
 
     // Access should be broken
     result = await t.query(api.rebac.checkRelationWithTraversal, {
+      tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
       relation: "viewer",
@@ -751,11 +809,13 @@ describe("Scenario: Wildcard & Super Admin", () => {
     const t = convexTest(schema, modules);
 
     await t.mutation(api.mutations.assignRole, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "superadmin",
     });
 
     const result = await t.query(api.queries.checkPermission, {
+      tenantId: TENANT,
       userId: USERS.alice,
       permission: "anything:action",
       rolePermissions: {
@@ -770,6 +830,7 @@ describe("Scenario: Wildcard & Super Admin", () => {
     const t = convexTest(schema, modules);
 
     await t.mutation(api.mutations.assignRole, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "doc_admin",
     });
@@ -779,6 +840,7 @@ describe("Scenario: Wildcard & Super Admin", () => {
     };
 
     const canRead = await t.query(api.queries.checkPermission, {
+      tenantId: TENANT,
       userId: USERS.alice,
       permission: "documents:read",
       rolePermissions: rolePerms,
@@ -786,6 +848,7 @@ describe("Scenario: Wildcard & Super Admin", () => {
     expect(canRead.allowed).toBe(true);
 
     const canDelete = await t.query(api.queries.checkPermission, {
+      tenantId: TENANT,
       userId: USERS.alice,
       permission: "documents:delete",
       rolePermissions: rolePerms,
@@ -794,6 +857,7 @@ describe("Scenario: Wildcard & Super Admin", () => {
 
     // But not other resources
     const canReadProjects = await t.query(api.queries.checkPermission, {
+      tenantId: TENANT,
       userId: USERS.alice,
       permission: "projects:read",
       rolePermissions: rolePerms,
@@ -812,6 +876,7 @@ describe("Scenario: Audit Trail", () => {
 
     // Assign role
     await t.mutation(api.mutations.assignRole, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
       assignedBy: "system",
@@ -820,6 +885,7 @@ describe("Scenario: Audit Trail", () => {
 
     // Revoke role
     await t.mutation(api.mutations.revokeRole, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
       revokedBy: "system",
@@ -828,6 +894,7 @@ describe("Scenario: Audit Trail", () => {
 
     // Grant permission
     await t.mutation(api.mutations.grantPermission, {
+      tenantId: TENANT,
       userId: USERS.alice,
       permission: "special:access",
       createdBy: "system",
@@ -836,6 +903,7 @@ describe("Scenario: Audit Trail", () => {
 
     // Get audit log
     const logsResult = await t.query(api.queries.getAuditLog, {
+      tenantId: TENANT,
       userId: USERS.alice,
     });
     const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
@@ -859,6 +927,7 @@ describe("Scenario: Cross-Tenant Data Room (RBAC + Overrides + O(1) indexed)", (
 
     // Alice is admin on Project Alpha (full CRUD)
     await t.mutation(api.indexed.assignRoleWithCompute, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
       rolePermissions: [
@@ -871,6 +940,7 @@ describe("Scenario: Cross-Tenant Data Room (RBAC + Overrides + O(1) indexed)", (
 
     // External contractor (Frank) gets explicit read but explicit deny for delete
     await t.mutation(api.indexed.grantPermissionDirect, {
+      tenantId: TENANT,
       userId: USERS.frank,
       permission: "documents:read",
       scope: { type: "project", id: PROJECTS.alpha },
@@ -878,6 +948,7 @@ describe("Scenario: Cross-Tenant Data Room (RBAC + Overrides + O(1) indexed)", (
     });
 
     await t.mutation(api.indexed.denyPermissionDirect, {
+      tenantId: TENANT,
       userId: USERS.frank,
       permission: "documents:delete",
       scope: { type: "project", id: PROJECTS.alpha },
@@ -886,6 +957,7 @@ describe("Scenario: Cross-Tenant Data Room (RBAC + Overrides + O(1) indexed)", (
 
     // Admin can delete
     const adminCanDelete = await t.query(api.indexed.checkPermissionFast, {
+      tenantId: TENANT,
       userId: USERS.alice,
       permission: "documents:delete",
       objectType: "project",
@@ -895,12 +967,14 @@ describe("Scenario: Cross-Tenant Data Room (RBAC + Overrides + O(1) indexed)", (
 
     // Contractor can read but not delete
     const contractorCanRead = await t.query(api.indexed.checkPermissionFast, {
+      tenantId: TENANT,
       userId: USERS.frank,
       permission: "documents:read",
       objectType: "project",
       objectId: PROJECTS.alpha,
     });
     const contractorCanDelete = await t.query(api.indexed.checkPermissionFast, {
+      tenantId: TENANT,
       userId: USERS.frank,
       permission: "documents:delete",
       objectType: "project",
@@ -922,6 +996,7 @@ describe("Scenario: ReBAC traversal with cycle protection", () => {
 
     // user -> team -> project
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
       relation: "member",
@@ -930,6 +1005,7 @@ describe("Scenario: ReBAC traversal with cycle protection", () => {
     });
 
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: TYPES.team,
       subjectId: TEAMS.acmeEng,
       relation: "owner",
@@ -939,6 +1015,7 @@ describe("Scenario: ReBAC traversal with cycle protection", () => {
 
     // Introduce a cycle: project references team as parent (synthetic example)
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: TYPES.project,
       subjectId: PROJECTS.alpha,
       relation: "parent",
@@ -947,6 +1024,7 @@ describe("Scenario: ReBAC traversal with cycle protection", () => {
     });
 
     const result = await t.query(api.rebac.checkRelationWithTraversal, {
+      tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
       relation: "viewer",
@@ -993,6 +1071,7 @@ describe("Scenario: Google Drive-style sharing", () => {
     // Relations setup
     // file -> folder (parent)
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: "folder",
       subjectId: FOLDER,
       relation: "parent",
@@ -1002,6 +1081,7 @@ describe("Scenario: Google Drive-style sharing", () => {
 
     // folder -> account (parent)
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: "account",
       subjectId: ACCOUNT,
       relation: "parent",
@@ -1011,6 +1091,7 @@ describe("Scenario: Google Drive-style sharing", () => {
 
     // file -> account (account_global) for everyone in account
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: "account",
       subjectId: ACCOUNT,
       relation: "account_global",
@@ -1021,6 +1102,7 @@ describe("Scenario: Google Drive-style sharing", () => {
     // Direct access and roles
     // John: direct viewer on file
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: "user",
       subjectId: JOHN,
       relation: "viewer",
@@ -1030,6 +1112,7 @@ describe("Scenario: Google Drive-style sharing", () => {
 
     // Jane: editor on folder
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: "user",
       subjectId: JANE,
       relation: "editor",
@@ -1039,6 +1122,7 @@ describe("Scenario: Google Drive-style sharing", () => {
 
     // Alice: admin on account
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: "user",
       subjectId: ALICE,
       relation: "admin",
@@ -1048,6 +1132,7 @@ describe("Scenario: Google Drive-style sharing", () => {
 
     // Bob: member on account (general access)
     await t.mutation(api.rebac.addRelation, {
+      tenantId: TENANT,
       subjectType: "user",
       subjectId: BOB,
       relation: "member",
@@ -1081,6 +1166,7 @@ describe("Scenario: Google Drive-style sharing", () => {
 
     // John: direct viewer on file
     const johnRead = await t.query(api.rebac.checkRelationWithTraversal, {
+      tenantId: TENANT,
       subjectType: "user",
       subjectId: JOHN,
       relation: "viewer",
@@ -1091,6 +1177,7 @@ describe("Scenario: Google Drive-style sharing", () => {
     expect(johnRead.allowed).toBe(true);
 
     const johnEdit = await t.query(api.rebac.checkRelationWithTraversal, {
+      tenantId: TENANT,
       subjectType: "user",
       subjectId: JOHN,
       relation: "editor",
@@ -1102,6 +1189,7 @@ describe("Scenario: Google Drive-style sharing", () => {
 
     // Jane: editor on folder -> inherits editor on file
     const janeEdit = await t.query(api.rebac.checkRelationWithTraversal, {
+      tenantId: TENANT,
       subjectType: "user",
       subjectId: JANE,
       relation: "editor",
@@ -1113,6 +1201,7 @@ describe("Scenario: Google Drive-style sharing", () => {
 
     // Alice: admin on account -> inherits editor on file
     const aliceEdit = await t.query(api.rebac.checkRelationWithTraversal, {
+      tenantId: TENANT,
       subjectType: "user",
       subjectId: ALICE,
       relation: "editor",
@@ -1124,6 +1213,7 @@ describe("Scenario: Google Drive-style sharing", () => {
 
     // Bob: member on account -> viewer via account_global
     const bobView = await t.query(api.rebac.checkRelationWithTraversal, {
+      tenantId: TENANT,
       subjectType: "user",
       subjectId: BOB,
       relation: "viewer",
@@ -1156,6 +1246,7 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
 
     // Base assignments (RBAC per order)
     await t.mutation(api.indexed.assignRoleWithCompute, {
+      tenantId: TENANT,
       userId: USERS.diana, // customer
       role: "customer",
       rolePermissions: ["orders:create"],
@@ -1163,6 +1254,7 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
     });
 
     await t.mutation(api.indexed.assignRoleWithCompute, {
+      tenantId: TENANT,
       userId: USERS.bob, // vendor
       role: "vendor",
       rolePermissions: ["orders:fulfill"],
@@ -1171,6 +1263,7 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
 
     // Admin (global)
     await t.mutation(api.indexed.assignRoleWithCompute, {
+      tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
       rolePermissions: ["orders:create", "orders:fulfill", "orders:deliver"],
@@ -1178,12 +1271,14 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
 
     // Make admin explicitly allowed on both orders (global may not cover scoped keys)
     await t.mutation(api.indexed.grantPermissionDirect, {
+      tenantId: TENANT,
       userId: USERS.alice,
       permission: "orders:deliver",
       scope: { type: "order", id: ORDER_ALPHA },
       reason: "Admin global deliver",
     });
     await t.mutation(api.indexed.grantPermissionDirect, {
+      tenantId: TENANT,
       userId: USERS.alice,
       permission: "orders:deliver",
       scope: { type: "order", id: ORDER_BETA },
@@ -1192,6 +1287,7 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
 
     // Another order in a different scope (to prove isolation)
     await t.mutation(api.indexed.assignRoleWithCompute, {
+      tenantId: TENANT,
       userId: USERS.bob,
       role: "vendor",
       rolePermissions: ["orders:fulfill"],
@@ -1200,6 +1296,7 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
 
     // Customer can create their order
     const customerCreate = await t.query(api.indexed.checkPermissionFast, {
+      tenantId: TENANT,
       userId: USERS.diana,
       permission: "orders:create",
       objectType: "order",
@@ -1209,6 +1306,7 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
 
     // Vendor can fulfill order alpha
     const vendorFulfill = await t.query(api.indexed.checkPermissionFast, {
+      tenantId: TENANT,
       userId: USERS.bob,
       permission: "orders:fulfill",
       objectType: "order",
@@ -1218,6 +1316,7 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
 
     // Rider initially should not have deliver until we explicitly grant it
     const riderDeliverInitial = await t.query(api.indexed.checkPermissionFast, {
+      tenantId: TENANT,
       userId: USERS.charlie,
       permission: "orders:deliver",
       objectType: "order",
@@ -1227,11 +1326,13 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
 
     // After rider reaches threshold, grant deliver explicitly
     await t.mutation(api.mutations.setAttribute, {
+      tenantId: TENANT,
       userId: USERS.charlie,
       key: "rides",
       value: 600,
     });
     await t.mutation(api.indexed.grantPermissionDirect, {
+      tenantId: TENANT,
       userId: USERS.charlie,
       permission: "orders:deliver",
       scope: { type: "order", id: ORDER_ALPHA },
@@ -1239,6 +1340,7 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
     });
 
     const riderDeliverAfter = await t.query(api.indexed.checkPermissionFast, {
+      tenantId: TENANT,
       userId: USERS.charlie,
       permission: "orders:deliver",
       objectType: "order",
@@ -1248,12 +1350,14 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
 
     // Admin can deliver anywhere (global)
     const adminDeliverAlpha = await t.query(api.indexed.checkPermissionFast, {
+      tenantId: TENANT,
       userId: USERS.alice,
       permission: "orders:deliver",
       objectType: "order",
       objectId: ORDER_ALPHA,
     });
     const adminDeliverBeta = await t.query(api.indexed.checkPermissionFast, {
+      tenantId: TENANT,
       userId: USERS.alice,
       permission: "orders:deliver",
       objectType: "order",
@@ -1264,6 +1368,7 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
 
     // Isolation: vendor of beta cannot fulfill alpha (and vice-versa if we checked)
     const vendorBetaOnAlpha = await t.query(api.indexed.checkPermissionFast, {
+      tenantId: TENANT,
       userId: USERS.bob,
       permission: "orders:fulfill",
       objectType: "order",
@@ -1272,6 +1377,7 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
     expect(vendorBetaOnAlpha).toBe(true); // bob was assigned to alpha
 
     const vendorAlphaOnBeta = await t.query(api.indexed.checkPermissionFast, {
+      tenantId: TENANT,
       userId: USERS.bob,
       permission: "orders:fulfill",
       objectType: "order",

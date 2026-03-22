@@ -8,6 +8,7 @@ import schema from "./schema.js";
 import { api } from "./_generated/api.js";
 
 const modules = import.meta.glob("./**/*.ts");
+const TENANT = "test-tenant";
 
 describe("O(1) Indexed Authorization", () => {
   describe("indexed role assignment", () => {
@@ -15,6 +16,7 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       const roleId = await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         rolePermissions: ["documents:read", "documents:write", "documents:delete"],
@@ -23,6 +25,7 @@ describe("O(1) Indexed Authorization", () => {
       expect(roleId).toBeDefined();
 
       const permissions = await t.query(api.indexed.getUserPermissionsFast, {
+        tenantId: TENANT,
         userId: "user_123",
       });
 
@@ -33,12 +36,14 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "editor",
         rolePermissions: ["documents:read", "documents:write"],
       });
 
       const canRead = await t.query(api.indexed.checkPermissionFast, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
@@ -46,6 +51,7 @@ describe("O(1) Indexed Authorization", () => {
       expect(canRead).toBe(true);
 
       const canDelete = await t.query(api.indexed.checkPermissionFast, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
       });
@@ -57,12 +63,14 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         rolePermissions: ["*:*"],
       });
 
       const hasAdmin = await t.query(api.indexed.hasRoleFast, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
@@ -70,6 +78,7 @@ describe("O(1) Indexed Authorization", () => {
       expect(hasAdmin).toBe(true);
 
       const hasViewer = await t.query(api.indexed.hasRoleFast, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
       });
@@ -81,12 +90,14 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "editor",
         rolePermissions: ["documents:read", "documents:write"],
       });
 
       const revoked = await t.mutation(api.indexed.revokeRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "editor",
         rolePermissions: ["documents:read", "documents:write"],
@@ -95,6 +106,7 @@ describe("O(1) Indexed Authorization", () => {
       expect(revoked).toBe(true);
 
       const permissions = await t.query(api.indexed.getUserPermissionsFast, {
+        tenantId: TENANT,
         userId: "user_123",
       });
 
@@ -105,12 +117,14 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
         rolePermissions: ["documents:read"],
       });
 
       const result = await t.query(api.indexed.checkPermissionsFast, {
+        tenantId: TENANT,
         userId: "user_123",
         permissions: ["documents:delete", "documents:read", "documents:update"],
       });
@@ -122,12 +136,14 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
         rolePermissions: ["documents:read"],
       });
 
       const result = await t.query(api.indexed.checkPermissionsFast, {
+        tenantId: TENANT,
         userId: "user_123",
         permissions: ["documents:delete", "documents:update"],
       });
@@ -144,6 +160,7 @@ describe("O(1) Indexed Authorization", () => {
       };
 
       const result = await t.mutation(api.indexed.assignRolesWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         roles: [
           { role: "admin" },
@@ -156,12 +173,14 @@ describe("O(1) Indexed Authorization", () => {
       expect(result.assignmentIds).toHaveLength(2);
 
       const canDelete = await t.query(api.indexed.checkPermissionFast, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
       });
       expect(canDelete).toBe(true);
 
       const canWriteScoped = await t.query(api.indexed.checkPermissionFast, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:write",
         objectType: "team",
@@ -179,12 +198,14 @@ describe("O(1) Indexed Authorization", () => {
       };
 
       await t.mutation(api.indexed.assignRolesWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         roles: [{ role: "admin" }, { role: "editor" }],
         rolePermissionsMap,
       });
 
       const result = await t.mutation(api.indexed.revokeRolesWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         roles: [{ role: "admin" }, { role: "editor" }],
         rolePermissionsMap,
@@ -193,6 +214,7 @@ describe("O(1) Indexed Authorization", () => {
       expect(result.revoked).toBe(2);
 
       const permissions = await t.query(api.indexed.getUserPermissionsFast, {
+        tenantId: TENANT,
         userId: "user_123",
       });
       expect(permissions).toHaveLength(0);
@@ -204,6 +226,7 @@ describe("O(1) Indexed Authorization", () => {
       const futureTime = Date.now() + 3600000;
 
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         rolePermissions: ["documents:read"],
@@ -211,6 +234,7 @@ describe("O(1) Indexed Authorization", () => {
 
       // Assign same role again - should update
       const roleId = await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         rolePermissions: ["documents:read"],
@@ -220,6 +244,7 @@ describe("O(1) Indexed Authorization", () => {
       expect(roleId).toBeDefined();
 
       const hasRole = await t.query(api.indexed.hasRoleFast, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
@@ -232,6 +257,7 @@ describe("O(1) Indexed Authorization", () => {
 
       // Assign viewer with read permission
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
         rolePermissions: ["documents:read"],
@@ -239,12 +265,14 @@ describe("O(1) Indexed Authorization", () => {
 
       // Assign editor with same read permission (plus write)
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "editor",
         rolePermissions: ["documents:read", "documents:write"],
       });
 
       const permissions = await t.query(api.indexed.getUserPermissionsFast, {
+        tenantId: TENANT,
         userId: "user_123",
       });
 
@@ -260,6 +288,7 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         rolePermissions: ["documents:read"],
@@ -267,12 +296,14 @@ describe("O(1) Indexed Authorization", () => {
 
       // Assign same role again
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         rolePermissions: ["documents:read"],
       });
 
       const permissions = await t.query(api.indexed.getUserPermissionsFast, {
+        tenantId: TENANT,
         userId: "user_123",
       });
 
@@ -286,6 +317,7 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "editor",
         rolePermissions: ["documents:read", "documents:write"],
@@ -293,6 +325,7 @@ describe("O(1) Indexed Authorization", () => {
       });
 
       const canReadGlobal = await t.query(api.indexed.checkPermissionFast, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
@@ -300,6 +333,7 @@ describe("O(1) Indexed Authorization", () => {
       expect(canReadGlobal).toBe(false);
 
       const canReadScoped = await t.query(api.indexed.checkPermissionFast, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         objectType: "team",
@@ -313,6 +347,7 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         rolePermissions: ["*:*"],
@@ -320,6 +355,7 @@ describe("O(1) Indexed Authorization", () => {
       });
 
       const hasRoleGlobal = await t.query(api.indexed.hasRoleFast, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
@@ -327,6 +363,7 @@ describe("O(1) Indexed Authorization", () => {
       expect(hasRoleGlobal).toBe(false);
 
       const hasRoleScoped = await t.query(api.indexed.hasRoleFast, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         objectType: "org",
@@ -342,12 +379,14 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.indexed.grantPermissionDirect, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "special:access",
         reason: "VIP user",
       });
 
       const hasPermission = await t.query(api.indexed.checkPermissionFast, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "special:access",
       });
@@ -359,18 +398,21 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         rolePermissions: ["documents:delete"],
       });
 
       await t.mutation(api.indexed.denyPermissionDirect, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
         reason: "Restricted",
       });
 
       const canDelete = await t.query(api.indexed.checkPermissionFast, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
       });
@@ -382,6 +424,7 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.indexed.grantPermissionDirect, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         scope: { type: "team", id: "team_1" },
@@ -389,6 +432,7 @@ describe("O(1) Indexed Authorization", () => {
       });
 
       const canReadScoped = await t.query(api.indexed.checkPermissionFast, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         objectType: "team",
@@ -398,6 +442,7 @@ describe("O(1) Indexed Authorization", () => {
       expect(canReadScoped).toBe(true);
 
       const canReadGlobal = await t.query(api.indexed.checkPermissionFast, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
@@ -409,17 +454,20 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.indexed.denyPermissionDirect, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
 
       // Now grant - should update existing
       await t.mutation(api.indexed.grantPermissionDirect, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
 
       const canRead = await t.query(api.indexed.checkPermissionFast, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
@@ -431,17 +479,20 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.indexed.grantPermissionDirect, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
 
       // Now deny - should update existing
       await t.mutation(api.indexed.denyPermissionDirect, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
 
       const canRead = await t.query(api.indexed.checkPermissionFast, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
@@ -453,6 +504,7 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.indexed.denyPermissionDirect, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
         scope: { type: "doc", id: "sensitive" },
@@ -460,6 +512,7 @@ describe("O(1) Indexed Authorization", () => {
       });
 
       const canDelete = await t.query(api.indexed.checkPermissionFast, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
         objectType: "doc",
@@ -475,6 +528,7 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       const result = await t.mutation(api.indexed.revokeRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "nonexistent",
         rolePermissions: [],
@@ -488,12 +542,14 @@ describe("O(1) Indexed Authorization", () => {
 
       // Both roles grant documents:read
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
         rolePermissions: ["documents:read"],
       });
 
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "editor",
         rolePermissions: ["documents:read", "documents:write"],
@@ -501,12 +557,14 @@ describe("O(1) Indexed Authorization", () => {
 
       // Revoke viewer - documents:read should remain (from editor)
       await t.mutation(api.indexed.revokeRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
         rolePermissions: ["documents:read"],
       });
 
       const permissions = await t.query(api.indexed.getUserPermissionsFast, {
+        tenantId: TENANT,
         userId: "user_123",
       });
 
@@ -523,6 +581,7 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         rolePermissions: ["documents:read"],
@@ -530,6 +589,7 @@ describe("O(1) Indexed Authorization", () => {
       });
 
       const result = await t.mutation(api.indexed.revokeRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         rolePermissions: ["documents:read"],
@@ -539,6 +599,7 @@ describe("O(1) Indexed Authorization", () => {
       expect(result).toBe(true);
 
       const hasRole = await t.query(api.indexed.hasRoleFast, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         objectType: "team",
@@ -556,12 +617,14 @@ describe("O(1) Indexed Authorization", () => {
       const pastTime = Date.now() - 10000;
 
       await t.mutation(api.indexed.grantPermissionDirect, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         expiresAt: pastTime,
       });
 
       const canRead = await t.query(api.indexed.checkPermissionFast, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
@@ -575,6 +638,7 @@ describe("O(1) Indexed Authorization", () => {
       const pastTime = Date.now() - 10000;
 
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         rolePermissions: ["documents:read"],
@@ -582,6 +646,7 @@ describe("O(1) Indexed Authorization", () => {
       });
 
       const hasRole = await t.query(api.indexed.hasRoleFast, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
@@ -595,6 +660,7 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       const relationId = await t.mutation(api.indexed.addRelationWithCompute, {
+        tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
         relation: "member",
@@ -605,6 +671,7 @@ describe("O(1) Indexed Authorization", () => {
       expect(relationId).toBeDefined();
 
       const hasRelation = await t.query(api.indexed.hasRelationFast, {
+        tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
         relation: "member",
@@ -619,6 +686,7 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       const id1 = await t.mutation(api.indexed.addRelationWithCompute, {
+        tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
         relation: "member",
@@ -627,6 +695,7 @@ describe("O(1) Indexed Authorization", () => {
       });
 
       const id2 = await t.mutation(api.indexed.addRelationWithCompute, {
+        tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
         relation: "member",
@@ -642,6 +711,7 @@ describe("O(1) Indexed Authorization", () => {
 
       // Setup: team -> org hierarchy
       await t.mutation(api.indexed.addRelationWithCompute, {
+        tenantId: TENANT,
         subjectType: "team",
         subjectId: "sales",
         relation: "parent",
@@ -651,6 +721,7 @@ describe("O(1) Indexed Authorization", () => {
 
       // Add user as member of team, with inherited viewer on org
       await t.mutation(api.indexed.addRelationWithCompute, {
+        tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
         relation: "member",
@@ -667,6 +738,7 @@ describe("O(1) Indexed Authorization", () => {
 
       // Check direct relation
       const isMember = await t.query(api.indexed.hasRelationFast, {
+        tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
         relation: "member",
@@ -677,6 +749,7 @@ describe("O(1) Indexed Authorization", () => {
 
       // Check inherited relation
       const isViewer = await t.query(api.indexed.hasRelationFast, {
+        tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
         relation: "viewer",
@@ -691,6 +764,7 @@ describe("O(1) Indexed Authorization", () => {
 
       // Setup hierarchy
       await t.mutation(api.indexed.addRelationWithCompute, {
+        tenantId: TENANT,
         subjectType: "team",
         subjectId: "sales",
         relation: "parent",
@@ -700,6 +774,7 @@ describe("O(1) Indexed Authorization", () => {
 
       // Pre-create the inherited relationship
       await t.mutation(api.indexed.addRelationWithCompute, {
+        tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
         relation: "viewer",
@@ -709,6 +784,7 @@ describe("O(1) Indexed Authorization", () => {
 
       // Now add with inherited - should not create duplicate
       await t.mutation(api.indexed.addRelationWithCompute, {
+        tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
         relation: "member",
@@ -725,6 +801,7 @@ describe("O(1) Indexed Authorization", () => {
 
       // Should still have the relation (no error from duplicate)
       const isViewer = await t.query(api.indexed.hasRelationFast, {
+        tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
         relation: "viewer",
@@ -738,6 +815,7 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.indexed.addRelationWithCompute, {
+        tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
         relation: "member",
@@ -746,6 +824,7 @@ describe("O(1) Indexed Authorization", () => {
       });
 
       const removed = await t.mutation(api.indexed.removeRelationWithCompute, {
+        tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
         relation: "member",
@@ -756,6 +835,7 @@ describe("O(1) Indexed Authorization", () => {
       expect(removed).toBe(true);
 
       const hasRelation = await t.query(api.indexed.hasRelationFast, {
+        tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
         relation: "member",
@@ -770,6 +850,7 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       const removed = await t.mutation(api.indexed.removeRelationWithCompute, {
+        tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
         relation: "member",
@@ -785,6 +866,7 @@ describe("O(1) Indexed Authorization", () => {
 
       // Setup hierarchy
       await t.mutation(api.indexed.addRelationWithCompute, {
+        tenantId: TENANT,
         subjectType: "team",
         subjectId: "sales",
         relation: "parent",
@@ -794,6 +876,7 @@ describe("O(1) Indexed Authorization", () => {
 
       // Add with inherited
       await t.mutation(api.indexed.addRelationWithCompute, {
+        tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
         relation: "member",
@@ -811,6 +894,7 @@ describe("O(1) Indexed Authorization", () => {
 
       // Remove the direct relation
       await t.mutation(api.indexed.removeRelationWithCompute, {
+        tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
         relation: "member",
@@ -820,6 +904,7 @@ describe("O(1) Indexed Authorization", () => {
 
       // Inherited should also be gone
       const isViewer = await t.query(api.indexed.hasRelationFast, {
+        tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
         relation: "viewer",
@@ -835,12 +920,14 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         rolePermissions: ["documents:read"],
       });
 
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "editor",
         rolePermissions: ["documents:write"],
@@ -849,6 +936,7 @@ describe("O(1) Indexed Authorization", () => {
 
       // Global scope
       const globalPerms = await t.query(api.indexed.getUserPermissionsFast, {
+        tenantId: TENANT,
         userId: "user_123",
         scopeKey: "global",
       });
@@ -858,6 +946,7 @@ describe("O(1) Indexed Authorization", () => {
 
       // Team scope
       const teamPerms = await t.query(api.indexed.getUserPermissionsFast, {
+        tenantId: TENANT,
         userId: "user_123",
         scopeKey: "team:team_1",
       });
@@ -871,17 +960,20 @@ describe("O(1) Indexed Authorization", () => {
       const pastTime = Date.now() - 10000;
 
       await t.mutation(api.indexed.grantPermissionDirect, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         expiresAt: pastTime,
       });
 
       await t.mutation(api.indexed.grantPermissionDirect, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:write",
       });
 
       const perms = await t.query(api.indexed.getUserPermissionsFast, {
+        tenantId: TENANT,
         userId: "user_123",
       });
 
@@ -893,12 +985,14 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         rolePermissions: [],
       });
 
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "editor",
         rolePermissions: [],
@@ -906,6 +1000,7 @@ describe("O(1) Indexed Authorization", () => {
       });
 
       const globalRoles = await t.query(api.indexed.getUserRolesFast, {
+        tenantId: TENANT,
         userId: "user_123",
         scopeKey: "global",
       });
@@ -914,6 +1009,7 @@ describe("O(1) Indexed Authorization", () => {
       expect(globalRoles.some((r) => r.role === "editor")).toBe(false);
 
       const teamRoles = await t.query(api.indexed.getUserRolesFast, {
+        tenantId: TENANT,
         userId: "user_123",
         scopeKey: "team:team_1",
       });
@@ -927,6 +1023,7 @@ describe("O(1) Indexed Authorization", () => {
       const pastTime = Date.now() - 10000;
 
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         rolePermissions: [],
@@ -934,12 +1031,14 @@ describe("O(1) Indexed Authorization", () => {
       });
 
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
         rolePermissions: [],
       });
 
       const roles = await t.query(api.indexed.getUserRolesFast, {
+        tenantId: TENANT,
         userId: "user_123",
       });
 
@@ -955,19 +1054,23 @@ describe("O(1) Indexed Authorization", () => {
       const pastTime = Date.now() - 10000;
 
       await t.mutation(api.indexed.grantPermissionDirect, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         expiresAt: pastTime,
       });
 
       await t.mutation(api.indexed.assignRoleWithCompute, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         rolePermissions: [],
         expiresAt: pastTime,
       });
 
-      const result = await t.mutation(api.indexed.cleanupExpired, {});
+      const result = await t.mutation(api.indexed.cleanupExpired, {
+        tenantId: TENANT,
+      });
 
       expect(result.expiredPermissions).toBeGreaterThanOrEqual(1);
       expect(result.expiredRoles).toBe(1);
@@ -976,7 +1079,9 @@ describe("O(1) Indexed Authorization", () => {
     it("should return zeros when nothing expired", async () => {
       const t = convexTest(schema, modules);
 
-      const result = await t.mutation(api.indexed.cleanupExpired, {});
+      const result = await t.mutation(api.indexed.cleanupExpired, {
+        tenantId: TENANT,
+      });
 
       expect(result.expiredPermissions).toBe(0);
       expect(result.expiredRoles).toBe(0);

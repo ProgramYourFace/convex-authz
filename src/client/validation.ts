@@ -5,6 +5,7 @@
 
 import { parsePermission } from "../component/helpers.js";
 
+const MAX_TENANT_ID_LENGTH = 512;
 const MAX_USER_ID_LENGTH = 512;
 const MAX_AUDIT_LIMIT = 1000;
 
@@ -16,6 +17,24 @@ export const MAX_BULK_ROLES = 100;
 export interface ScopeLike {
   type: string;
   id: string;
+}
+
+/**
+ * Validate tenantId: non-empty string (after trim), max length 512.
+ */
+export function validateTenantId(tenantId: string): void {
+  if (typeof tenantId !== "string") {
+    throw new Error("tenantId must be a string");
+  }
+  const trimmed = tenantId.trim();
+  if (trimmed.length === 0) {
+    throw new Error("tenantId must be a non-empty string");
+  }
+  if (tenantId.length > MAX_TENANT_ID_LENGTH) {
+    throw new Error(
+      `tenantId must not exceed ${MAX_TENANT_ID_LENGTH} characters`
+    );
+  }
 }
 
 /**

@@ -15,6 +15,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { matchesPermissionPattern } from "./helpers";
+import { scopeValidator } from "./validators";
 
 // ============================================================================
 // O(1) Permission Check - The Fast Path
@@ -26,6 +27,7 @@ import { matchesPermissionPattern } from "./helpers";
  */
 export const checkPermissionFast = query({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     permission: v.string(),
     objectType: v.optional(v.string()),
@@ -33,7 +35,6 @@ export const checkPermissionFast = query({
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    // Build the lookup key
     const scopeKey = args.objectType && args.objectId
       ? `${args.objectType}:${args.objectId}`
       : "global";
@@ -41,8 +42,9 @@ export const checkPermissionFast = query({
     // O(1) indexed lookup
     const cached = await ctx.db
       .query("effectivePermissions")
-      .withIndex("by_user_permission_scope", (q) =>
+      .withIndex("by_tenant_user_permission_scope", (q) =>
         q
+          .eq("tenantId", args.tenantId)
           .eq("userId", args.userId)
           .eq("permission", args.permission)
           .eq("scopeKey", scopeKey)
@@ -53,7 +55,6 @@ export const checkPermissionFast = query({
       return false;
     }
 
-    // Check if expired
     if (cached.expiresAt && cached.expiresAt < Date.now()) {
       return false;
     }
@@ -71,6 +72,7 @@ const MAX_BULK_ROLES = 100;
  */
 export const checkPermissionsFast = query({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     permissions: v.array(v.string()),
     objectType: v.optional(v.string()),
@@ -92,8 +94,8 @@ export const checkPermissionsFast = query({
     const now = Date.now();
     const rows = await ctx.db
       .query("effectivePermissions")
-      .withIndex("by_user_scope", (q) =>
-        q.eq("userId", args.userId).eq("scopeKey", scopeKey)
+      .withIndex("by_tenant_user_scope", (q) =>
+        q.eq("tenantId", args.tenantId).eq("userId", args.userId).eq("scopeKey", scopeKey)
       )
       .collect();
 
@@ -127,6 +129,7 @@ export const checkPermissionsFast = query({
  */
 export const hasRoleFast = query({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     role: v.string(),
     objectType: v.optional(v.string()),
@@ -141,8 +144,9 @@ export const hasRoleFast = query({
     // O(1) indexed lookup
     const cached = await ctx.db
       .query("effectiveRoles")
-      .withIndex("by_user_role_scope", (q) =>
+      .withIndex("by_tenant_user_role_scope", (q) =>
         q
+          .eq("tenantId", args.tenantId)
           .eq("userId", args.userId)
           .eq("role", args.role)
           .eq("scopeKey", scopeKey)
@@ -153,7 +157,6 @@ export const hasRoleFast = query({
       return false;
     }
 
-    // Check if expired
     if (cached.expiresAt && cached.expiresAt < Date.now()) {
       return false;
     }
@@ -167,6 +170,7 @@ export const hasRoleFast = query({
  */
 export const hasRelationFast = query({
   args: {
+    tenantId: v.string(),
     subjectType: v.string(),
     subjectId: v.string(),
     relation: v.string(),
@@ -178,8 +182,9 @@ export const hasRelationFast = query({
     // O(1) indexed lookup on computed relationships
     const cached = await ctx.db
       .query("effectiveRelationships")
-      .withIndex("by_subject_relation_object", (q) =>
+      .withIndex("by_tenant_subject_relation_object", (q) =>
         q
+          .eq("tenantId", args.tenantId)
           .eq("subjectKey", `${args.subjectType}:${args.subjectId}`)
           .eq("relation", args.relation)
           .eq("objectKey", `${args.objectType}:${args.objectId}`)
@@ -200,10 +205,11 @@ export const hasRelationFast = query({
  */
 export const assignRoleWithCompute = mutation({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     role: v.string(),
     rolePermissions: v.array(v.string()), // Permissions this role grants
-    scope: v.optional(v.object({ type: v.string(), id: v.string() })),
+    scope: scopeValidator,
     expiresAt: v.optional(v.number()),
     assignedBy: v.optional(v.string()),
   },
@@ -216,8 +222,9 @@ export const assignRoleWithCompute = mutation({
     // Step 1: Store the role assignment
     const existing = await ctx.db
       .query("effectiveRoles")
-      .withIndex("by_user_role_scope", (q) =>
+      .withIndex("by_tenant_user_role_scope", (q) =>
         q
+          .eq("tenantId", args.tenantId)
           .eq("userId", args.userId)
           .eq("role", args.role)
           .eq("scopeKey", scopeKey)
@@ -233,6 +240,7 @@ export const assignRoleWithCompute = mutation({
       roleId = existing._id as string;
     } else {
       roleId = await ctx.db.insert("effectiveRoles", {
+        tenantId: args.tenantId,
         userId: args.userId,
         role: args.role,
         scopeKey,
@@ -248,8 +256,9 @@ export const assignRoleWithCompute = mutation({
     for (const permission of args.rolePermissions) {
       const existingPerm = await ctx.db
         .query("effectivePermissions")
-        .withIndex("by_user_permission_scope", (q) =>
+        .withIndex("by_tenant_user_permission_scope", (q) =>
           q
+            .eq("tenantId", args.tenantId)
             .eq("userId", args.userId)
             .eq("permission", permission)
             .eq("scopeKey", scopeKey)
@@ -257,7 +266,6 @@ export const assignRoleWithCompute = mutation({
         .unique();
 
       if (existingPerm) {
-        // Add this role as a source
         const sources = existingPerm.sources /* v8 ignore next */ || [];
         if (!sources.includes(args.role)) {
           sources.push(args.role);
@@ -268,6 +276,7 @@ export const assignRoleWithCompute = mutation({
         }
       } else {
         await ctx.db.insert("effectivePermissions", {
+          tenantId: args.tenantId,
           userId: args.userId,
           permission,
           scopeKey,
@@ -290,10 +299,11 @@ export const assignRoleWithCompute = mutation({
  */
 export const revokeRoleWithCompute = mutation({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     role: v.string(),
     rolePermissions: v.array(v.string()), // Permissions this role granted
-    scope: v.optional(v.object({ type: v.string(), id: v.string() })),
+    scope: scopeValidator,
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
@@ -304,8 +314,9 @@ export const revokeRoleWithCompute = mutation({
     // Step 1: Remove the role assignment
     const existing = await ctx.db
       .query("effectiveRoles")
-      .withIndex("by_user_role_scope", (q) =>
+      .withIndex("by_tenant_user_role_scope", (q) =>
         q
+          .eq("tenantId", args.tenantId)
           .eq("userId", args.userId)
           .eq("role", args.role)
           .eq("scopeKey", scopeKey)
@@ -322,8 +333,9 @@ export const revokeRoleWithCompute = mutation({
     for (const permission of args.rolePermissions) {
       const existingPerm = await ctx.db
         .query("effectivePermissions")
-        .withIndex("by_user_permission_scope", (q) =>
+        .withIndex("by_tenant_user_permission_scope", (q) =>
           q
+            .eq("tenantId", args.tenantId)
             .eq("userId", args.userId)
             .eq("permission", permission)
             .eq("scopeKey", scopeKey)
@@ -336,10 +348,8 @@ export const revokeRoleWithCompute = mutation({
         );
 
         if (sources.length === 0) {
-          // No more sources - remove the permission
           await ctx.db.delete(existingPerm._id);
         } else {
-          // Update sources
           await ctx.db.patch(existingPerm._id, {
             sources,
             updatedAt: Date.now(),
@@ -357,11 +367,12 @@ export const revokeRoleWithCompute = mutation({
  */
 export const assignRolesWithCompute = mutation({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     roles: v.array(
       v.object({
         role: v.string(),
-        scope: v.optional(v.object({ type: v.string(), id: v.string() })),
+        scope: scopeValidator,
         expiresAt: v.optional(v.number()),
         metadata: v.optional(v.any()),
       })
@@ -394,8 +405,9 @@ export const assignRolesWithCompute = mutation({
 
       const existing = await ctx.db
         .query("effectiveRoles")
-        .withIndex("by_user_role_scope", (q) =>
+        .withIndex("by_tenant_user_role_scope", (q) =>
           q
+            .eq("tenantId", args.tenantId)
             .eq("userId", args.userId)
             .eq("role", item.role)
             .eq("scopeKey", scopeKey)
@@ -411,6 +423,7 @@ export const assignRolesWithCompute = mutation({
         roleId = existing._id as string;
       } else {
         roleId = await ctx.db.insert("effectiveRoles", {
+          tenantId: args.tenantId,
           userId: args.userId,
           role: item.role,
           scopeKey,
@@ -425,8 +438,9 @@ export const assignRolesWithCompute = mutation({
       for (const permission of rolePermissions) {
         const existingPerm = await ctx.db
           .query("effectivePermissions")
-          .withIndex("by_user_permission_scope", (q) =>
+          .withIndex("by_tenant_user_permission_scope", (q) =>
             q
+              .eq("tenantId", args.tenantId)
               .eq("userId", args.userId)
               .eq("permission", permission)
               .eq("scopeKey", scopeKey)
@@ -444,6 +458,7 @@ export const assignRolesWithCompute = mutation({
           }
         } else {
           await ctx.db.insert("effectivePermissions", {
+            tenantId: args.tenantId,
             userId: args.userId,
             permission,
             scopeKey,
@@ -470,11 +485,12 @@ export const assignRolesWithCompute = mutation({
  */
 export const revokeRolesWithCompute = mutation({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     roles: v.array(
       v.object({
         role: v.string(),
-        scope: v.optional(v.object({ type: v.string(), id: v.string() })),
+        scope: scopeValidator,
       })
     ),
     rolePermissionsMap: v.record(v.string(), v.array(v.string())),
@@ -502,8 +518,9 @@ export const revokeRolesWithCompute = mutation({
 
       const existing = await ctx.db
         .query("effectiveRoles")
-        .withIndex("by_user_role_scope", (q) =>
+        .withIndex("by_tenant_user_role_scope", (q) =>
           q
+            .eq("tenantId", args.tenantId)
             .eq("userId", args.userId)
             .eq("role", item.role)
             .eq("scopeKey", scopeKey)
@@ -518,8 +535,9 @@ export const revokeRolesWithCompute = mutation({
       for (const permission of rolePermissions) {
         const existingPerm = await ctx.db
           .query("effectivePermissions")
-          .withIndex("by_user_permission_scope", (q) =>
+          .withIndex("by_tenant_user_permission_scope", (q) =>
             q
+              .eq("tenantId", args.tenantId)
               .eq("userId", args.userId)
               .eq("permission", permission)
               .eq("scopeKey", scopeKey)
@@ -551,9 +569,10 @@ export const revokeRolesWithCompute = mutation({
  */
 export const grantPermissionDirect = mutation({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     permission: v.string(),
-    scope: v.optional(v.object({ type: v.string(), id: v.string() })),
+    scope: scopeValidator,
     reason: v.optional(v.string()),
     grantedBy: v.optional(v.string()),
     expiresAt: v.optional(v.number()),
@@ -566,8 +585,9 @@ export const grantPermissionDirect = mutation({
 
     const existing = await ctx.db
       .query("effectivePermissions")
-      .withIndex("by_user_permission_scope", (q) =>
+      .withIndex("by_tenant_user_permission_scope", (q) =>
         q
+          .eq("tenantId", args.tenantId)
           .eq("userId", args.userId)
           .eq("permission", args.permission)
           .eq("scopeKey", scopeKey)
@@ -586,6 +606,7 @@ export const grantPermissionDirect = mutation({
     }
 
     return await ctx.db.insert("effectivePermissions", {
+      tenantId: args.tenantId,
       userId: args.userId,
       permission: args.permission,
       scopeKey,
@@ -607,9 +628,10 @@ export const grantPermissionDirect = mutation({
  */
 export const denyPermissionDirect = mutation({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     permission: v.string(),
-    scope: v.optional(v.object({ type: v.string(), id: v.string() })),
+    scope: scopeValidator,
     reason: v.optional(v.string()),
     deniedBy: v.optional(v.string()),
     expiresAt: v.optional(v.number()),
@@ -622,8 +644,9 @@ export const denyPermissionDirect = mutation({
 
     const existing = await ctx.db
       .query("effectivePermissions")
-      .withIndex("by_user_permission_scope", (q) =>
+      .withIndex("by_tenant_user_permission_scope", (q) =>
         q
+          .eq("tenantId", args.tenantId)
           .eq("userId", args.userId)
           .eq("permission", args.permission)
           .eq("scopeKey", scopeKey)
@@ -642,6 +665,7 @@ export const denyPermissionDirect = mutation({
     }
 
     return await ctx.db.insert("effectivePermissions", {
+      tenantId: args.tenantId,
       userId: args.userId,
       permission: args.permission,
       scopeKey,
@@ -667,6 +691,7 @@ export const denyPermissionDirect = mutation({
  */
 export const addRelationWithCompute = mutation({
   args: {
+    tenantId: v.string(),
     subjectType: v.string(),
     subjectId: v.string(),
     relation: v.string(),
@@ -692,8 +717,9 @@ export const addRelationWithCompute = mutation({
     // Step 1: Store the direct relationship
     const existing = await ctx.db
       .query("effectiveRelationships")
-      .withIndex("by_subject_relation_object", (q) =>
+      .withIndex("by_tenant_subject_relation_object", (q) =>
         q
+          .eq("tenantId", args.tenantId)
           .eq("subjectKey", subjectKey)
           .eq("relation", args.relation)
           .eq("objectKey", objectKey)
@@ -705,6 +731,7 @@ export const addRelationWithCompute = mutation({
     }
 
     const relId = await ctx.db.insert("effectiveRelationships", {
+      tenantId: args.tenantId,
       subjectKey,
       subjectType: args.subjectType,
       subjectId: args.subjectId,
@@ -721,11 +748,11 @@ export const addRelationWithCompute = mutation({
     // Step 2: Compute inherited relationships
     if (args.inheritedRelations) {
       for (const inherited of args.inheritedRelations) {
-        // Find all objects where the current object has a relation
         const parentRelations = await ctx.db
           .query("effectiveRelationships")
-          .withIndex("by_subject_relation", (q) =>
+          .withIndex("by_tenant_subject_relation", (q) =>
             q
+              .eq("tenantId", args.tenantId)
               .eq("subjectKey", objectKey)
               .eq("relation", inherited.fromRelation)
           )
@@ -735,15 +762,15 @@ export const addRelationWithCompute = mutation({
           (r) => r.objectType === inherited.fromObjectType
         );
 
-        // Create inherited relationships
         for (const parent of matchingParents) {
           const inheritedKey = `${args.subjectType}:${args.subjectId}`;
           const parentObjectKey = parent.objectKey;
 
           const existingInherited = await ctx.db
             .query("effectiveRelationships")
-            .withIndex("by_subject_relation_object", (q) =>
+            .withIndex("by_tenant_subject_relation_object", (q) =>
               q
+                .eq("tenantId", args.tenantId)
                 .eq("subjectKey", inheritedKey)
                 .eq("relation", inherited.relation)
                 .eq("objectKey", parentObjectKey)
@@ -752,6 +779,7 @@ export const addRelationWithCompute = mutation({
 
           if (!existingInherited) {
             await ctx.db.insert("effectiveRelationships", {
+              tenantId: args.tenantId,
               subjectKey: inheritedKey,
               subjectType: args.subjectType,
               subjectId: args.subjectId,
@@ -778,6 +806,7 @@ export const addRelationWithCompute = mutation({
  */
 export const removeRelationWithCompute = mutation({
   args: {
+    tenantId: v.string(),
     subjectType: v.string(),
     subjectId: v.string(),
     relation: v.string(),
@@ -789,11 +818,11 @@ export const removeRelationWithCompute = mutation({
     const subjectKey = `${args.subjectType}:${args.subjectId}`;
     const objectKey = `${args.objectType}:${args.objectId}`;
 
-    // Find the direct relationship
     const existing = await ctx.db
       .query("effectiveRelationships")
-      .withIndex("by_subject_relation_object", (q) =>
+      .withIndex("by_tenant_subject_relation_object", (q) =>
         q
+          .eq("tenantId", args.tenantId)
           .eq("subjectKey", subjectKey)
           .eq("relation", args.relation)
           .eq("objectKey", objectKey)
@@ -804,11 +833,10 @@ export const removeRelationWithCompute = mutation({
       return false;
     }
 
-    // Delete all inherited relationships from this one
     const inherited = await ctx.db
       .query("effectiveRelationships")
-      .withIndex("by_inherited_from", (q) =>
-        q.eq("inheritedFrom", existing._id as string)
+      .withIndex("by_tenant_inherited_from", (q) =>
+        q.eq("tenantId", args.tenantId).eq("inheritedFrom", existing._id as string)
       )
       .collect();
 
@@ -816,7 +844,6 @@ export const removeRelationWithCompute = mutation({
       await ctx.db.delete(rel._id);
     }
 
-    // Delete the direct relationship
     await ctx.db.delete(existing._id);
 
     return true;
@@ -832,6 +859,7 @@ export const removeRelationWithCompute = mutation({
  */
 export const getUserPermissionsFast = query({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     scopeKey: v.optional(v.string()),
   },
@@ -849,14 +877,16 @@ export const getUserPermissionsFast = query({
     if (args.scopeKey) {
       permissions = await ctx.db
         .query("effectivePermissions")
-        .withIndex("by_user_scope", (q) =>
-          q.eq("userId", args.userId).eq("scopeKey", args.scopeKey as string)
+        .withIndex("by_tenant_user_scope", (q) =>
+          q.eq("tenantId", args.tenantId).eq("userId", args.userId).eq("scopeKey", args.scopeKey as string)
         )
         .collect();
     } else {
       permissions = await ctx.db
         .query("effectivePermissions")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId))
+        .withIndex("by_tenant_user", (q) =>
+          q.eq("tenantId", args.tenantId).eq("userId", args.userId)
+        )
         .collect();
     }
 
@@ -877,6 +907,7 @@ export const getUserPermissionsFast = query({
  */
 export const getUserRolesFast = query({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     scopeKey: v.optional(v.string()),
   },
@@ -893,14 +924,16 @@ export const getUserRolesFast = query({
     if (args.scopeKey) {
       roles = await ctx.db
         .query("effectiveRoles")
-        .withIndex("by_user_scope", (q) =>
-          q.eq("userId", args.userId).eq("scopeKey", args.scopeKey as string)
+        .withIndex("by_tenant_user_scope", (q) =>
+          q.eq("tenantId", args.tenantId).eq("userId", args.userId).eq("scopeKey", args.scopeKey as string)
         )
         .collect();
     } else {
       roles = await ctx.db
         .query("effectiveRoles")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId))
+        .withIndex("by_tenant_user", (q) =>
+          q.eq("tenantId", args.tenantId).eq("userId", args.userId)
+        )
         .collect();
     }
 
@@ -923,31 +956,57 @@ export const getUserRolesFast = query({
  * Clean up expired entries
  */
 export const cleanupExpired = mutation({
-  args: {},
+  args: {
+    tenantId: v.optional(v.string()),
+  },
   returns: v.object({
     expiredPermissions: v.number(),
     expiredRoles: v.number(),
   }),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const now = Date.now();
     let expiredPermissions = 0;
     let expiredRoles = 0;
 
-    // Clean expired permissions
-    const allPermissions = await ctx.db.query("effectivePermissions").collect();
-    for (const perm of allPermissions) {
-      if (perm.expiresAt && perm.expiresAt < now) {
-        await ctx.db.delete(perm._id);
-        expiredPermissions++;
+    if (args.tenantId) {
+      const permissions = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user", (q) => q.eq("tenantId", args.tenantId!))
+        .collect();
+      for (const perm of permissions) {
+        if (perm.expiresAt && perm.expiresAt < now) {
+          await ctx.db.delete(perm._id);
+          expiredPermissions++;
+        }
       }
-    }
 
-    // Clean expired roles
-    const allRoles = await ctx.db.query("effectiveRoles").collect();
-    for (const role of allRoles) {
-      if (role.expiresAt && role.expiresAt < now) {
-        await ctx.db.delete(role._id);
-        expiredRoles++;
+      const roles = await ctx.db
+        .query("effectiveRoles")
+        .withIndex("by_tenant_user", (q) => q.eq("tenantId", args.tenantId!))
+        .collect();
+      for (const role of roles) {
+        if (role.expiresAt && role.expiresAt < now) {
+          await ctx.db.delete(role._id);
+          expiredRoles++;
+        }
+      }
+    } else {
+      const allPermissions = await ctx.db
+        .query("effectivePermissions")
+        .collect();
+      for (const perm of allPermissions) {
+        if (perm.expiresAt && perm.expiresAt < now) {
+          await ctx.db.delete(perm._id);
+          expiredPermissions++;
+        }
+      }
+
+      const allRoles = await ctx.db.query("effectiveRoles").collect();
+      for (const role of allRoles) {
+        if (role.expiresAt && role.expiresAt < now) {
+          await ctx.db.delete(role._id);
+          expiredRoles++;
+        }
       }
     }
 

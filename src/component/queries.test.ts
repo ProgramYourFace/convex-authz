@@ -9,23 +9,28 @@ import { api } from "./_generated/api.js";
 
 const modules = import.meta.glob("./**/*.ts");
 
+const TENANT = "test-tenant";
+
 describe("queries - additional coverage", () => {
   describe("getUserRoles with scope", () => {
     it("should filter roles by scope", async () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         scope: { type: "team", id: "team_1" },
       });
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
       });
 
       const scopedRoles = await t.query(api.queries.getUserRoles, {
+        tenantId: TENANT,
         userId: "user_123",
         scope: { type: "team", id: "team_1" },
       });
@@ -41,17 +46,20 @@ describe("queries - additional coverage", () => {
       const pastTime = Date.now() - 10000;
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         expiresAt: pastTime,
       });
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
       });
 
       const roles = await t.query(api.queries.getUserRoles, {
+        tenantId: TENANT,
         userId: "user_123",
       });
 
@@ -65,16 +73,19 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.grantPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
 
       await t.mutation(api.mutations.denyPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
       });
 
       const overrides = await t.query(api.queries.getPermissionOverrides, {
+        tenantId: TENANT,
         userId: "user_123",
       });
 
@@ -85,16 +96,19 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.grantPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
 
       await t.mutation(api.mutations.denyPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
       });
 
       const overrides = await t.query(api.queries.getPermissionOverrides, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
@@ -110,17 +124,20 @@ describe("queries - additional coverage", () => {
       const pastTime = Date.now() - 10000;
 
       await t.mutation(api.mutations.grantPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         expiresAt: pastTime,
       });
 
       await t.mutation(api.mutations.grantPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:write",
       });
 
       const overrides = await t.query(api.queries.getPermissionOverrides, {
+        tenantId: TENANT,
         userId: "user_123",
       });
 
@@ -136,12 +153,14 @@ describe("queries - additional coverage", () => {
       const pastTime = Date.now() - 10000;
 
       await t.mutation(api.mutations.grantPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         expiresAt: pastTime,
       });
 
       const result = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         rolePermissions: {},
@@ -156,12 +175,14 @@ describe("queries - additional coverage", () => {
       const pastTime = Date.now() - 10000;
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         expiresAt: pastTime,
       });
 
       const result = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         rolePermissions: {
@@ -176,12 +197,14 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         scope: { type: "team", id: "team_1" },
       });
 
       const result = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         scope: { type: "team", id: "team_1" },
@@ -197,11 +220,13 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
       });
 
       const result = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
         rolePermissions: {
@@ -219,11 +244,13 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.grantPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:*",
       });
 
       const readResult = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         rolePermissions: {},
@@ -231,6 +258,7 @@ describe("queries - additional coverage", () => {
       expect(readResult.allowed).toBe(true);
 
       const deleteResult = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
         rolePermissions: {},
@@ -238,6 +266,7 @@ describe("queries - additional coverage", () => {
       expect(deleteResult.allowed).toBe(true);
 
       const otherResult = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "settings:read",
         rolePermissions: {},
@@ -249,11 +278,13 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.grantPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "*:read",
       });
 
       const docRead = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         rolePermissions: {},
@@ -261,6 +292,7 @@ describe("queries - additional coverage", () => {
       expect(docRead.allowed).toBe(true);
 
       const settingsRead = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "settings:read",
         rolePermissions: {},
@@ -268,6 +300,7 @@ describe("queries - additional coverage", () => {
       expect(settingsRead.allowed).toBe(true);
 
       const docWrite = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:write",
         rolePermissions: {},
@@ -279,11 +312,13 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.grantPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "*",
       });
 
       const result = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         rolePermissions: {},
@@ -291,6 +326,7 @@ describe("queries - additional coverage", () => {
       expect(result.allowed).toBe(true);
 
       const anyResult = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "any:action",
         rolePermissions: {},
@@ -302,11 +338,13 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "poweruser",
       });
 
       const result = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
         rolePermissions: {
@@ -320,15 +358,18 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
       await t.mutation(api.mutations.denyPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:*",
       });
 
       const result = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         rolePermissions: {
@@ -345,11 +386,13 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
       });
 
       const result = await t.query(api.queries.checkPermissions, {
+        tenantId: TENANT,
         userId: "user_123",
         permissions: ["documents:delete", "documents:read", "documents:update"],
         rolePermissions: {
@@ -365,11 +408,13 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
       });
 
       const result = await t.query(api.queries.checkPermissions, {
+        tenantId: TENANT,
         userId: "user_123",
         permissions: ["documents:delete", "documents:update"],
         rolePermissions: {
@@ -385,15 +430,18 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
       await t.mutation(api.mutations.denyPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
       });
 
       const result = await t.query(api.queries.checkPermissions, {
+        tenantId: TENANT,
         userId: "user_123",
         permissions: ["documents:delete", "documents:read"],
         rolePermissions: {
@@ -409,6 +457,7 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       const result = await t.query(api.queries.checkPermissions, {
+        tenantId: TENANT,
         userId: "user_123",
         permissions: [],
         rolePermissions: {},
@@ -427,6 +476,7 @@ describe("queries - additional coverage", () => {
 
       await expect(
         t.query(api.queries.checkPermissions, {
+          tenantId: TENANT,
           userId: "user_123",
           permissions,
           rolePermissions: {},
@@ -440,18 +490,21 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "editor",
         scope: { type: "team", id: "team_1" },
       });
 
       await t.mutation(api.mutations.grantPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "special:access",
         scope: { type: "team", id: "team_1" },
       });
 
       const result = await t.query(api.queries.getEffectivePermissions, {
+        tenantId: TENANT,
         userId: "user_123",
         rolePermissions: {
           editor: ["documents:read", "documents:write"],
@@ -468,12 +521,14 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.grantPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "special:access",
         scope: { type: "team", id: "team_1" },
       });
 
       const result = await t.query(api.queries.getEffectivePermissions, {
+        tenantId: TENANT,
         userId: "user_123",
         rolePermissions: {},
         scope: { type: "team", id: "team_2" },
@@ -489,12 +544,14 @@ describe("queries - additional coverage", () => {
       const pastTime = Date.now() - 10000;
 
       await t.mutation(api.mutations.grantPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "special:access",
         expiresAt: pastTime,
       });
 
       const result = await t.query(api.queries.getEffectivePermissions, {
+        tenantId: TENANT,
         userId: "user_123",
         rolePermissions: {},
       });
@@ -508,21 +565,25 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_1",
         role: "admin",
       });
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_2",
         role: "admin",
       });
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_3",
         role: "viewer",
       });
 
       const users = await t.query(api.queries.getUsersWithRole, {
+        tenantId: TENANT,
         role: "admin",
       });
 
@@ -535,18 +596,21 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_1",
         role: "admin",
         scope: { type: "team", id: "team_1" },
       });
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_2",
         role: "admin",
         scope: { type: "team", id: "team_2" },
       });
 
       const users = await t.query(api.queries.getUsersWithRole, {
+        tenantId: TENANT,
         role: "admin",
         scope: { type: "team", id: "team_1" },
       });
@@ -561,17 +625,20 @@ describe("queries - additional coverage", () => {
       const pastTime = Date.now() - 10000;
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_1",
         role: "admin",
         expiresAt: pastTime,
       });
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_2",
         role: "admin",
       });
 
       const users = await t.query(api.queries.getUsersWithRole, {
+        tenantId: TENANT,
         role: "admin",
       });
 
@@ -585,18 +652,21 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         enableAudit: true,
       });
 
       await t.mutation(api.mutations.grantPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         enableAudit: true,
       });
 
       const logsResult = await t.query(api.queries.getAuditLog, {
+        tenantId: TENANT,
         action: "role_assigned",
       });
       const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
@@ -608,18 +678,20 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         enableAudit: true,
       });
 
       await t.mutation(api.mutations.grantPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         enableAudit: true,
       });
 
-      const logsResult = await t.query(api.queries.getAuditLog, {});
+      const logsResult = await t.query(api.queries.getAuditLog, { tenantId: TENANT });
       const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
 
       expect(logs.length).toBeGreaterThanOrEqual(2);
@@ -630,24 +702,28 @@ describe("queries - additional coverage", () => {
 
       // Create multiple audit entries
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         enableAudit: true,
       });
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "editor",
         enableAudit: true,
       });
 
       await t.mutation(api.mutations.grantPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         enableAudit: true,
       });
 
       const logsResult = await t.query(api.queries.getAuditLog, {
+        tenantId: TENANT,
         limit: 1,
       });
       const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;
@@ -659,22 +735,26 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         enableAudit: true,
       });
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "editor",
         enableAudit: true,
       });
       await t.mutation(api.mutations.grantPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         enableAudit: true,
       });
 
       const result = await t.query(api.queries.getAuditLog, {
+        tenantId: TENANT,
         paginationOpts: { numItems: 2, cursor: null },
       });
 
@@ -686,6 +766,7 @@ describe("queries - additional coverage", () => {
         expect(result.page.length).toBeLessThanOrEqual(2);
         if (result.page.length === 2 && !result.isDone) {
           const next = await t.query(api.queries.getAuditLog, {
+            tenantId: TENANT,
             paginationOpts: {
               numItems: 2,
               cursor: result.continueCursor,
@@ -701,12 +782,14 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_paginated",
         role: "admin",
         enableAudit: true,
       });
 
       const result = await t.query(api.queries.getAuditLog, {
+        tenantId: TENANT,
         userId: "user_paginated",
         paginationOpts: { numItems: 10, cursor: null },
       });
@@ -724,12 +807,14 @@ describe("queries - additional coverage", () => {
       const pastTime = Date.now() - 10000;
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         expiresAt: pastTime,
       });
 
       const hasRole = await t.query(api.queries.hasRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
@@ -744,6 +829,7 @@ describe("queries - additional coverage", () => {
 
       // Scoped role for team_1
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         scope: { type: "team", id: "team_1" },
@@ -751,6 +837,7 @@ describe("queries - additional coverage", () => {
 
       // Query with different scope - scoped role should not match
       const roles = await t.query(api.queries.getUserRoles, {
+        tenantId: TENANT,
         userId: "user_123",
         scope: { type: "team", id: "team_2" },
       });
@@ -764,12 +851,14 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.denyPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
         reason: "Custom deny reason",
       });
 
       const result = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
         rolePermissions: {},
@@ -783,11 +872,13 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.denyPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
       });
 
       const result = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
         rolePermissions: {},
@@ -801,12 +892,14 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.grantPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         reason: "Custom allow reason",
       });
 
       const result = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         rolePermissions: {},
@@ -820,11 +913,13 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.grantPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
 
       const result = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         rolePermissions: {},
@@ -842,17 +937,20 @@ describe("queries - additional coverage", () => {
       const pastTime = Date.now() - 10000;
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         expiresAt: pastTime,
       });
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
       });
 
       const result = await t.query(api.queries.getEffectivePermissions, {
+        tenantId: TENANT,
         userId: "user_123",
         rolePermissions: {
           admin: ["documents:read", "documents:delete"],

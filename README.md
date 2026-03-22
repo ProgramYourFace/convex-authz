@@ -95,7 +95,7 @@ const roles = defineRoles(permissions, {
 });
 
 // Step 3: Create the authz client
-export const authz = new Authz(components.authz, { permissions, roles });
+export const authz = new Authz(components.authz, { permissions, roles, tenantId: "my-app" });
 ```
 
 #### Role inheritance and composition
@@ -515,7 +515,7 @@ const policies = definePolicies({
   },
 });
 
-const authz = new Authz(components.authz, { permissions, roles, policies });
+const authz = new Authz(components.authz, { permissions, roles, policies, tenantId: "my-app" });
 ```
 
 When you **evaluate** a policy (e.g. after RBAC allows), always **await** the condition so both sync and async policies work. Use `evaluatePolicyCondition` to normalize to a Promise:
@@ -675,7 +675,7 @@ For high-performance production use, the indexed system pre-computes permissions
 import { IndexedAuthz } from "@djpanda/convex-authz";
 import { components } from "./_generated/api";
 
-const authz = new IndexedAuthz(components.authz, { permissions, roles });
+const authz = new IndexedAuthz(components.authz, { permissions, roles, tenantId: "my-app" });
 
 // O(1) permission check - single index lookup
 const canEdit = await authz.can(ctx, userId, "documents:update");
@@ -1073,6 +1073,57 @@ describe("authorization", () => {
 
 ---
 
+## Multi-Tenant Data Isolation
+
+Every table in the authz component includes a required `tenantId` field as the leading column in every database index. This provides database-level data isolation between tenants — queries for one tenant can never return data from another.
+
+### tenantId vs scope
+
+| | `tenantId` | `scope` |
+|---|---|---|
+| **Purpose** | Data isolation boundary | Resource-level grouping |
+| **Enforcement** | Database-level (index prefix) | Application-level (query filter) |
+| **Required** | Always | Optional |
+| **Example** | `"acme-corp"` | `{ type: "project", id: "proj-123" }` |
+
+- **tenantId** answers: "whose data is this?" — the organization/customer boundary
+- **scope** answers: "within this tenant, what resource does this apply to?" — e.g. admin of a specific project
+
+### Configuration
+
+```typescript
+// Single-tenant apps — pass any constant string
+const authz = new Authz(components.authz, {
+  permissions, roles,
+  tenantId: "my-app",
+});
+
+// Multi-tenant apps — pass the current organization/tenant ID
+const authz = new Authz(components.authz, {
+  permissions, roles,
+  tenantId: currentOrgId,
+});
+```
+
+### Cross-tenant operations
+
+For rare admin operations that need to access a different tenant's data, use the `withTenant()` method:
+
+```typescript
+// Returns a new Authz instance scoped to a different tenant
+const otherTenant = authz.withTenant("other-org-id");
+await otherTenant.getUserRoles(ctx, userId);
+```
+
+### Compliance
+
+The `tenantId`-first index design satisfies SOC2 and HIPAA data isolation requirements:
+- All queries are partitioned by tenant at the database index level
+- Cross-tenant data access is structurally impossible through the standard API
+- `tenantId` is required in the constructor — it cannot be accidentally omitted
+
+---
+
 ## Best Practices
 
 ### 1. Use Scoped Roles for Multi-tenancy
@@ -1089,10 +1140,10 @@ await authz.assignRole(ctx, userId, "admin", { type: "org", id: orgId });
 
 ```typescript
 // Development: Standard API (simpler)
-const authz = new Authz(components.authz, { permissions, roles });
+const authz = new Authz(components.authz, { permissions, roles, tenantId: "my-app" });
 
 // Production: Indexed API (faster)
-const authz = new IndexedAuthz(components.authz, { permissions, roles });
+const authz = new IndexedAuthz(components.authz, { permissions, roles, tenantId: "my-app" });
 ```
 
 ### 3. Use ReBAC for Complex Hierarchies
@@ -1181,7 +1232,7 @@ const roles = defineRoles(permissions, {
 });
 
 // Export the single authz client — import this everywhere
-export const authz = new Authz(components.authz, { permissions, roles });
+export const authz = new Authz(components.authz, { permissions, roles, tenantId: "my-app" });
 ```
 
 ```typescript
@@ -1231,7 +1282,7 @@ import { billingPermissions, billingRoles } from "./permissions/billing";
 const permissions = definePermissions(documentPermissions, billingPermissions);
 const roles = defineRoles(permissions, documentRoles, billingRoles);
 
-export const authz = new Authz(components.authz, { permissions, roles });
+export const authz = new Authz(components.authz, { permissions, roles, tenantId: "my-app" });
 ```
 
 This keeps each domain self-contained while producing a single, type-safe authz client.
@@ -1297,7 +1348,7 @@ const appRoles = {
 const permissions = definePermissions(appPermissions, TENANTS_PERMISSIONS);
 const roles = defineRoles(permissions, appRoles, TENANTS_ROLES);
 
-export const authz = new Authz(components.authz, { permissions, roles });
+export const authz = new Authz(components.authz, { permissions, roles, tenantId: "my-app" });
 ```
 
 ```typescript

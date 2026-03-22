@@ -48,6 +48,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           relation: string;
           subjectId: string;
           subjectType: string;
+          tenantId: string;
         },
         string,
         Name
@@ -64,6 +65,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             role: string;
             scope?: { id: string; type: string };
           }>;
+          tenantId: string;
           userId: string;
         },
         { assigned: number; assignmentIds: Array<string> },
@@ -78,6 +80,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           role: string;
           rolePermissions: Array<string>;
           scope?: { id: string; type: string };
+          tenantId: string;
           userId: string;
         },
         string,
@@ -90,6 +93,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           objectId?: string;
           objectType?: string;
           permission: string;
+          tenantId: string;
           userId: string;
         },
         boolean,
@@ -102,6 +106,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           objectId?: string;
           objectType?: string;
           permissions: Array<string>;
+          tenantId: string;
           userId: string;
         },
         boolean,
@@ -110,7 +115,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       cleanupExpired: FunctionReference<
         "mutation",
         "internal",
-        {},
+        { tenantId: string },
         { expiredPermissions: number; expiredRoles: number },
         Name
       >;
@@ -123,6 +128,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           permission: string;
           reason?: string;
           scope?: { id: string; type: string };
+          tenantId: string;
           userId: string;
         },
         string,
@@ -131,7 +137,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       getUserPermissionsFast: FunctionReference<
         "query",
         "internal",
-        { scopeKey?: string; userId: string },
+        { scopeKey?: string; tenantId: string; userId: string },
         Array<{
           effect: string;
           permission: string;
@@ -143,7 +149,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       getUserRolesFast: FunctionReference<
         "query",
         "internal",
-        { scopeKey?: string; userId: string },
+        { scopeKey?: string; tenantId: string; userId: string },
         Array<{
           role: string;
           scope?: { id: string; type: string };
@@ -160,6 +166,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           permission: string;
           reason?: string;
           scope?: { id: string; type: string };
+          tenantId: string;
           userId: string;
         },
         string,
@@ -174,6 +181,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           relation: string;
           subjectId: string;
           subjectType: string;
+          tenantId: string;
         },
         boolean,
         Name
@@ -185,6 +193,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           objectId?: string;
           objectType?: string;
           role: string;
+          tenantId: string;
           userId: string;
         },
         boolean,
@@ -199,6 +208,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           relation: string;
           subjectId: string;
           subjectType: string;
+          tenantId: string;
         },
         boolean,
         Name
@@ -209,6 +219,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         {
           rolePermissionsMap: Record<string, Array<string>>;
           roles: Array<{ role: string; scope?: { id: string; type: string } }>;
+          tenantId: string;
           userId: string;
         },
         { revoked: number },
@@ -221,6 +232,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           role: string;
           rolePermissions: Array<string>;
           scope?: { id: string; type: string };
+          tenantId: string;
           userId: string;
         },
         boolean,
@@ -238,6 +250,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           metadata?: any;
           role: string;
           scope?: { id: string; type: string };
+          tenantId: string;
           userId: string;
         },
         string,
@@ -255,6 +268,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             role: string;
             scope?: { id: string; type: string };
           }>;
+          tenantId: string;
           userId: string;
         },
         { assigned: number; assignmentIds: Array<string> },
@@ -263,7 +277,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       cleanupExpired: FunctionReference<
         "mutation",
         "internal",
-        {},
+        { tenantId?: string },
         { expiredOverrides: number; expiredRoles: number },
         Name
       >;
@@ -277,6 +291,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           permission: string;
           reason?: string;
           scope?: { id: string; type: string };
+          tenantId: string;
           userId: string;
         },
         string,
@@ -285,7 +300,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       deprovisionUser: FunctionReference<
         "mutation",
         "internal",
-        { enableAudit?: boolean; revokedBy?: string; userId: string },
+        {
+          enableAudit?: boolean;
+          revokedBy?: string;
+          tenantId: string;
+          userId: string;
+        },
         {
           attributesRemoved: number;
           effectivePermissionsRemoved: number;
@@ -307,6 +327,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           permission: string;
           reason?: string;
           scope?: { id: string; type: string };
+          tenantId: string;
           userId: string;
         },
         string,
@@ -320,6 +341,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           reason?: string;
           result: boolean;
           scope?: { id: string; type: string };
+          tenantId: string;
           userId: string;
         },
         null,
@@ -335,6 +357,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           removeRelationships?: boolean;
           revokedBy?: string;
           scope?: { id: string; type: string };
+          tenantId: string;
           userId: string;
         },
         {
@@ -351,7 +374,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       removeAllAttributes: FunctionReference<
         "mutation",
         "internal",
-        { enableAudit?: boolean; removedBy?: string; userId: string },
+        {
+          enableAudit?: boolean;
+          removedBy?: string;
+          tenantId: string;
+          userId: string;
+        },
         number,
         Name
       >;
@@ -362,6 +390,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           enableAudit?: boolean;
           key: string;
           removedBy?: string;
+          tenantId: string;
           userId: string;
         },
         boolean,
@@ -375,6 +404,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           permission: string;
           removedBy?: string;
           scope?: { id: string; type: string };
+          tenantId: string;
           userId: string;
         },
         boolean,
@@ -387,6 +417,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           enableAudit?: boolean;
           revokedBy?: string;
           scope?: { id: string; type: string };
+          tenantId: string;
           userId: string;
         },
         number,
@@ -400,6 +431,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           revokedBy?: string;
           role: string;
           scope?: { id: string; type: string };
+          tenantId: string;
           userId: string;
         },
         boolean,
@@ -412,6 +444,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           enableAudit?: boolean;
           revokedBy?: string;
           roles: Array<{ role: string; scope?: { id: string; type: string } }>;
+          tenantId: string;
           userId: string;
         },
         { revoked: number },
@@ -420,14 +453,14 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       runAuditRetentionCleanup: FunctionReference<
         "mutation",
         "internal",
-        { maxAgeDays?: number; maxEntries?: number },
+        { maxAgeDays?: number; maxEntries?: number; tenantId?: string },
         { deletedByAge: number; deletedByCount: number },
         Name
       >;
       runScheduledCleanup: FunctionReference<
         "mutation",
         "internal",
-        {},
+        { tenantId?: string },
         {
           expiredEffectivePermissions: number;
           expiredEffectiveRoles: number;
@@ -443,6 +476,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           enableAudit?: boolean;
           key: string;
           setBy?: string;
+          tenantId: string;
           userId: string;
           value: any;
         },
@@ -458,6 +492,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           permission: string;
           rolePermissions: Record<string, Array<string>>;
           scope?: { id: string; type: string };
+          tenantId: string;
           userId: string;
         },
         {
@@ -475,6 +510,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           permissions: Array<string>;
           rolePermissions: Record<string, Array<string>>;
           scope?: { id: string; type: string };
+          tenantId: string;
           userId: string;
         },
         { allowed: boolean; matchedPermission?: string },
@@ -501,6 +537,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             maximumRowsRead?: number;
             numItems: number;
           };
+          tenantId: string;
           userId?: string;
         },
         | Array<{
@@ -531,6 +568,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         {
           rolePermissions: Record<string, Array<string>>;
           scope?: { id: string; type: string };
+          tenantId: string;
           userId: string;
         },
         {
@@ -543,7 +581,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       getPermissionOverrides: FunctionReference<
         "query",
         "internal",
-        { permission?: string; userId: string },
+        { permission?: string; tenantId: string; userId: string },
         Array<{
           _id: string;
           effect: "allow" | "deny";
@@ -557,21 +595,25 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       getUserAttribute: FunctionReference<
         "query",
         "internal",
-        { key: string; userId: string },
+        { key: string; tenantId: string; userId: string },
         null | any,
         Name
       >;
       getUserAttributes: FunctionReference<
         "query",
         "internal",
-        { userId: string },
+        { tenantId: string; userId: string },
         Array<{ _id: string; key: string; value: any }>,
         Name
       >;
       getUserRoles: FunctionReference<
         "query",
         "internal",
-        { scope?: { id: string; type: string }; userId: string },
+        {
+          scope?: { id: string; type: string };
+          tenantId: string;
+          userId: string;
+        },
         Array<{
           _id: string;
           expiresAt?: number;
@@ -584,14 +626,23 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       getUsersWithRole: FunctionReference<
         "query",
         "internal",
-        { role: string; scope?: { id: string; type: string } },
+        {
+          role: string;
+          scope?: { id: string; type: string };
+          tenantId: string;
+        },
         Array<{ assignedAt: number; expiresAt?: number; userId: string }>,
         Name
       >;
       hasRole: FunctionReference<
         "query",
         "internal",
-        { role: string; scope?: { id: string; type: string }; userId: string },
+        {
+          role: string;
+          scope?: { id: string; type: string };
+          tenantId: string;
+          userId: string;
+        },
         boolean,
         Name
       >;
@@ -607,6 +658,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           relation: string;
           subjectId: string;
           subjectType: string;
+          tenantId: string;
         },
         string,
         Name
@@ -621,6 +673,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           relation: string;
           subjectId: string;
           subjectType: string;
+          tenantId: string;
           traversalRules?: any;
         },
         { allowed: boolean; path: Array<string>; reason: string },
@@ -629,7 +682,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       getObjectRelations: FunctionReference<
         "query",
         "internal",
-        { objectId: string; objectType: string; relation?: string },
+        {
+          objectId: string;
+          objectType: string;
+          relation?: string;
+          tenantId: string;
+        },
         Array<{
           _id: string;
           relation: string;
@@ -641,7 +699,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       getSubjectRelations: FunctionReference<
         "query",
         "internal",
-        { objectType?: string; subjectId: string; subjectType: string },
+        {
+          objectType?: string;
+          subjectId: string;
+          subjectType: string;
+          tenantId: string;
+        },
         Array<{
           _id: string;
           objectId: string;
@@ -659,6 +722,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           relation: string;
           subjectId: string;
           subjectType: string;
+          tenantId: string;
         },
         boolean,
         Name
@@ -671,6 +735,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           relation: string;
           subjectId: string;
           subjectType: string;
+          tenantId: string;
           traversalRules?: any;
         },
         Array<{ objectId: string; via: string }>,
@@ -679,7 +744,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       listUsersWithAccess: FunctionReference<
         "query",
         "internal",
-        { objectId: string; objectType: string; relation: string },
+        {
+          objectId: string;
+          objectType: string;
+          relation: string;
+          tenantId: string;
+        },
         Array<{ userId: string; via: string }>,
         Name
       >;
@@ -692,6 +762,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           relation: string;
           subjectId: string;
           subjectType: string;
+          tenantId: string;
         },
         boolean,
         Name
