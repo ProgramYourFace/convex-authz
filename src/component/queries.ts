@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
-import { query } from "./_generated/server";
+import { query, internalQuery } from "./_generated/server";
 import {
   isExpired,
   matchesScope,
@@ -212,7 +212,7 @@ export const getPermissionOverrides = query({
  * 1. Permission overrides (explicit allow/deny)
  * 2. Role-based permissions (using provided role definitions)
  */
-export const checkPermission = query({
+export const checkPermission = internalQuery({
   args: {
     tenantId: v.string(),
     userId: v.string(),
@@ -309,7 +309,7 @@ export const checkPermission = query({
  * Loads role assignments and overrides once, then evaluates each permission in order.
  * Returns as soon as one permission is allowed; if all are denied or none granted, returns allowed: false.
  */
-export const checkPermissions = query({
+export const checkPermissions = internalQuery({
   args: {
     tenantId: v.string(),
     userId: v.string(),
@@ -392,7 +392,7 @@ export const checkPermissions = query({
  * Get all effective permissions for a user
  * Combines role-based permissions and overrides
  */
-export const getEffectivePermissions = query({
+export const getEffectivePermissions = internalQuery({
   args: {
     tenantId: v.string(),
     userId: v.string(),

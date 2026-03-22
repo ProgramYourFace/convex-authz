@@ -841,15 +841,12 @@ describe("Authz class", () => {
   });
 
   describe("canAny", () => {
-    it("should call runQuery with checkPermissions and return result.allowed", async () => {
+    it("should call runQuery with checkPermissionsFast and return boolean", async () => {
       const component = createMockComponent();
       const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
-        runQuery: vi.fn().mockResolvedValue({
-          allowed: true,
-          matchedPermission: "documents:read",
-        }),
+        runQuery: vi.fn().mockResolvedValue(true),
       };
 
       const result = await authz.canAny(ctx, "user_123", [
@@ -858,11 +855,10 @@ describe("Authz class", () => {
       ]);
       expect(result).toBe(true);
       expect(ctx.runQuery).toHaveBeenCalledWith(
-        component.queries.checkPermissions,
+        component.indexed.checkPermissionsFast,
         expect.objectContaining({
           userId: "user_123",
           permissions: ["documents:delete", "documents:read"],
-          scope: undefined,
           tenantId: "test-tenant",
         })
       );
@@ -2461,15 +2457,12 @@ describe("IndexedAuthz alias (via Authz)", () => {
   });
 
   describe("canAny", () => {
-    it("should call runQuery with checkPermissions", async () => {
+    it("should call runQuery with checkPermissionsFast", async () => {
       const component = createMockComponent();
       const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
-        runQuery: vi.fn().mockResolvedValue({
-          allowed: true,
-          matchedPermission: "documents:read",
-        }),
+        runQuery: vi.fn().mockResolvedValue(true),
       };
 
       const result = await authz.canAny(ctx, "user_123", [
@@ -2478,7 +2471,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
       ]);
       expect(result).toBe(true);
       expect(ctx.runQuery).toHaveBeenCalledWith(
-        component.queries.checkPermissions,
+        component.indexed.checkPermissionsFast,
         expect.objectContaining({
           userId: "user_123",
           permissions: ["documents:read", "documents:delete"],
