@@ -556,14 +556,13 @@ export class Authz<
     validateUserId(userId);
     validatePermissions(permissions);
     validateScope(scope);
-    const result = await ctx.runQuery(this.component.queries.checkPermissions, {
+    return await ctx.runQuery(this.component.indexed.checkPermissionsFast, {
+      tenantId: this.options.tenantId,
       userId,
       permissions,
-      scope,
-      rolePermissions: this.buildRolePermissionsMap(),
-      tenantId: this.options.tenantId,
+      objectType: scope?.type,
+      objectId: scope?.id,
     });
-    return result.allowed;
   }
 
   /**

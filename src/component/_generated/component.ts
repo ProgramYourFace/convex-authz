@@ -33,59 +33,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       >;
     };
     indexed: {
-      addRelationWithCompute: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          createdBy?: string;
-          inheritedRelations?: Array<{
-            fromObjectType: string;
-            fromRelation: string;
-            relation: string;
-          }>;
-          objectId: string;
-          objectType: string;
-          relation: string;
-          subjectId: string;
-          subjectType: string;
-          tenantId: string;
-        },
-        string,
-        Name
-      >;
-      assignRolesWithCompute: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          assignedBy?: string;
-          rolePermissionsMap: Record<string, Array<string>>;
-          roles: Array<{
-            expiresAt?: number;
-            metadata?: any;
-            role: string;
-            scope?: { id: string; type: string };
-          }>;
-          tenantId: string;
-          userId: string;
-        },
-        { assigned: number; assignmentIds: Array<string> },
-        Name
-      >;
-      assignRoleWithCompute: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          assignedBy?: string;
-          expiresAt?: number;
-          role: string;
-          rolePermissions: Array<string>;
-          scope?: { id: string; type: string };
-          tenantId: string;
-          userId: string;
-        },
-        string,
-        Name
-      >;
       checkPermissionFast: FunctionReference<
         "query",
         "internal",
@@ -119,21 +66,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         { expiredPermissions: number; expiredRoles: number },
         Name
       >;
-      denyPermissionDirect: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          deniedBy?: string;
-          expiresAt?: number;
-          permission: string;
-          reason?: string;
-          scope?: { id: string; type: string };
-          tenantId: string;
-          userId: string;
-        },
-        string,
-        Name
-      >;
       getUserPermissionsFast: FunctionReference<
         "query",
         "internal",
@@ -157,21 +89,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         }>,
         Name
       >;
-      grantPermissionDirect: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          expiresAt?: number;
-          grantedBy?: string;
-          permission: string;
-          reason?: string;
-          scope?: { id: string; type: string };
-          tenantId: string;
-          userId: string;
-        },
-        string,
-        Name
-      >;
       hasRelationFast: FunctionReference<
         "query",
         "internal",
@@ -193,45 +110,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           objectId?: string;
           objectType?: string;
           role: string;
-          tenantId: string;
-          userId: string;
-        },
-        boolean,
-        Name
-      >;
-      removeRelationWithCompute: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          objectId: string;
-          objectType: string;
-          relation: string;
-          subjectId: string;
-          subjectType: string;
-          tenantId: string;
-        },
-        boolean,
-        Name
-      >;
-      revokeRolesWithCompute: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          rolePermissionsMap: Record<string, Array<string>>;
-          roles: Array<{ role: string; scope?: { id: string; type: string } }>;
-          tenantId: string;
-          userId: string;
-        },
-        { revoked: number },
-        Name
-      >;
-      revokeRoleWithCompute: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          role: string;
-          rolePermissions: Array<string>;
-          scope?: { id: string; type: string };
           tenantId: string;
           userId: string;
         },
@@ -485,37 +363,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       >;
     };
     queries: {
-      checkPermission: FunctionReference<
-        "query",
-        "internal",
-        {
-          permission: string;
-          rolePermissions: Record<string, Array<string>>;
-          scope?: { id: string; type: string };
-          tenantId: string;
-          userId: string;
-        },
-        {
-          allowed: boolean;
-          matchedOverride?: string;
-          matchedRole?: string;
-          reason: string;
-        },
-        Name
-      >;
-      checkPermissions: FunctionReference<
-        "query",
-        "internal",
-        {
-          permissions: Array<string>;
-          rolePermissions: Record<string, Array<string>>;
-          scope?: { id: string; type: string };
-          tenantId: string;
-          userId: string;
-        },
-        { allowed: boolean; matchedPermission?: string },
-        Name
-      >;
       getAuditLog: FunctionReference<
         "query",
         "internal",
@@ -560,22 +407,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               userId: string;
             }>;
           },
-        Name
-      >;
-      getEffectivePermissions: FunctionReference<
-        "query",
-        "internal",
-        {
-          rolePermissions: Record<string, Array<string>>;
-          scope?: { id: string; type: string };
-          tenantId: string;
-          userId: string;
-        },
-        {
-          deniedPermissions: Array<string>;
-          permissions: Array<string>;
-          roles: Array<string>;
-        },
         Name
       >;
       getPermissionOverrides: FunctionReference<

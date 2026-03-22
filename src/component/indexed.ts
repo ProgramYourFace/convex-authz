@@ -13,7 +13,7 @@
  */
 
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, internalMutation, query } from "./_generated/server";
 import { matchesPermissionPattern } from "./helpers";
 import { scopeValidator } from "./validators";
 
@@ -203,7 +203,7 @@ export const hasRelationFast = query({
  * Assign a role and compute all resulting permissions
  * This is slower but makes reads O(1)
  */
-export const assignRoleWithCompute = mutation({
+export const assignRoleWithCompute = internalMutation({
   args: {
     tenantId: v.string(),
     userId: v.string(),
@@ -297,7 +297,7 @@ export const assignRoleWithCompute = mutation({
 /**
  * Revoke a role and recompute permissions
  */
-export const revokeRoleWithCompute = mutation({
+export const revokeRoleWithCompute = internalMutation({
   args: {
     tenantId: v.string(),
     userId: v.string(),
@@ -365,7 +365,7 @@ export const revokeRoleWithCompute = mutation({
 /**
  * Assign multiple roles and compute permissions in a single transaction.
  */
-export const assignRolesWithCompute = mutation({
+export const assignRolesWithCompute = internalMutation({
   args: {
     tenantId: v.string(),
     userId: v.string(),
@@ -483,7 +483,7 @@ export const assignRolesWithCompute = mutation({
 /**
  * Revoke multiple roles and recompute permissions in a single transaction.
  */
-export const revokeRolesWithCompute = mutation({
+export const revokeRolesWithCompute = internalMutation({
   args: {
     tenantId: v.string(),
     userId: v.string(),
@@ -567,7 +567,7 @@ export const revokeRolesWithCompute = mutation({
 /**
  * Grant a direct permission override
  */
-export const grantPermissionDirect = mutation({
+export const grantPermissionDirect = internalMutation({
   args: {
     tenantId: v.string(),
     userId: v.string(),
@@ -626,7 +626,7 @@ export const grantPermissionDirect = mutation({
 /**
  * Deny a permission (override)
  */
-export const denyPermissionDirect = mutation({
+export const denyPermissionDirect = internalMutation({
   args: {
     tenantId: v.string(),
     userId: v.string(),
@@ -689,7 +689,7 @@ export const denyPermissionDirect = mutation({
 /**
  * Add a relationship and compute transitive permissions
  */
-export const addRelationWithCompute = mutation({
+export const addRelationWithCompute = internalMutation({
   args: {
     tenantId: v.string(),
     subjectType: v.string(),
@@ -804,7 +804,7 @@ export const addRelationWithCompute = mutation({
 /**
  * Remove a relationship and clean up inherited permissions
  */
-export const removeRelationWithCompute = mutation({
+export const removeRelationWithCompute = internalMutation({
   args: {
     tenantId: v.string(),
     subjectType: v.string(),
