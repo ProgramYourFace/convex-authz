@@ -543,6 +543,67 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
       expect(result.allowed).toBe(false);
       expect(result.reason).toBe("No relationship path found");
     });
+
+    it("should accept maxBranching parameter and still traverse correctly", async () => {
+      const t = convexTest(schema, modules);
+
+      // Setup: user -[member]-> team, team -[owner]-> account
+      await t.mutation(api.rebac.addRelation, {
+        tenantId: TENANT,
+        subjectType: "user",
+        subjectId: "alice",
+        relation: "member",
+        objectType: "team",
+        objectId: "sales",
+      });
+
+      await t.mutation(api.rebac.addRelation, {
+        tenantId: TENANT,
+        subjectType: "team",
+        subjectId: "sales",
+        relation: "owner",
+        objectType: "account",
+        objectId: "acme",
+      });
+
+      // With maxBranching=1 the single parent is still found, access is granted
+      const resultAllowed = await t.query(api.rebac.checkRelationWithTraversal, {
+        tenantId: TENANT,
+        subjectType: "user",
+        subjectId: "alice",
+        relation: "viewer",
+        objectType: "account",
+        objectId: "acme",
+        traversalRules: {
+          "account:viewer": [
+            { through: "team", via: "owner", inherit: "member" },
+          ],
+        },
+        maxBranching: 1,
+      });
+
+      expect(resultAllowed.allowed).toBe(true);
+      expect(resultAllowed.path).toBeDefined();
+
+      // With maxBranching=0 no parents are fetched, access is denied
+      const resultDenied = await t.query(api.rebac.checkRelationWithTraversal, {
+        tenantId: TENANT,
+        subjectType: "user",
+        subjectId: "alice",
+        relation: "viewer",
+        objectType: "account",
+        objectId: "acme",
+        traversalRules: {
+          "account:viewer": [
+            { through: "team", via: "owner", inherit: "member" },
+          ],
+        },
+        maxBranching: 0,
+      });
+
+      expect(resultDenied.allowed).toBe(false);
+      expect(resultDenied.reason).toBe("No relationship path found");
+    });
   });
 
   describe("batch operations", () => {

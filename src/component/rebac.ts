@@ -232,6 +232,10 @@ export const getObjectRelations = query({
  *
  * **maxDepth** (default 5): Maximum traversal depth; nodes at depth >= maxDepth are not expanded.
  *
+ * **maxBranching** (default 50): Maximum number of parent relations fetched per BFS node per
+ * rule. Prevents exceeding Convex's 4,096 db.query call limit on wide graphs (e.g. branching
+ * factor 10 at depth 5 = 22,222 queries without this guard).
+ *
  * **Cycle detection**: A visited set keyed by `objectType:objectId:relation` ensures each
  * (object, relation) pair is processed at most once, so cycles do not cause infinite
  * loops or stack overflow.
@@ -250,6 +254,7 @@ export const checkRelationWithTraversal = query({
     // Traversal rules encoded as JSON
     traversalRules: v.optional(v.any()),
     maxDepth: v.optional(v.number()),
+    maxBranching: v.optional(v.number()),
   },
   returns: v.object({
     allowed: v.boolean(),
@@ -258,6 +263,7 @@ export const checkRelationWithTraversal = query({
   }),
   handler: async (ctx, args) => {
     const maxDepth = args.maxDepth ?? 5;
+    const maxBranching = args.maxBranching ?? 50;
     const visited = new Set<string>();
 
     // Check direct relation first
@@ -377,7 +383,7 @@ export const checkRelationWithTraversal = query({
               .eq("objectId", current.objectId)
               .eq("relation", rule.via),
           )
-          .collect();
+          .take(maxBranching);
 
         // Filter to only the intermediate object type we're looking for
         const parents = parentRelations.filter(
