@@ -360,3 +360,263 @@ describe("assignRoleUnified", () => {
     });
   });
 });
+
+describe("revokeRoleUnified", () => {
+  it("removes from source and effective tables", async () => {
+    const t = convexTest(schema, modules);
+
+    // Assign a role first
+    await t.mutation(api.unified.assignRoleUnified, {
+      tenantId: TENANT,
+      userId: "user_1",
+      role: "editor",
+      rolePermissions: ["documents:read", "documents:write"],
+      scope: undefined,
+    });
+
+    // Revoke it
+    const result = await t.mutation(api.unified.revokeRoleUnified, {
+      tenantId: TENANT,
+      userId: "user_1",
+      role: "editor",
+      rolePermissions: ["documents:read", "documents:write"],
+      scope: undefined,
+    });
+
+    expect(result).toBe(true);
+
+    // Verify roleAssignments is empty
+    await t.run(async (ctx) => {
+      const assignments = await ctx.db
+        .query("roleAssignments")
+        .withIndex("by_tenant_user_and_role", (q) =>
+          q.eq("tenantId", TENANT).eq("userId", "user_1").eq("role", "editor")
+        )
+        .collect();
+      expect(assignments.length).toBe(0);
+    });
+
+    // Verify effectiveRoles is empty
+    await t.run(async (ctx) => {
+      const roles = await ctx.db
+        .query("effectiveRoles")
+        .withIndex("by_tenant_user_role_scope", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("userId", "user_1")
+            .eq("role", "editor")
+            .eq("scopeKey", "global")
+        )
+        .collect();
+      expect(roles.length).toBe(0);
+    });
+
+    // Verify effectivePermissions is empty
+    await t.run(async (ctx) => {
+      const perms = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user", (q) =>
+          q.eq("tenantId", TENANT).eq("userId", "user_1")
+        )
+        .collect();
+      expect(perms.length).toBe(0);
+    });
+  });
+
+  it("preserves permission when another role still grants it", async () => {
+    const t = convexTest(schema, modules);
+
+    // Assign two roles that share "documents:read"
+    await t.mutation(api.unified.assignRoleUnified, {
+      tenantId: TENANT,
+      userId: "user_1",
+      role: "editor",
+      rolePermissions: ["documents:read", "documents:write"],
+      scope: undefined,
+    });
+
+    await t.mutation(api.unified.assignRoleUnified, {
+      tenantId: TENANT,
+      userId: "user_1",
+      role: "viewer",
+      rolePermissions: ["documents:read"],
+      scope: undefined,
+    });
+
+    // Revoke editor — documents:read should remain because viewer still grants it
+    const result = await t.mutation(api.unified.revokeRoleUnified, {
+      tenantId: TENANT,
+      userId: "user_1",
+      role: "editor",
+      rolePermissions: ["documents:read", "documents:write"],
+      scope: undefined,
+    });
+
+    expect(result).toBe(true);
+
+    await t.run(async (ctx) => {
+      // documents:read should still exist with source "viewer"
+      const readPerm = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user_permission_scope", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("userId", "user_1")
+            .eq("permission", "documents:read")
+            .eq("scopeKey", "global")
+        )
+        .unique();
+      expect(readPerm).not.toBeNull();
+      expect(readPerm!.sources).toEqual(["viewer"]);
+
+      // documents:write should be deleted (only editor granted it)
+      const writePerm = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user_permission_scope", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("userId", "user_1")
+            .eq("permission", "documents:write")
+            .eq("scopeKey", "global")
+        )
+        .unique();
+      expect(writePerm).toBeNull();
+    });
+  });
+
+  it("returns false if role not found", async () => {
+    const t = convexTest(schema, modules);
+
+    const result = await t.mutation(api.unified.revokeRoleUnified, {
+      tenantId: TENANT,
+      userId: "user_1",
+      role: "nonexistent",
+      rolePermissions: ["documents:read"],
+      scope: undefined,
+    });
+
+    expect(result).toBe(false);
+  });
+});
+
+describe("grantPermissionUnified", () => {
+  it("writes to both overrides and effective tables", async () => {
+    const t = convexTest(schema, modules);
+
+    const overrideId = await t.mutation(api.unified.grantPermissionUnified, {
+      tenantId: TENANT,
+      userId: "user_1",
+      permission: "billing:manage",
+      scope: undefined,
+      reason: "Admin approval",
+    });
+
+    expect(typeof overrideId).toBe("string");
+
+    // Verify permissionOverrides
+    await t.run(async (ctx) => {
+      const overrides = await ctx.db
+        .query("permissionOverrides")
+        .withIndex("by_tenant_user_and_permission", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("userId", "user_1")
+            .eq("permission", "billing:manage")
+        )
+        .collect();
+      expect(overrides.length).toBe(1);
+      expect(overrides[0].effect).toBe("allow");
+      expect(overrides[0].reason).toBe("Admin approval");
+    });
+
+    // Verify effectivePermissions
+    await t.run(async (ctx) => {
+      const perm = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user_permission_scope", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("userId", "user_1")
+            .eq("permission", "billing:manage")
+            .eq("scopeKey", "global")
+        )
+        .unique();
+      expect(perm).not.toBeNull();
+      expect(perm!.effect).toBe("allow");
+      expect(perm!.directGrant).toBe(true);
+      expect(perm!.sources).toEqual([]);
+    });
+  });
+});
+
+describe("denyPermissionUnified", () => {
+  it("overrides existing allow", async () => {
+    const t = convexTest(schema, modules);
+
+    // First grant the permission
+    await t.mutation(api.unified.grantPermissionUnified, {
+      tenantId: TENANT,
+      userId: "user_1",
+      permission: "billing:manage",
+      scope: undefined,
+    });
+
+    // Verify it's allowed
+    await t.run(async (ctx) => {
+      const perm = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user_permission_scope", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("userId", "user_1")
+            .eq("permission", "billing:manage")
+            .eq("scopeKey", "global")
+        )
+        .unique();
+      expect(perm!.effect).toBe("allow");
+      expect(perm!.directGrant).toBe(true);
+    });
+
+    // Now deny it
+    await t.mutation(api.unified.denyPermissionUnified, {
+      tenantId: TENANT,
+      userId: "user_1",
+      permission: "billing:manage",
+      scope: undefined,
+      reason: "Compliance violation",
+    });
+
+    // Verify override is now deny
+    await t.run(async (ctx) => {
+      const overrides = await ctx.db
+        .query("permissionOverrides")
+        .withIndex("by_tenant_user_and_permission", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("userId", "user_1")
+            .eq("permission", "billing:manage")
+        )
+        .collect();
+      expect(overrides.length).toBe(1);
+      expect(overrides[0].effect).toBe("deny");
+    });
+
+    // Verify effectivePermissions is now deny with directDeny
+    await t.run(async (ctx) => {
+      const perm = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user_permission_scope", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("userId", "user_1")
+            .eq("permission", "billing:manage")
+            .eq("scopeKey", "global")
+        )
+        .unique();
+      expect(perm).not.toBeNull();
+      expect(perm!.effect).toBe("deny");
+      expect(perm!.directDeny).toBe(true);
+      expect(perm!.reason).toBe("Compliance violation");
+    });
+  });
+});

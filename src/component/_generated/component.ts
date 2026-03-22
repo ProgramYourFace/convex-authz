@@ -803,5 +803,52 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         { allowed: boolean; policyName?: string; reason: string; tier: string },
         Name
       >;
+      denyPermissionUnified: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          createdBy?: string;
+          enableAudit?: boolean;
+          expiresAt?: number;
+          permission: string;
+          reason?: string;
+          scope?: { id: string; type: string };
+          tenantId: string;
+          userId: string;
+        },
+        string,
+        Name
+      >;
+      grantPermissionUnified: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          createdBy?: string;
+          enableAudit?: boolean;
+          expiresAt?: number;
+          permission: string;
+          reason?: string;
+          scope?: { id: string; type: string };
+          tenantId: string;
+          userId: string;
+        },
+        string,
+        Name
+      >;
+      revokeRoleUnified: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          enableAudit?: boolean;
+          revokedBy?: string;
+          role: string;
+          rolePermissions: Array<string>;
+          scope?: { id: string; type: string };
+          tenantId: string;
+          userId: string;
+        },
+        boolean,
+        Name
+      >;
     };
   };
