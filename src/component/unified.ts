@@ -46,38 +46,48 @@ export const checkPermission = query({
       )
       .unique();
 
-    // ── Load all permissions for wildcard/deny checks ────────────────
-    // We need this for both deny-pattern override (even on exact match)
-    // and wildcard allow fallback.
-    const rows = await ctx.db
-      .query("effectivePermissions")
-      .withIndex("by_tenant_user_scope", (q) =>
-        q
-          .eq("tenantId", args.tenantId)
-          .eq("userId", args.userId)
-          .eq("scopeKey", scopeKey)
-      )
-      .collect();
-
-    // ── Step 1: Check ALL deny patterns first (deny wins over everything) ──
-    // A wildcard deny like "docs:*" must block "docs:read" even if
-    // "docs:read" has an exact allow entry.
-    for (const row of rows) {
-      if (isExpired(row.expiresAt)) continue;
-      if (
-        row.effect === "deny" &&
-        matchesPermissionPattern(args.permission, row.permission)
-      ) {
-        return {
-          allowed: false,
-          reason: row.reason ?? "Denied",
-          tier: "cached",
-        };
-      }
+    // Fast path: exact deny → return immediately, no scan needed
+    if (exact && !isExpired(exact.expiresAt) && exact.effect === "deny") {
+      return {
+        allowed: false,
+        reason: exact.reason ?? "Denied",
+        tier: "cached",
+      };
     }
 
-    // ── Step 2: Use exact match if available (O(1) fast path) ────────
+    // Fast path: exact allow with no wildcards to worry about
+    // We still need to check for wildcard deny patterns that could override.
+    // Lazy-load the full scan only when needed.
     if (exact && !isExpired(exact.expiresAt) && exact.effect === "allow") {
+      // Check if any wildcard deny patterns exist that could override this allow.
+      // Load all rows for this user+scope (the "slow" scan).
+      const rows = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user_scope", (q) =>
+          q
+            .eq("tenantId", args.tenantId)
+            .eq("userId", args.userId)
+            .eq("scopeKey", scopeKey)
+        )
+        .collect();
+
+      // Check deny patterns first — a wildcard deny overrides exact allow
+      for (const row of rows) {
+        if (isExpired(row.expiresAt)) continue;
+        if (
+          row.effect === "deny" &&
+          row.permission !== args.permission && // skip exact match (already checked)
+          matchesPermissionPattern(args.permission, row.permission)
+        ) {
+          return {
+            allowed: false,
+            reason: row.reason ?? "Denied",
+            tier: "cached",
+          };
+        }
+      }
+
+      // No deny pattern found — return the exact allow
       const policyResult = exact.policyResult ?? null;
 
       if (policyResult === null || policyResult === "allow") {
@@ -101,7 +111,34 @@ export const checkPermission = query({
       };
     }
 
-    // ── Step 3: Wildcard allow fallback ──────────────────────────────
+    // ── Tier 2: No exact match — wildcard fallback ──────────────────
+    // Load all rows for pattern matching
+    const rows = await ctx.db
+      .query("effectivePermissions")
+      .withIndex("by_tenant_user_scope", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("userId", args.userId)
+          .eq("scopeKey", scopeKey)
+      )
+      .collect();
+
+    // Deny patterns first
+    for (const row of rows) {
+      if (isExpired(row.expiresAt)) continue;
+      if (
+        row.effect === "deny" &&
+        matchesPermissionPattern(args.permission, row.permission)
+      ) {
+        return {
+          allowed: false,
+          reason: row.reason ?? "Denied",
+          tier: "cached",
+        };
+      }
+    }
+
+    // Allow patterns
     for (const row of rows) {
       if (isExpired(row.expiresAt)) continue;
       if (
@@ -255,10 +292,15 @@ export const assignRoleUnified = mutation({
         const sources = existingPerm.sources.includes(args.role)
           ? existingPerm.sources
           : [...existingPerm.sources, args.role];
-        await ctx.db.patch(existingPerm._id, {
-          sources,
-          updatedAt: now,
-        });
+        // Also update policyResult if the new classification is more specific
+        const patchData: Record<string, unknown> = { sources, updatedAt: now };
+        if (classification === "deferred" && !existingPerm.policyResult) {
+          patchData.policyResult = "deferred";
+          patchData.policyName = permission;
+        } else if (classification === "allow" && !existingPerm.policyResult) {
+          patchData.policyResult = "allow";
+        }
+        await ctx.db.patch(existingPerm._id, patchData);
       } else {
         await ctx.db.insert("effectivePermissions", {
           tenantId: args.tenantId,
@@ -1249,10 +1291,14 @@ export const assignRolesUnified = mutation({
           const sources = existingPerm.sources.includes(item.role)
             ? existingPerm.sources
             : [...existingPerm.sources, item.role];
-          await ctx.db.patch(existingPerm._id, {
-            sources,
-            updatedAt: now,
-          });
+          const patchData: Record<string, unknown> = { sources, updatedAt: now };
+          if (classification === "deferred" && !existingPerm.policyResult) {
+            patchData.policyResult = "deferred";
+            patchData.policyName = permission;
+          } else if (classification === "allow" && !existingPerm.policyResult) {
+            patchData.policyResult = "allow";
+          }
+          await ctx.db.patch(existingPerm._id, patchData);
         } else {
           await ctx.db.insert("effectivePermissions", {
             tenantId: args.tenantId,

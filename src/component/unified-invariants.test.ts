@@ -1330,3 +1330,172 @@ describe("Category 9: Edge cases", () => {
     expect(after.allowed).toBe(false);
   });
 });
+
+// ============================================================================
+// Category 10: Bulk unified mutations (transactional dual-write)
+// ============================================================================
+
+describe("Category 10: Bulk unified mutations", () => {
+  test("10.1 assignRolesUnified populates effective tables for all roles", async () => {
+    const t = convexTest(schema, import.meta.glob("./**/*.ts"));
+
+    await t.mutation(api.unified.assignRolesUnified, {
+      tenantId: TENANT,
+      userId: "alice",
+      roles: [
+        { role: "editor" },
+        { role: "viewer" },
+      ],
+      rolePermissionsMap: {
+        editor: ["docs:read", "docs:write"],
+        viewer: ["docs:read"],
+      },
+    });
+
+    // docs:read should be allowed (granted by both roles)
+    const r1 = await t.query(api.unified.checkPermission, {
+      tenantId: TENANT, userId: "alice", permission: "docs:read",
+    });
+    expect(r1.allowed).toBe(true);
+
+    // docs:write should be allowed (granted by editor)
+    const r2 = await t.query(api.unified.checkPermission, {
+      tenantId: TENANT, userId: "alice", permission: "docs:write",
+    });
+    expect(r2.allowed).toBe(true);
+
+    // settings:read should be denied (not granted by any role)
+    const r3 = await t.query(api.unified.checkPermission, {
+      tenantId: TENANT, userId: "alice", permission: "settings:read",
+    });
+    expect(r3.allowed).toBe(false);
+  });
+
+  test("10.2 revokeRolesUnified removes permissions atomically", async () => {
+    const t = convexTest(schema, import.meta.glob("./**/*.ts"));
+
+    // Assign 3 roles
+    await t.mutation(api.unified.assignRolesUnified, {
+      tenantId: TENANT,
+      userId: "alice",
+      roles: [
+        { role: "admin" },
+        { role: "editor" },
+        { role: "viewer" },
+      ],
+      rolePermissionsMap: {
+        admin: ["docs:read", "docs:write", "docs:delete"],
+        editor: ["docs:read", "docs:write"],
+        viewer: ["docs:read"],
+      },
+    });
+
+    // Revoke admin and editor (viewer remains)
+    await t.mutation(api.unified.revokeRolesUnified, {
+      tenantId: TENANT,
+      userId: "alice",
+      roles: [
+        { role: "admin" },
+        { role: "editor" },
+      ],
+      rolePermissionsMap: {
+        admin: ["docs:read", "docs:write", "docs:delete"],
+        editor: ["docs:read", "docs:write"],
+        viewer: ["docs:read"],
+      },
+    });
+
+    // docs:read still allowed (viewer grants it)
+    const r1 = await t.query(api.unified.checkPermission, {
+      tenantId: TENANT, userId: "alice", permission: "docs:read",
+    });
+    expect(r1.allowed).toBe(true);
+
+    // docs:write denied (only admin and editor granted it, both revoked)
+    const r2 = await t.query(api.unified.checkPermission, {
+      tenantId: TENANT, userId: "alice", permission: "docs:write",
+    });
+    expect(r2.allowed).toBe(false);
+
+    // docs:delete denied (only admin granted it)
+    const r3 = await t.query(api.unified.checkPermission, {
+      tenantId: TENANT, userId: "alice", permission: "docs:delete",
+    });
+    expect(r3.allowed).toBe(false);
+  });
+
+  test("10.3 revokeAllRolesUnified clears all role-based permissions but preserves direct grants", async () => {
+    const t = convexTest(schema, import.meta.glob("./**/*.ts"));
+
+    // Assign roles
+    await t.mutation(api.unified.assignRolesUnified, {
+      tenantId: TENANT,
+      userId: "alice",
+      roles: [{ role: "admin" }, { role: "editor" }],
+      rolePermissionsMap: {
+        admin: ["docs:delete", "settings:manage"],
+        editor: ["docs:read", "docs:write"],
+      },
+    });
+
+    // Direct grant one permission
+    await t.mutation(api.unified.grantPermissionUnified, {
+      tenantId: TENANT, userId: "alice", permission: "billing:view",
+    });
+
+    // Revoke all roles
+    await t.mutation(api.unified.revokeAllRolesUnified, {
+      tenantId: TENANT,
+      userId: "alice",
+      rolePermissionsMap: {
+        admin: ["docs:delete", "settings:manage"],
+        editor: ["docs:read", "docs:write"],
+      },
+    });
+
+    // All role-based permissions denied
+    const r1 = await t.query(api.unified.checkPermission, {
+      tenantId: TENANT, userId: "alice", permission: "docs:read",
+    });
+    expect(r1.allowed).toBe(false);
+
+    const r2 = await t.query(api.unified.checkPermission, {
+      tenantId: TENANT, userId: "alice", permission: "docs:delete",
+    });
+    expect(r2.allowed).toBe(false);
+
+    // Direct grant preserved
+    const r3 = await t.query(api.unified.checkPermission, {
+      tenantId: TENANT, userId: "alice", permission: "billing:view",
+    });
+    expect(r3.allowed).toBe(true);
+  });
+
+  test("10.4 assignRolesUnified propagates policyClassifications to existing rows", async () => {
+    const t = convexTest(schema, import.meta.glob("./**/*.ts"));
+
+    // First role creates the permission row with no policy
+    await t.mutation(api.unified.assignRoleUnified, {
+      tenantId: TENANT,
+      userId: "alice",
+      role: "viewer",
+      rolePermissions: ["docs:read"],
+    });
+
+    // Second role via bulk adds itself as source + sets deferred policy
+    await t.mutation(api.unified.assignRolesUnified, {
+      tenantId: TENANT,
+      userId: "alice",
+      roles: [{ role: "auditor" }],
+      rolePermissionsMap: { auditor: ["docs:read"] },
+      policyClassifications: { "docs:read": "deferred" },
+    });
+
+    // The permission should now have policyResult=deferred
+    const result = await t.query(api.unified.checkPermission, {
+      tenantId: TENANT, userId: "alice", permission: "docs:read",
+    });
+    expect(result.allowed).toBe(true);
+    expect(result.tier).toBe("deferred");
+  });
+});
