@@ -382,7 +382,71 @@ export class Authz<
   }
 
   /**
+   * Internal helper: check permission via the unified O(1) indexed path.
+   * Returns the full structured result including tier and policyName for deferred evaluation.
+   */
+  private async _checkPermission(
+    ctx: QueryCtx | ActionCtx,
+    userId: string,
+    permission: string,
+    scope?: Scope,
+  ): Promise<{ allowed: boolean; reason: string; tier: string; policyName?: string }> {
+    validateUserId(userId);
+    validatePermission(permission);
+    validateScope(scope);
+    return ctx.runQuery(this.component.unified.checkPermission, {
+      tenantId: this.options.tenantId,
+      userId,
+      permission,
+      scope,
+    });
+  }
+
+  /**
+   * Internal helper: evaluate a deferred policy condition.
+   * Fetches user attributes and roles, builds a PolicyContext, and evaluates the condition.
+   */
+  private async _evaluateDeferredPolicy(
+    ctx: QueryCtx | ActionCtx,
+    userId: string,
+    policyName: string | undefined,
+    permission: string,
+    scope?: Scope,
+    requestContext?: Record<string, unknown>,
+  ): Promise<boolean> {
+    if (!policyName || !this.options.policies) return true;
+    const policy = (this.options.policies as Record<string, { condition: (ctx: PolicyContext) => boolean | Promise<boolean> }>)[policyName];
+    if (!policy) return true;
+
+    // Fetch user attributes and roles for the context
+    const [attrs, roles] = await Promise.all([
+      ctx.runQuery(this.component.queries.getUserAttributes, {
+        userId,
+        tenantId: this.options.tenantId,
+      }),
+      ctx.runQuery(this.component.queries.getUserRoles, {
+        userId,
+        scope,
+        tenantId: this.options.tenantId,
+      }),
+    ]);
+
+    const policyCtx: PolicyContext = {
+      subject: {
+        userId,
+        roles: roles.map((r: { role: string }) => r.role),
+        attributes: Object.fromEntries(attrs.map((a: { key: string; value: unknown }) => [a.key, a.value])),
+      },
+      resource: scope ? { type: scope.type, id: scope.id, ...requestContext } : requestContext ? { type: "", id: "", ...requestContext } : undefined,
+      action: permission,
+    };
+
+    return evaluatePolicyCondition(policy.condition, policyCtx);
+  }
+
+  /**
    * Check if user has permission.
+   * Uses O(1) indexed lookup via the unified checkPermission query.
    * Permission checks support wildcard matching: if the user has a role or override with a pattern
    * (e.g. "documents:*", "*:read", or "*"), it is treated as granting that permission when the
    * pattern matches the requested permission.
@@ -394,18 +458,34 @@ export class Authz<
     permission: string,
     scope?: Scope
   ): Promise<boolean> {
-    validateUserId(userId);
-    validatePermission(permission);
-    validateScope(scope);
-    const result = await ctx.runQuery(this.component.queries.checkPermission, {
-      userId,
-      permission,
-      scope,
-      rolePermissions: this.buildRolePermissionsMap(),
-      tenantId: this.options.tenantId,
-    });
+    const result = await this._checkPermission(ctx, userId, permission, scope);
+    if (!result.allowed) return false;
+    // For deferred policies, evaluate with empty context
+    if (result.tier === "deferred" && this.options.policies) {
+      return this._evaluateDeferredPolicy(ctx, userId, result.policyName, permission, scope);
+    }
+    return true;
+  }
 
-    return result.allowed;
+  /**
+   * Check if user has permission, with additional request context for deferred policy evaluation.
+   * Uses O(1) indexed lookup via the unified checkPermission query.
+   * @param permission - Concrete permission "resource:action" (e.g. "documents:read")
+   * @param requestContext - Additional context passed to deferred policy conditions
+   */
+  async canWithContext(
+    ctx: QueryCtx | ActionCtx,
+    userId: string,
+    permission: string,
+    scope?: Scope,
+    requestContext?: Record<string, unknown>,
+  ): Promise<boolean> {
+    const result = await this._checkPermission(ctx, userId, permission, scope);
+    if (!result.allowed) return false;
+    if (result.tier === "deferred" && this.options.policies) {
+      return this._evaluateDeferredPolicy(ctx, userId, result.policyName, permission, scope, requestContext);
+    }
+    return true;
   }
 
   /**
@@ -419,20 +499,10 @@ export class Authz<
     permission: string,
     scope?: Scope
   ): Promise<void> {
-    validateUserId(userId);
-    validatePermission(permission);
-    validateScope(scope);
-    const result = await ctx.runQuery(this.component.queries.checkPermission, {
-      userId,
-      permission,
-      scope,
-      rolePermissions: this.buildRolePermissionsMap(),
-      tenantId: this.options.tenantId,
-    });
-
-    if (!result.allowed) {
+    const allowed = await this.can(ctx, userId, permission, scope);
+    if (!allowed) {
       throw new Error(
-        `Permission denied: ${permission}${scope ? ` on ${scope.type}:${scope.id}` : ""} - ${result.reason}`
+        `Permission denied: ${permission}${scope ? ` on ${scope.type}:${scope.id}` : ""}`
       );
     }
   }
@@ -462,7 +532,7 @@ export class Authz<
   }
 
   /**
-   * Check if user has a role
+   * Check if user has a role - O(1) indexed lookup
    */
   async hasRole(
     ctx: QueryCtx | ActionCtx,
@@ -473,29 +543,31 @@ export class Authz<
     validateUserId(userId);
     validateRole(role, this.options.roles);
     validateScope(scope);
-    return await ctx.runQuery(this.component.queries.hasRole, {
+    return await ctx.runQuery(this.component.indexed.hasRoleFast, {
       userId,
       role,
-      scope,
+      objectType: scope?.type,
+      objectId: scope?.id,
       tenantId: this.options.tenantId,
     });
   }
 
   /**
-   * Get all roles for a user
+   * Get all roles for a user - O(1) indexed lookup
    */
   async getUserRoles(ctx: QueryCtx | ActionCtx, userId: string, scope?: Scope) {
     validateUserId(userId);
     validateScope(scope);
-    return await ctx.runQuery(this.component.queries.getUserRoles, {
+    const scopeKey = scope ? `${scope.type}:${scope.id}` : undefined;
+    return await ctx.runQuery(this.component.indexed.getUserRolesFast, {
       userId,
-      scope,
+      scopeKey,
       tenantId: this.options.tenantId,
     });
   }
 
   /**
-   * Get all effective permissions for a user
+   * Get all effective permissions for a user - O(1) indexed lookup
    */
   async getUserPermissions(
     ctx: QueryCtx | ActionCtx,
@@ -504,10 +576,10 @@ export class Authz<
   ) {
     validateUserId(userId);
     validateScope(scope);
-    return await ctx.runQuery(this.component.queries.getEffectivePermissions, {
+    const scopeKey = scope ? `${scope.type}:${scope.id}` : undefined;
+    return await ctx.runQuery(this.component.indexed.getUserPermissionsFast, {
       userId,
-      rolePermissions: this.buildRolePermissionsMap(),
-      scope,
+      scopeKey,
       tenantId: this.options.tenantId,
     });
   }
@@ -524,7 +596,7 @@ export class Authz<
   }
 
   /**
-   * Assign a role to a user
+   * Assign a role to a user (unified: writes to both source tables and indexed tables)
    */
   async assignRole(
     ctx: MutationCtx | ActionCtx,
@@ -538,19 +610,24 @@ export class Authz<
     validateRole(role, this.options.roles);
     validateScope(scope);
     validateOptionalExpiresAt(expiresAt);
-    return await ctx.runMutation(this.component.mutations.assignRole, {
+    const rolePermissions = flattenRolePermissions(
+      this.options.roles as unknown as Record<string, Record<string, string[]>>,
+      role
+    );
+    return await ctx.runMutation(this.component.unified.assignRoleUnified, {
+      tenantId: this.options.tenantId,
       userId,
       role,
+      rolePermissions,
       scope,
       expiresAt,
       assignedBy: actorId ?? this.options.defaultActorId,
       enableAudit: true,
-      tenantId: this.options.tenantId,
     });
   }
 
   /**
-   * Revoke a role from a user
+   * Revoke a role from a user (unified: updates both source tables and indexed tables)
    */
   async revokeRole(
     ctx: MutationCtx | ActionCtx,
@@ -562,13 +639,18 @@ export class Authz<
     validateUserId(userId);
     validateRole(role, this.options.roles);
     validateScope(scope);
-    return await ctx.runMutation(this.component.mutations.revokeRole, {
+    const rolePermissions = flattenRolePermissions(
+      this.options.roles as unknown as Record<string, Record<string, string[]>>,
+      role
+    );
+    return await ctx.runMutation(this.component.unified.revokeRoleUnified, {
+      tenantId: this.options.tenantId,
       userId,
       role,
+      rolePermissions,
       scope,
       revokedBy: actorId ?? this.options.defaultActorId,
       enableAudit: true,
-      tenantId: this.options.tenantId,
     });
   }
 
@@ -749,7 +831,7 @@ export class Authz<
   }
 
   /**
-   * Grant a direct permission override.
+   * Grant a direct permission override (unified: writes to both source tables and indexed tables).
    * Permission can be a concrete permission ("documents:read") or a wildcard pattern
    * ("documents:*", "*:read", "*:*", or "*") to allow all matching permissions.
    * @param permission - Permission or pattern (e.g. "documents:read", "documents:*", "*:read", "*")
@@ -767,7 +849,8 @@ export class Authz<
     validatePermission(permission);
     validateScope(scope);
     validateOptionalExpiresAt(expiresAt);
-    return await ctx.runMutation(this.component.mutations.grantPermission, {
+    return await ctx.runMutation(this.component.unified.grantPermissionUnified, {
+      tenantId: this.options.tenantId,
       userId,
       permission,
       scope,
@@ -775,12 +858,11 @@ export class Authz<
       expiresAt,
       createdBy: actorId ?? this.options.defaultActorId,
       enableAudit: true,
-      tenantId: this.options.tenantId,
     });
   }
 
   /**
-   * Deny a permission (explicit deny override).
+   * Deny a permission (explicit deny override, unified: writes to both source tables and indexed tables).
    * Permission can be a concrete permission or a wildcard pattern (e.g. "documents:*", "*:read", "*").
    * @param permission - Permission or pattern to deny
    */
@@ -797,7 +879,8 @@ export class Authz<
     validatePermission(permission);
     validateScope(scope);
     validateOptionalExpiresAt(expiresAt);
-    return await ctx.runMutation(this.component.mutations.denyPermission, {
+    return await ctx.runMutation(this.component.unified.denyPermissionUnified, {
+      tenantId: this.options.tenantId,
       userId,
       permission,
       scope,
@@ -805,7 +888,80 @@ export class Authz<
       expiresAt,
       createdBy: actorId ?? this.options.defaultActorId,
       enableAudit: true,
+    });
+  }
+
+  /**
+   * Check relationship - O(1) indexed lookup
+   */
+  async hasRelation(
+    ctx: QueryCtx | ActionCtx,
+    subject: { type: string; id: string },
+    relation: string,
+    object: { type: string; id: string },
+  ): Promise<boolean> {
+    return ctx.runQuery(this.component.indexed.hasRelationFast, {
+      subjectType: subject.type,
+      subjectId: subject.id,
+      relation,
+      objectType: object.type,
+      objectId: object.id,
       tenantId: this.options.tenantId,
+    });
+  }
+
+  /**
+   * Add a relationship (unified: writes to both source tables and indexed tables)
+   */
+  async addRelation(
+    ctx: MutationCtx | ActionCtx,
+    subject: { type: string; id: string },
+    relation: string,
+    object: { type: string; id: string },
+    options?: { caveat?: string; caveatContext?: unknown; createdBy?: string },
+  ): Promise<string> {
+    return ctx.runMutation(this.component.unified.addRelationUnified, {
+      subjectType: subject.type,
+      subjectId: subject.id,
+      relation,
+      objectType: object.type,
+      objectId: object.id,
+      caveat: options?.caveat,
+      caveatContext: options?.caveatContext,
+      createdBy: options?.createdBy ?? this.options.defaultActorId,
+      tenantId: this.options.tenantId,
+    });
+  }
+
+  /**
+   * Remove a relationship (unified: removes from both source tables and indexed tables)
+   */
+  async removeRelation(
+    ctx: MutationCtx | ActionCtx,
+    subject: { type: string; id: string },
+    relation: string,
+    object: { type: string; id: string },
+  ): Promise<boolean> {
+    return ctx.runMutation(this.component.unified.removeRelationUnified, {
+      subjectType: subject.type,
+      subjectId: subject.id,
+      relation,
+      objectType: object.type,
+      objectId: object.id,
+      tenantId: this.options.tenantId,
+    });
+  }
+
+  /**
+   * Recompute all indexed data for a user (effectiveRoles, effectivePermissions).
+   * Useful when role definitions change and you need to rebuild the index.
+   */
+  async recomputeUser(ctx: MutationCtx | ActionCtx, userId: string): Promise<void> {
+    validateUserId(userId);
+    await ctx.runMutation(this.component.unified.recomputeUser, {
+      tenantId: this.options.tenantId,
+      userId,
+      rolePermissionsMap: this.buildRolePermissionsMap(),
     });
   }
 
