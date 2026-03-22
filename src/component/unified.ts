@@ -306,3 +306,360 @@ export const assignRoleUnified = mutation({
     return assignmentId;
   },
 });
+
+/**
+ * Unified Role Revocation
+ *
+ * Removes a role from BOTH source tables (roleAssignments) AND effective tables
+ * (effectiveRoles, effectivePermissions) in a single transaction.
+ */
+export const revokeRoleUnified = mutation({
+  args: {
+    tenantId: v.string(),
+    userId: v.string(),
+    role: v.string(),
+    rolePermissions: v.array(v.string()),
+    scope: scopeValidator,
+    revokedBy: v.optional(v.string()),
+    enableAudit: v.optional(v.boolean()),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // 1. Compute scopeKey
+    const scopeKey = args.scope
+      ? `${args.scope.type}:${args.scope.id}`
+      : "global";
+
+    // 2. Find the role assignment in roleAssignments
+    const assignments = await ctx.db
+      .query("roleAssignments")
+      .withIndex("by_tenant_user_and_role", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("userId", args.userId)
+          .eq("role", args.role)
+      )
+      .collect();
+
+    const assignment = assignments.find(
+      (row) => matchesScope(row.scope, args.scope) && !isExpired(row.expiresAt)
+    );
+
+    if (!assignment) {
+      return false;
+    }
+
+    // 3. Delete from roleAssignments
+    await ctx.db.delete(assignment._id);
+
+    // 4. Delete from effectiveRoles
+    const effectiveRole = await ctx.db
+      .query("effectiveRoles")
+      .withIndex("by_tenant_user_role_scope", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("userId", args.userId)
+          .eq("role", args.role)
+          .eq("scopeKey", scopeKey)
+      )
+      .unique();
+
+    if (effectiveRole) {
+      await ctx.db.delete(effectiveRole._id);
+    }
+
+    // 5. For each permission the revoked role granted, update effectivePermissions
+    for (const permission of args.rolePermissions) {
+      const effectivePerm = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user_permission_scope", (q) =>
+          q
+            .eq("tenantId", args.tenantId)
+            .eq("userId", args.userId)
+            .eq("permission", permission)
+            .eq("scopeKey", scopeKey)
+        )
+        .unique();
+
+      if (!effectivePerm) continue;
+
+      const updatedSources = effectivePerm.sources.filter(
+        (s) => s !== args.role
+      );
+
+      if (updatedSources.length === 0 && !effectivePerm.directGrant) {
+        // No more sources and no direct grant — delete the row
+        await ctx.db.delete(effectivePerm._id);
+      } else if (updatedSources.length !== effectivePerm.sources.length) {
+        // Role was in sources; patch with updated array
+        await ctx.db.patch(effectivePerm._id, {
+          sources: updatedSources,
+          updatedAt: now,
+        });
+      }
+    }
+
+    // 6. Audit log
+    if (args.enableAudit) {
+      await ctx.db.insert("auditLog", {
+        tenantId: args.tenantId,
+        timestamp: now,
+        action: "role_revoked",
+        userId: args.userId,
+        actorId: args.revokedBy,
+        details: {
+          role: args.role,
+          scope: args.scope,
+        },
+      });
+    }
+
+    // 7. Return true
+    return true;
+  },
+});
+
+/**
+ * Unified Permission Grant
+ *
+ * Writes a direct permission grant to BOTH permissionOverrides (source of truth)
+ * AND effectivePermissions (cache) in a single transaction.
+ */
+export const grantPermissionUnified = mutation({
+  args: {
+    tenantId: v.string(),
+    userId: v.string(),
+    permission: v.string(),
+    scope: scopeValidator,
+    reason: v.optional(v.string()),
+    expiresAt: v.optional(v.number()),
+    createdBy: v.optional(v.string()),
+    enableAudit: v.optional(v.boolean()),
+  },
+  returns: v.string(),
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // 1. Compute scopeKey
+    const scopeKey = args.scope
+      ? `${args.scope.type}:${args.scope.id}`
+      : "global";
+
+    // 2. Upsert into permissionOverrides
+    const existingOverrides = await ctx.db
+      .query("permissionOverrides")
+      .withIndex("by_tenant_user_and_permission", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("userId", args.userId)
+          .eq("permission", args.permission)
+      )
+      .collect();
+
+    const existingOverride = existingOverrides.find((row) =>
+      matchesScope(row.scope, args.scope)
+    );
+
+    let overrideId: string;
+
+    if (existingOverride) {
+      await ctx.db.patch(existingOverride._id, {
+        effect: "allow",
+        reason: args.reason,
+        expiresAt: args.expiresAt,
+        createdBy: args.createdBy,
+      });
+      overrideId = existingOverride._id;
+    } else {
+      overrideId = await ctx.db.insert("permissionOverrides", {
+        tenantId: args.tenantId,
+        userId: args.userId,
+        permission: args.permission,
+        effect: "allow",
+        scope: args.scope,
+        reason: args.reason,
+        expiresAt: args.expiresAt,
+        createdBy: args.createdBy,
+      });
+    }
+
+    // 3. Upsert into effectivePermissions
+    const existingPerm = await ctx.db
+      .query("effectivePermissions")
+      .withIndex("by_tenant_user_permission_scope", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("userId", args.userId)
+          .eq("permission", args.permission)
+          .eq("scopeKey", scopeKey)
+      )
+      .unique();
+
+    if (existingPerm) {
+      await ctx.db.patch(existingPerm._id, {
+        directGrant: true,
+        effect: "allow",
+        reason: args.reason,
+        expiresAt: args.expiresAt,
+        updatedAt: now,
+      });
+    } else {
+      await ctx.db.insert("effectivePermissions", {
+        tenantId: args.tenantId,
+        userId: args.userId,
+        permission: args.permission,
+        scopeKey,
+        scope: args.scope,
+        effect: "allow",
+        sources: [],
+        directGrant: true,
+        reason: args.reason,
+        expiresAt: args.expiresAt,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    // 4. Audit log
+    if (args.enableAudit) {
+      await ctx.db.insert("auditLog", {
+        tenantId: args.tenantId,
+        timestamp: now,
+        action: "permission_granted",
+        userId: args.userId,
+        actorId: args.createdBy,
+        details: {
+          permission: args.permission,
+          scope: args.scope,
+        },
+      });
+    }
+
+    // 5. Return override ID
+    return overrideId;
+  },
+});
+
+/**
+ * Unified Permission Deny
+ *
+ * Writes a direct permission denial to BOTH permissionOverrides (source of truth)
+ * AND effectivePermissions (cache) in a single transaction.
+ * Direct deny ALWAYS wins — overrides existing allow.
+ */
+export const denyPermissionUnified = mutation({
+  args: {
+    tenantId: v.string(),
+    userId: v.string(),
+    permission: v.string(),
+    scope: scopeValidator,
+    reason: v.optional(v.string()),
+    expiresAt: v.optional(v.number()),
+    createdBy: v.optional(v.string()),
+    enableAudit: v.optional(v.boolean()),
+  },
+  returns: v.string(),
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // 1. Compute scopeKey
+    const scopeKey = args.scope
+      ? `${args.scope.type}:${args.scope.id}`
+      : "global";
+
+    // 2. Upsert into permissionOverrides with effect: "deny"
+    const existingOverrides = await ctx.db
+      .query("permissionOverrides")
+      .withIndex("by_tenant_user_and_permission", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("userId", args.userId)
+          .eq("permission", args.permission)
+      )
+      .collect();
+
+    const existingOverride = existingOverrides.find((row) =>
+      matchesScope(row.scope, args.scope)
+    );
+
+    let overrideId: string;
+
+    if (existingOverride) {
+      await ctx.db.patch(existingOverride._id, {
+        effect: "deny",
+        reason: args.reason,
+        expiresAt: args.expiresAt,
+        createdBy: args.createdBy,
+      });
+      overrideId = existingOverride._id;
+    } else {
+      overrideId = await ctx.db.insert("permissionOverrides", {
+        tenantId: args.tenantId,
+        userId: args.userId,
+        permission: args.permission,
+        effect: "deny",
+        scope: args.scope,
+        reason: args.reason,
+        expiresAt: args.expiresAt,
+        createdBy: args.createdBy,
+      });
+    }
+
+    // 3. Upsert into effectivePermissions with effect: "deny", directDeny: true
+    const existingPerm = await ctx.db
+      .query("effectivePermissions")
+      .withIndex("by_tenant_user_permission_scope", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("userId", args.userId)
+          .eq("permission", args.permission)
+          .eq("scopeKey", scopeKey)
+      )
+      .unique();
+
+    if (existingPerm) {
+      await ctx.db.patch(existingPerm._id, {
+        directDeny: true,
+        effect: "deny",
+        reason: args.reason,
+        expiresAt: args.expiresAt,
+        updatedAt: now,
+      });
+    } else {
+      await ctx.db.insert("effectivePermissions", {
+        tenantId: args.tenantId,
+        userId: args.userId,
+        permission: args.permission,
+        scopeKey,
+        scope: args.scope,
+        effect: "deny",
+        sources: [],
+        directDeny: true,
+        reason: args.reason,
+        expiresAt: args.expiresAt,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    // 4. Audit log
+    if (args.enableAudit) {
+      await ctx.db.insert("auditLog", {
+        tenantId: args.tenantId,
+        timestamp: now,
+        action: "permission_denied",
+        userId: args.userId,
+        actorId: args.createdBy,
+        details: {
+          permission: args.permission,
+          scope: args.scope,
+        },
+      });
+    }
+
+    // 5. Return override ID
+    return overrideId;
+  },
+});
