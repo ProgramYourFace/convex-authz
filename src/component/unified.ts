@@ -46,16 +46,38 @@ export const checkPermission = query({
       )
       .unique();
 
-    if (exact && !isExpired(exact.expiresAt)) {
-      if (exact.effect === "deny") {
+    // ── Load all permissions for wildcard/deny checks ────────────────
+    // We need this for both deny-pattern override (even on exact match)
+    // and wildcard allow fallback.
+    const rows = await ctx.db
+      .query("effectivePermissions")
+      .withIndex("by_tenant_user_scope", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("userId", args.userId)
+          .eq("scopeKey", scopeKey)
+      )
+      .collect();
+
+    // ── Step 1: Check ALL deny patterns first (deny wins over everything) ──
+    // A wildcard deny like "docs:*" must block "docs:read" even if
+    // "docs:read" has an exact allow entry.
+    for (const row of rows) {
+      if (isExpired(row.expiresAt)) continue;
+      if (
+        row.effect === "deny" &&
+        matchesPermissionPattern(args.permission, row.permission)
+      ) {
         return {
           allowed: false,
-          reason: exact.reason ?? "Denied",
+          reason: row.reason ?? "Denied",
           tier: "cached",
         };
       }
+    }
 
-      // effect === "allow"
+    // ── Step 2: Use exact match if available (O(1) fast path) ────────
+    if (exact && !isExpired(exact.expiresAt) && exact.effect === "allow") {
       const policyResult = exact.policyResult ?? null;
 
       if (policyResult === null || policyResult === "allow") {
@@ -71,7 +93,7 @@ export const checkPermission = query({
         };
       }
 
-      // policyResult === "deny"
+      // policyResult === "deny" — static policy denied this
       return {
         allowed: false,
         reason: exact.reason ?? "Denied by policy",
@@ -79,50 +101,20 @@ export const checkPermission = query({
       };
     }
 
-    // ── Tier 2: Wildcard fallback ──────────────────────────────────────
-    const rows = await ctx.db
-      .query("effectivePermissions")
-      .withIndex("by_tenant_user_scope", (q) =>
-        q
-          .eq("tenantId", args.tenantId)
-          .eq("userId", args.userId)
-          .eq("scopeKey", scopeKey)
-      )
-      .collect();
-
-    // Check deny patterns first (deny wins)
-    for (const row of rows) {
-      if (isExpired(row.expiresAt)) continue;
-      if (
-        row.effect === "deny" &&
-        matchesPermissionPattern(args.permission, row.permission)
-      ) {
-        return {
-          allowed: false,
-          reason: row.reason ?? "Denied by wildcard pattern",
-          tier: "cached",
-        };
-      }
-    }
-
-    // Then check allow patterns
+    // ── Step 3: Wildcard allow fallback ──────────────────────────────
     for (const row of rows) {
       if (isExpired(row.expiresAt)) continue;
       if (
         row.effect === "allow" &&
         matchesPermissionPattern(args.permission, row.permission)
       ) {
-        // Respect policyResult on wildcard matches too
         const policyResult = row.policyResult ?? null;
-
-        if (policyResult === "deny") {
-          continue; // skip this allow — policy overrode it
-        }
+        if (policyResult === "deny") continue;
 
         if (policyResult === "deferred") {
           return {
             allowed: true,
-            reason: "Allowed by wildcard (policy deferred)",
+            reason: "Allowed by pattern (policy deferred)",
             tier: "deferred",
             policyName: row.policyName,
           };
@@ -130,13 +122,13 @@ export const checkPermission = query({
 
         return {
           allowed: true,
-          reason: "Allowed by wildcard pattern",
+          reason: "Allowed by pattern",
           tier: "cached",
         };
       }
     }
 
-    // ── Tier 3: No permission found ────────────────────────────────────
+    // ── Step 4: No permission found ─────────────────────────────────
     return {
       allowed: false,
       reason: "No permission granted",
@@ -276,6 +268,7 @@ export const assignRoleUnified = mutation({
           scope: args.scope,
           effect: "allow",
           sources: [args.role],
+          expiresAt: args.expiresAt,
           createdAt: now,
           updatedAt: now,
           ...(classification === "deferred"
@@ -980,6 +973,7 @@ export const recomputeUser = mutation({
             scope: assignment.scope,
             effect: "allow",
             sources: [assignment.role],
+            expiresAt: assignment.expiresAt,
             createdAt: now,
             updatedAt: now,
             ...(classification === "deferred"
