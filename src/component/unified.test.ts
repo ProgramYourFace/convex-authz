@@ -699,6 +699,213 @@ describe("setAttributeWithRecompute", () => {
   });
 });
 
+describe("addRelationUnified", () => {
+  it("writes to both relationships and effectiveRelationships", async () => {
+    const t = convexTest(schema, modules);
+
+    const relationId = await t.mutation(api.unified.addRelationUnified, {
+      tenantId: TENANT,
+      subjectType: "user",
+      subjectId: "user_1",
+      relation: "member",
+      objectType: "org",
+      objectId: "org_1",
+    });
+
+    expect(typeof relationId).toBe("string");
+
+    // Verify relationships (source of truth)
+    await t.run(async (ctx) => {
+      const rels = await ctx.db
+        .query("relationships")
+        .withIndex("by_tenant_subject_relation_object", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("subjectType", "user")
+            .eq("subjectId", "user_1")
+            .eq("relation", "member")
+            .eq("objectType", "org")
+            .eq("objectId", "org_1")
+        )
+        .collect();
+      expect(rels.length).toBe(1);
+      expect(rels[0].relation).toBe("member");
+      expect(rels[0].createdAt).toBeGreaterThan(0);
+    });
+
+    // Verify effectiveRelationships (materialized)
+    await t.run(async (ctx) => {
+      const effRels = await ctx.db
+        .query("effectiveRelationships")
+        .withIndex("by_tenant_subject_relation_object", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("subjectKey", "user:user_1")
+            .eq("relation", "member")
+            .eq("objectKey", "org:org_1")
+        )
+        .collect();
+      expect(effRels.length).toBe(1);
+      expect(effRels[0].isDirect).toBe(true);
+      expect(effRels[0].inheritedFrom).toBeNull();
+      expect(effRels[0].depth).toBe(0);
+      expect(effRels[0].subjectType).toBe("user");
+      expect(effRels[0].subjectId).toBe("user_1");
+      expect(effRels[0].objectType).toBe("org");
+      expect(effRels[0].objectId).toBe("org_1");
+    });
+  });
+
+  it("is idempotent — returns same ID for duplicate", async () => {
+    const t = convexTest(schema, modules);
+
+    const id1 = await t.mutation(api.unified.addRelationUnified, {
+      tenantId: TENANT,
+      subjectType: "user",
+      subjectId: "user_1",
+      relation: "member",
+      objectType: "org",
+      objectId: "org_1",
+    });
+
+    const id2 = await t.mutation(api.unified.addRelationUnified, {
+      tenantId: TENANT,
+      subjectType: "user",
+      subjectId: "user_1",
+      relation: "member",
+      objectType: "org",
+      objectId: "org_1",
+    });
+
+    expect(id1).toBe(id2);
+
+    // Verify only one row in relationships
+    await t.run(async (ctx) => {
+      const rels = await ctx.db
+        .query("relationships")
+        .withIndex("by_tenant_subject_relation_object", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("subjectType", "user")
+            .eq("subjectId", "user_1")
+            .eq("relation", "member")
+            .eq("objectType", "org")
+            .eq("objectId", "org_1")
+        )
+        .collect();
+      expect(rels.length).toBe(1);
+    });
+  });
+
+  it("stores caveat and caveatContext", async () => {
+    const t = convexTest(schema, modules);
+
+    await t.mutation(api.unified.addRelationUnified, {
+      tenantId: TENANT,
+      subjectType: "user",
+      subjectId: "user_1",
+      relation: "viewer",
+      objectType: "document",
+      objectId: "doc_1",
+      caveat: "ipAllowlist",
+      caveatContext: { allowedIPs: ["10.0.0.0/8"] },
+    });
+
+    await t.run(async (ctx) => {
+      const rel = await ctx.db
+        .query("relationships")
+        .withIndex("by_tenant_subject_relation_object", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("subjectType", "user")
+            .eq("subjectId", "user_1")
+            .eq("relation", "viewer")
+            .eq("objectType", "document")
+            .eq("objectId", "doc_1")
+        )
+        .unique();
+      expect(rel).not.toBeNull();
+      expect(rel!.caveat).toBe("ipAllowlist");
+      expect(rel!.caveatContext).toEqual({ allowedIPs: ["10.0.0.0/8"] });
+    });
+  });
+});
+
+describe("removeRelationUnified", () => {
+  it("removes from both tables", async () => {
+    const t = convexTest(schema, modules);
+
+    // Add a relation first
+    await t.mutation(api.unified.addRelationUnified, {
+      tenantId: TENANT,
+      subjectType: "user",
+      subjectId: "user_1",
+      relation: "member",
+      objectType: "org",
+      objectId: "org_1",
+    });
+
+    // Remove it
+    const result = await t.mutation(api.unified.removeRelationUnified, {
+      tenantId: TENANT,
+      subjectType: "user",
+      subjectId: "user_1",
+      relation: "member",
+      objectType: "org",
+      objectId: "org_1",
+    });
+
+    expect(result).toBe(true);
+
+    // Verify relationships is empty
+    await t.run(async (ctx) => {
+      const rels = await ctx.db
+        .query("relationships")
+        .withIndex("by_tenant_subject_relation_object", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("subjectType", "user")
+            .eq("subjectId", "user_1")
+            .eq("relation", "member")
+            .eq("objectType", "org")
+            .eq("objectId", "org_1")
+        )
+        .collect();
+      expect(rels.length).toBe(0);
+    });
+
+    // Verify effectiveRelationships is empty
+    await t.run(async (ctx) => {
+      const effRels = await ctx.db
+        .query("effectiveRelationships")
+        .withIndex("by_tenant_subject_relation_object", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("subjectKey", "user:user_1")
+            .eq("relation", "member")
+            .eq("objectKey", "org:org_1")
+        )
+        .collect();
+      expect(effRels.length).toBe(0);
+    });
+  });
+
+  it("returns false if not found", async () => {
+    const t = convexTest(schema, modules);
+
+    const result = await t.mutation(api.unified.removeRelationUnified, {
+      tenantId: TENANT,
+      subjectType: "user",
+      subjectId: "user_1",
+      relation: "member",
+      objectType: "org",
+      objectId: "nonexistent",
+    });
+
+    expect(result).toBe(false);
+  });
+});
+
 describe("denyPermissionUnified", () => {
   it("overrides existing allow", async () => {
     const t = convexTest(schema, modules);
