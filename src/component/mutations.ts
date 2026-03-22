@@ -4,6 +4,7 @@ import { isExpired } from "./helpers";
 import { scopeValidator } from "./validators";
 
 const MAX_BULK_ROLES = 100;
+const BATCH_SIZE = 500;
 
 /**
  * Assign a role to a user
@@ -1063,34 +1064,56 @@ export const cleanupExpired = mutation({
     let expiredRoles = 0;
     let expiredOverrides = 0;
 
-    const roleAssignments = args.tenantId
-      ? await ctx.db
-          .query("roleAssignments")
-          .withIndex("by_tenant_user", (q) =>
-            q.eq("tenantId", args.tenantId!),
-          )
-          .collect()
-      : await ctx.db.query("roleAssignments").collect();
-    for (const assignment of roleAssignments) {
-      if (assignment.expiresAt && assignment.expiresAt < now) {
-        await ctx.db.delete(assignment._id);
-        expiredRoles++;
+    // Clean up expired role assignments in batches
+    while (true) {
+      const roleAssignments = args.tenantId
+        ? await ctx.db
+            .query("roleAssignments")
+            .withIndex("by_tenant_user", (q) =>
+              q.eq("tenantId", args.tenantId!),
+            )
+            .take(BATCH_SIZE)
+        : await ctx.db
+            .query("roleAssignments")
+            .order("asc")
+            .take(BATCH_SIZE);
+      if (roleAssignments.length === 0) break;
+      let deletedAny = false;
+      for (const assignment of roleAssignments) {
+        if (assignment.expiresAt && assignment.expiresAt < now) {
+          await ctx.db.delete(assignment._id);
+          expiredRoles++;
+          deletedAny = true;
+        }
       }
+      // If we got fewer than BATCH_SIZE rows, we've scanned everything
+      // If we got a full batch but deleted nothing, stop to avoid infinite loop
+      if (roleAssignments.length < BATCH_SIZE || !deletedAny) break;
     }
 
-    const overrides = args.tenantId
-      ? await ctx.db
-          .query("permissionOverrides")
-          .withIndex("by_tenant_user", (q) =>
-            q.eq("tenantId", args.tenantId!),
-          )
-          .collect()
-      : await ctx.db.query("permissionOverrides").collect();
-    for (const override of overrides) {
-      if (override.expiresAt && override.expiresAt < now) {
-        await ctx.db.delete(override._id);
-        expiredOverrides++;
+    // Clean up expired permission overrides in batches
+    while (true) {
+      const overrides = args.tenantId
+        ? await ctx.db
+            .query("permissionOverrides")
+            .withIndex("by_tenant_user", (q) =>
+              q.eq("tenantId", args.tenantId!),
+            )
+            .take(BATCH_SIZE)
+        : await ctx.db
+            .query("permissionOverrides")
+            .order("asc")
+            .take(BATCH_SIZE);
+      if (overrides.length === 0) break;
+      let deletedAny = false;
+      for (const override of overrides) {
+        if (override.expiresAt && override.expiresAt < now) {
+          await ctx.db.delete(override._id);
+          expiredOverrides++;
+          deletedAny = true;
+        }
       }
+      if (overrides.length < BATCH_SIZE || !deletedAny) break;
     }
 
     return { expiredRoles, expiredOverrides };
@@ -1123,65 +1146,101 @@ export const runScheduledCleanup = mutation({
     let expiredEffectivePermissions = 0;
 
     // 1. Source tables: roleAssignments, permissionOverrides
-    const roleAssignments = args.tenantId
-      ? await ctx.db
-          .query("roleAssignments")
-          .withIndex("by_tenant_user", (q) =>
-            q.eq("tenantId", args.tenantId!),
-          )
-          .collect()
-      : await ctx.db.query("roleAssignments").collect();
-    for (const assignment of roleAssignments) {
-      if (assignment.expiresAt && assignment.expiresAt < now) {
-        await ctx.db.delete(assignment._id);
-        expiredRoleAssignments++;
+    while (true) {
+      const roleAssignments = args.tenantId
+        ? await ctx.db
+            .query("roleAssignments")
+            .withIndex("by_tenant_user", (q) =>
+              q.eq("tenantId", args.tenantId!),
+            )
+            .take(BATCH_SIZE)
+        : await ctx.db
+            .query("roleAssignments")
+            .order("asc")
+            .take(BATCH_SIZE);
+      if (roleAssignments.length === 0) break;
+      let deletedAny = false;
+      for (const assignment of roleAssignments) {
+        if (assignment.expiresAt && assignment.expiresAt < now) {
+          await ctx.db.delete(assignment._id);
+          expiredRoleAssignments++;
+          deletedAny = true;
+        }
       }
+      if (roleAssignments.length < BATCH_SIZE || !deletedAny) break;
     }
 
-    const overrides = args.tenantId
-      ? await ctx.db
-          .query("permissionOverrides")
-          .withIndex("by_tenant_user", (q) =>
-            q.eq("tenantId", args.tenantId!),
-          )
-          .collect()
-      : await ctx.db.query("permissionOverrides").collect();
-    for (const override of overrides) {
-      if (override.expiresAt && override.expiresAt < now) {
-        await ctx.db.delete(override._id);
-        expiredOverrides++;
+    while (true) {
+      const overrides = args.tenantId
+        ? await ctx.db
+            .query("permissionOverrides")
+            .withIndex("by_tenant_user", (q) =>
+              q.eq("tenantId", args.tenantId!),
+            )
+            .take(BATCH_SIZE)
+        : await ctx.db
+            .query("permissionOverrides")
+            .order("asc")
+            .take(BATCH_SIZE);
+      if (overrides.length === 0) break;
+      let deletedAny = false;
+      for (const override of overrides) {
+        if (override.expiresAt && override.expiresAt < now) {
+          await ctx.db.delete(override._id);
+          expiredOverrides++;
+          deletedAny = true;
+        }
       }
+      if (overrides.length < BATCH_SIZE || !deletedAny) break;
     }
 
     // 2. Indexed tables: effectiveRoles, effectivePermissions
-    const effectiveRoles = args.tenantId
-      ? await ctx.db
-          .query("effectiveRoles")
-          .withIndex("by_tenant_user", (q) =>
-            q.eq("tenantId", args.tenantId!),
-          )
-          .collect()
-      : await ctx.db.query("effectiveRoles").collect();
-    for (const row of effectiveRoles) {
-      if (row.expiresAt && row.expiresAt < now) {
-        await ctx.db.delete(row._id);
-        expiredEffectiveRoles++;
+    while (true) {
+      const effectiveRoles = args.tenantId
+        ? await ctx.db
+            .query("effectiveRoles")
+            .withIndex("by_tenant_user", (q) =>
+              q.eq("tenantId", args.tenantId!),
+            )
+            .take(BATCH_SIZE)
+        : await ctx.db
+            .query("effectiveRoles")
+            .order("asc")
+            .take(BATCH_SIZE);
+      if (effectiveRoles.length === 0) break;
+      let deletedAny = false;
+      for (const row of effectiveRoles) {
+        if (row.expiresAt && row.expiresAt < now) {
+          await ctx.db.delete(row._id);
+          expiredEffectiveRoles++;
+          deletedAny = true;
+        }
       }
+      if (effectiveRoles.length < BATCH_SIZE || !deletedAny) break;
     }
 
-    const effectivePermissions = args.tenantId
-      ? await ctx.db
-          .query("effectivePermissions")
-          .withIndex("by_tenant_user", (q) =>
-            q.eq("tenantId", args.tenantId!),
-          )
-          .collect()
-      : await ctx.db.query("effectivePermissions").collect();
-    for (const row of effectivePermissions) {
-      if (row.expiresAt && row.expiresAt < now) {
-        await ctx.db.delete(row._id);
-        expiredEffectivePermissions++;
+    while (true) {
+      const effectivePermissions = args.tenantId
+        ? await ctx.db
+            .query("effectivePermissions")
+            .withIndex("by_tenant_user", (q) =>
+              q.eq("tenantId", args.tenantId!),
+            )
+            .take(BATCH_SIZE)
+        : await ctx.db
+            .query("effectivePermissions")
+            .order("asc")
+            .take(BATCH_SIZE);
+      if (effectivePermissions.length === 0) break;
+      let deletedAny = false;
+      for (const row of effectivePermissions) {
+        if (row.expiresAt && row.expiresAt < now) {
+          await ctx.db.delete(row._id);
+          expiredEffectivePermissions++;
+          deletedAny = true;
+        }
       }
+      if (effectivePermissions.length < BATCH_SIZE || !deletedAny) break;
     }
 
     return {
@@ -1193,7 +1252,6 @@ export const runScheduledCleanup = mutation({
   },
 });
 
-const BATCH_SIZE = 500;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 function getOptionalEnvNumber(name: string): number | undefined {
@@ -1250,29 +1308,72 @@ export const runAuditRetentionCleanup = mutation({
           }
         }
       } else {
-        const all = await ctx.db.query("auditLog").collect();
-        for (const doc of all) {
-          if (doc.timestamp < cutoff) {
-            await ctx.db.delete(doc._id);
-            deletedByAge++;
+        // Global path: scan oldest rows in batches, filter expired in memory
+        while (true) {
+          const batch = await ctx.db
+            .query("auditLog")
+            .order("asc")
+            .take(BATCH_SIZE);
+          if (batch.length === 0) break;
+          let deletedAny = false;
+          for (const doc of batch) {
+            if (doc.timestamp < cutoff) {
+              await ctx.db.delete(doc._id);
+              deletedByAge++;
+              deletedAny = true;
+            }
           }
+          if (batch.length < BATCH_SIZE || !deletedAny) break;
         }
       }
     }
 
     if (maxEntries !== undefined && maxEntries > 0) {
-      const all = await ctx.db.query("auditLog").collect();
-      const filtered = args.tenantId
-        ? all.filter((doc) => doc.tenantId === args.tenantId)
-        : all;
-      const count = filtered.length;
-      if (count > maxEntries) {
-        const toDelete = count - maxEntries;
-        const byTimestamp = filtered.sort((a, b) => a.timestamp - b.timestamp);
-        const toRemove = byTimestamp.slice(0, toDelete);
-        for (const doc of toRemove) {
-          await ctx.db.delete(doc._id);
-          deletedByCount++;
+      if (args.tenantId) {
+        // Tenant-scoped: use index to count and delete oldest
+        const allForTenant = await ctx.db
+          .query("auditLog")
+          .withIndex("by_tenant_timestamp", (q) =>
+            q.eq("tenantId", args.tenantId!),
+          )
+          .order("asc")
+          .collect();
+        const count = allForTenant.length;
+        if (count > maxEntries) {
+          const toDelete = count - maxEntries;
+          for (let i = 0; i < toDelete; i++) {
+            await ctx.db.delete(allForTenant[i]._id);
+            deletedByCount++;
+          }
+        }
+      } else {
+        // Global path: find the newest maxEntries entries to keep,
+        // then delete everything older in batches
+        const keepEntries = await ctx.db
+          .query("auditLog")
+          .order("desc")
+          .take(maxEntries);
+        if (keepEntries.length === maxEntries) {
+          // There may be excess entries; delete anything not in the keep set
+          const keepIds = new Set(
+            keepEntries.map((e) => e._id.toString()),
+          );
+          while (true) {
+            const batch = await ctx.db
+              .query("auditLog")
+              .order("asc")
+              .take(BATCH_SIZE);
+            if (batch.length === 0) break;
+            let deletedAny = false;
+            for (const doc of batch) {
+              if (!keepIds.has(doc._id.toString())) {
+                await ctx.db.delete(doc._id);
+                deletedByCount++;
+                deletedAny = true;
+              }
+            }
+            if (batch.length < BATCH_SIZE || !deletedAny) break;
+          }
         }
       }
     }
