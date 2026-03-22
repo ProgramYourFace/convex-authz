@@ -770,6 +770,24 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       >;
     };
     unified: {
+      addRelationUnified: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          caveat?: string;
+          caveatContext?: any;
+          createdBy?: string;
+          enableAudit?: boolean;
+          objectId: string;
+          objectType: string;
+          relation: string;
+          subjectId: string;
+          subjectType: string;
+          tenantId: string;
+        },
+        string,
+        Name
+      >;
       assignRoleUnified: FunctionReference<
         "mutation",
         "internal",
@@ -835,6 +853,21 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         string,
         Name
       >;
+      removeRelationUnified: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          enableAudit?: boolean;
+          objectId: string;
+          objectType: string;
+          relation: string;
+          subjectId: string;
+          subjectType: string;
+          tenantId: string;
+        },
+        boolean,
+        Name
+      >;
       revokeRoleUnified: FunctionReference<
         "mutation",
         "internal",
@@ -848,6 +881,21 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           userId: string;
         },
         boolean,
+        Name
+      >;
+      setAttributeWithRecompute: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          enableAudit?: boolean;
+          key: string;
+          policyReEvaluations?: Record<string, "allow" | "deny">;
+          setBy?: string;
+          tenantId: string;
+          userId: string;
+          value: any;
+        },
+        string,
         Name
       >;
     };

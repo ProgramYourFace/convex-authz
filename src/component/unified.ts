@@ -669,6 +669,198 @@ export const setAttributeWithRecompute = mutation({
  * AND effectivePermissions (cache) in a single transaction.
  * Direct deny ALWAYS wins — overrides existing allow.
  */
+/**
+ * Unified Relation Add
+ *
+ * Writes a direct relationship to BOTH relationships (source of truth)
+ * AND effectiveRelationships (materialized view) in a single transaction.
+ *
+ * Note: Only writes the direct relationship. Transitive closure
+ * computation will be added in a future enhancement.
+ */
+export const addRelationUnified = mutation({
+  args: {
+    tenantId: v.string(),
+    subjectType: v.string(),
+    subjectId: v.string(),
+    relation: v.string(),
+    objectType: v.string(),
+    objectId: v.string(),
+    caveat: v.optional(v.string()),
+    caveatContext: v.optional(v.any()),
+    createdBy: v.optional(v.string()),
+    enableAudit: v.optional(v.boolean()),
+  },
+  returns: v.string(), // relation ID
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // 1. Check for duplicate in relationships (idempotent)
+    const existing = await ctx.db
+      .query("relationships")
+      .withIndex("by_tenant_subject_relation_object", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("subjectType", args.subjectType)
+          .eq("subjectId", args.subjectId)
+          .eq("relation", args.relation)
+          .eq("objectType", args.objectType)
+          .eq("objectId", args.objectId)
+      )
+      .unique();
+
+    if (existing) {
+      return existing._id;
+    }
+
+    // 2. Insert into relationships (source of truth)
+    const relationId = await ctx.db.insert("relationships", {
+      tenantId: args.tenantId,
+      subjectType: args.subjectType,
+      subjectId: args.subjectId,
+      relation: args.relation,
+      objectType: args.objectType,
+      objectId: args.objectId,
+      createdBy: args.createdBy,
+      createdAt: now,
+      ...(args.caveat !== undefined ? { caveat: args.caveat } : {}),
+      ...(args.caveatContext !== undefined
+        ? { caveatContext: args.caveatContext }
+        : {}),
+    });
+
+    // 3. Insert into effectiveRelationships (materialized)
+    const subjectKey = `${args.subjectType}:${args.subjectId}`;
+    const objectKey = `${args.objectType}:${args.objectId}`;
+
+    await ctx.db.insert("effectiveRelationships", {
+      tenantId: args.tenantId,
+      subjectKey,
+      subjectType: args.subjectType,
+      subjectId: args.subjectId,
+      relation: args.relation,
+      objectKey,
+      objectType: args.objectType,
+      objectId: args.objectId,
+      isDirect: true,
+      inheritedFrom: null,
+      createdBy: args.createdBy,
+      createdAt: now,
+      depth: 0,
+    });
+
+    // 4. Audit log
+    if (args.enableAudit) {
+      await ctx.db.insert("auditLog", {
+        tenantId: args.tenantId,
+        timestamp: now,
+        action: "relation_added",
+        userId: `${args.subjectType}:${args.subjectId}`,
+        actorId: args.createdBy,
+        details: {
+          scope: undefined,
+        },
+      });
+    }
+
+    // 5. Return relation ID
+    return relationId;
+  },
+});
+
+/**
+ * Unified Relation Remove
+ *
+ * Removes a relationship from BOTH relationships (source of truth)
+ * AND effectiveRelationships (materialized view) in a single transaction.
+ * Also cleans up any inherited relationships derived from this one.
+ */
+export const removeRelationUnified = mutation({
+  args: {
+    tenantId: v.string(),
+    subjectType: v.string(),
+    subjectId: v.string(),
+    relation: v.string(),
+    objectType: v.string(),
+    objectId: v.string(),
+    enableAudit: v.optional(v.boolean()),
+  },
+  returns: v.boolean(), // true if found and removed
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // 1. Find in relationships
+    const existing = await ctx.db
+      .query("relationships")
+      .withIndex("by_tenant_subject_relation_object", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("subjectType", args.subjectType)
+          .eq("subjectId", args.subjectId)
+          .eq("relation", args.relation)
+          .eq("objectType", args.objectType)
+          .eq("objectId", args.objectId)
+      )
+      .unique();
+
+    if (!existing) {
+      return false;
+    }
+
+    // 2. Delete from relationships
+    await ctx.db.delete(existing._id);
+
+    // 3. Find and delete from effectiveRelationships
+    const subjectKey = `${args.subjectType}:${args.subjectId}`;
+    const objectKey = `${args.objectType}:${args.objectId}`;
+
+    const effectiveRel = await ctx.db
+      .query("effectiveRelationships")
+      .withIndex("by_tenant_subject_relation_object", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("subjectKey", subjectKey)
+          .eq("relation", args.relation)
+          .eq("objectKey", objectKey)
+      )
+      .unique();
+
+    if (effectiveRel) {
+      await ctx.db.delete(effectiveRel._id);
+    }
+
+    // 4. Delete any inherited relationships that point to this one
+    const inherited = await ctx.db
+      .query("effectiveRelationships")
+      .withIndex("by_tenant_inherited_from", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("inheritedFrom", existing._id)
+      )
+      .collect();
+
+    for (const row of inherited) {
+      await ctx.db.delete(row._id);
+    }
+
+    // 5. Audit log
+    if (args.enableAudit) {
+      await ctx.db.insert("auditLog", {
+        tenantId: args.tenantId,
+        timestamp: now,
+        action: "relation_removed",
+        userId: `${args.subjectType}:${args.subjectId}`,
+        details: {
+          scope: undefined,
+        },
+      });
+    }
+
+    // 6. Return true
+    return true;
+  },
+});
+
 export const denyPermissionUnified = mutation({
   args: {
     tenantId: v.string(),
