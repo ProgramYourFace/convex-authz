@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+## v2.0.0
+
+### BREAKING CHANGES
+
+- **`IndexedAuthz` deprecated**: Use `Authz` instead. All IndexedAuthz functionality (O(1) reads, ReBAC, pre-computed permissions) is now built into the unified `Authz` class. `IndexedAuthz` is re-exported as a deprecated alias and will be removed in v2.1.
+
+- **`Authz.can()` now reads from effectivePermissions**: Permission checks are always O(1). Existing `Authz` users must run `recomputeUser()` to backfill effective tables after upgrading.
+
+- **ReBAC methods use structured objects**: `hasRelation`, `addRelation`, `removeRelation` now take `{ type, id }` objects instead of positional string arguments.
+
+- **Superseded component functions marked internal**: `queries.checkPermission`, `queries.checkPermissions`, `queries.getEffectivePermissions`, and indexed write mutations are now internal functions.
+
+### New features
+
+- `canWithContext(ctx, userId, permission, scope?, requestContext?)` for deferred ABAC policies
+- `recomputeUser(ctx, userId)` for post-deploy effective table rebuild
+- Static vs deferred policy classification in `definePolicies` (`type: "static" | "deferred"`)
+- `defineTraversalRules()`, `defineRelationPermissions()`, `defineCaveats()` helpers
+- Caveats on relationship edges (`caveat`/`caveatContext` fields)
+- Schema fields: `policyResult`/`policyName` on effectivePermissions, `depth` on effectiveRelationships
+- New audit actions: `relation_added`, `relation_removed`, `policy_evaluated`
+
+### Bug fixes
+
+- Cleanup mutations now use batched deletion (prevents Convex 16K scan limit overflow)
+- ReBAC traversal has `maxBranching` limit (prevents 4K db.query limit overflow)
+- `MAX_BULK_ROLES` reduced from 100 to 20 (prevents transaction limit overflow)
+
 - **BREAKING: Tenant-level data isolation**: All tables now include a required `tenantId` field. All indexes have been replaced with tenant-prefixed versions (`tenantId` as the first column). This is a breaking schema change.
 
 - **BREAKING: tenantId required in constructors**: The `Authz` and `IndexedAuthz` constructors now require a `tenantId: string` option. Single-tenant apps should pass any constant string (e.g. `"my-app"`). Multi-tenant apps should pass their tenant/organization identifier.
