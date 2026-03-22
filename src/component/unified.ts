@@ -389,8 +389,8 @@ export const revokeRoleUnified = mutation({
         (s) => s !== args.role
       );
 
-      if (updatedSources.length === 0 && !effectivePerm.directGrant) {
-        // No more sources and no direct grant — delete the row
+      if (updatedSources.length === 0 && !effectivePerm.directGrant && !effectivePerm.directDeny) {
+        // No more sources, no direct grant, no direct deny — delete the row
         await ctx.db.delete(effectivePerm._id);
       } else if (updatedSources.length !== effectivePerm.sources.length) {
         // Role was in sources; patch with updated array
@@ -500,6 +500,7 @@ export const grantPermissionUnified = mutation({
     if (existingPerm) {
       await ctx.db.patch(existingPerm._id, {
         directGrant: true,
+        directDeny: undefined,
         effect: "allow",
         reason: args.reason,
         expiresAt: args.expiresAt,
@@ -599,43 +600,36 @@ export const setAttributeWithRecompute = mutation({
     // 2. Apply policyReEvaluations to effectivePermissions
     if (args.policyReEvaluations) {
       for (const [permission, newResult] of Object.entries(args.policyReEvaluations)) {
-        const effectivePerm = await ctx.db
+        // Find ALL effectivePermissions for this user+permission across all scopes
+        const effectivePerms = await ctx.db
           .query("effectivePermissions")
-          .withIndex("by_tenant_user_permission_scope", (q) =>
+          .withIndex("by_tenant_user", (q) =>
             q
               .eq("tenantId", args.tenantId)
               .eq("userId", args.userId)
-              .eq("permission", permission)
-              .eq("scopeKey", "global")
           )
-          .unique();
+          .collect();
 
-        if (!effectivePerm || !effectivePerm.policyName) {
-          // Only re-evaluate rows that have a policyName (policy-governed permissions)
-          continue;
-        }
+        const matchingPerms = effectivePerms.filter(
+          (p) => p.permission === permission && p.policyName
+        );
 
-        if (newResult === "deny" && effectivePerm.effect === "allow") {
-          if (effectivePerm.directGrant) {
-            // Has a direct grant — update policyResult to deny but keep the row
+        for (const effectivePerm of matchingPerms) {
+
+          if (newResult === "deny" && effectivePerm.effect === "allow") {
+            // Mark as denied via policyResult
             await ctx.db.patch(effectivePerm._id, {
               policyResult: "deny",
               updatedAt: now,
             });
-          } else {
-            // No direct grant — mark as denied via policyResult
+          } else if (newResult === "allow" && effectivePerm.policyResult === "deny") {
+            // Policy now allows — restore allow state
             await ctx.db.patch(effectivePerm._id, {
-              policyResult: "deny",
+              policyResult: "allow",
+              effect: "allow",
               updatedAt: now,
             });
           }
-        } else if (newResult === "allow" && effectivePerm.policyResult === "deny") {
-          // Policy now allows — restore allow state
-          await ctx.db.patch(effectivePerm._id, {
-            policyResult: "allow",
-            effect: "allow",
-            updatedAt: now,
-          });
         }
       }
     }
@@ -662,13 +656,6 @@ export const setAttributeWithRecompute = mutation({
   },
 });
 
-/**
- * Unified Permission Deny
- *
- * Writes a direct permission denial to BOTH permissionOverrides (source of truth)
- * AND effectivePermissions (cache) in a single transaction.
- * Direct deny ALWAYS wins — overrides existing allow.
- */
 /**
  * Unified Relation Add
  *
@@ -755,10 +742,13 @@ export const addRelationUnified = mutation({
         tenantId: args.tenantId,
         timestamp: now,
         action: "relation_added",
-        userId: `${args.subjectType}:${args.subjectId}`,
+        userId: args.subjectType === "user" ? args.subjectId : args.createdBy ?? "system",
         actorId: args.createdBy,
         details: {
           scope: undefined,
+          relation: args.relation,
+          subject: `${args.subjectType}:${args.subjectId}`,
+          object: `${args.objectType}:${args.objectId}`,
         },
       });
     }
