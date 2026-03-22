@@ -39,7 +39,7 @@ const roles = defineRoles(permissions, {
   },
 });
 
-const authz = new Authz(components.authz, { permissions, roles });
+const authz = new Authz(components.authz, { permissions, roles, tenantId: "example" });
 
 // ============================================================================
 // Queries

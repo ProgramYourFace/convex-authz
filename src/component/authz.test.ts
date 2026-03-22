@@ -4,6 +4,7 @@ import schema from "./schema.js";
 import { api } from "./_generated/api.js";
 
 const modules = import.meta.glob("./**/*.ts");
+const TENANT = "test-tenant";
 
 describe("authz component", () => {
   describe("role assignments", () => {
@@ -11,6 +12,7 @@ describe("authz component", () => {
       const t = convexTest(schema, modules);
 
       const assignmentId = await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
@@ -23,11 +25,13 @@ describe("authz component", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
 
       const roles = await t.query(api.queries.getUserRoles, {
+        tenantId: TENANT,
         userId: "user_123",
       });
 
@@ -39,11 +43,13 @@ describe("authz component", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "editor",
       });
 
       const hasRole = await t.query(api.queries.hasRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "editor",
       });
@@ -51,6 +57,7 @@ describe("authz component", () => {
       expect(hasRole).toBe(true);
 
       const hasAdmin = await t.query(api.queries.hasRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
@@ -62,11 +69,13 @@ describe("authz component", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "editor",
       });
 
       const revoked = await t.mutation(api.mutations.revokeRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "editor",
       });
@@ -74,6 +83,7 @@ describe("authz component", () => {
       expect(revoked).toBe(true);
 
       const hasRole = await t.query(api.queries.hasRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "editor",
       });
@@ -85,12 +95,14 @@ describe("authz component", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "editor",
         scope: { type: "team", id: "team_456" },
       });
 
       const hasRoleGlobal = await t.query(api.queries.hasRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "editor",
       });
@@ -99,6 +111,7 @@ describe("authz component", () => {
       expect(hasRoleGlobal).toBe(false);
 
       const hasRoleScoped = await t.query(api.queries.hasRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "editor",
         scope: { type: "team", id: "team_456" },
@@ -111,12 +124,14 @@ describe("authz component", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
 
       await expect(
         t.mutation(api.mutations.assignRole, {
+          tenantId: TENANT,
           userId: "user_123",
           role: "admin",
         })
@@ -129,11 +144,13 @@ describe("authz component", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
 
       const result = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         rolePermissions: {
@@ -150,11 +167,13 @@ describe("authz component", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
       });
 
       const result = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
         rolePermissions: {
@@ -170,11 +189,13 @@ describe("authz component", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "superadmin",
       });
 
       const result = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
         rolePermissions: {
@@ -191,12 +212,14 @@ describe("authz component", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.grantPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
         reason: "Temporary access",
       });
 
       const result = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
         rolePermissions: {},
@@ -211,18 +234,21 @@ describe("authz component", () => {
 
       // First give admin role
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
 
       // Then deny specific permission
       await t.mutation(api.mutations.denyPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
         reason: "Access revoked",
       });
 
       const result = await t.query(api.queries.checkPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
         rolePermissions: {
@@ -240,12 +266,14 @@ describe("authz component", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.setAttribute, {
+        tenantId: TENANT,
         userId: "user_123",
         key: "department",
         value: "engineering",
       });
 
       const value = await t.query(api.queries.getUserAttribute, {
+        tenantId: TENANT,
         userId: "user_123",
         key: "department",
       });
@@ -257,18 +285,21 @@ describe("authz component", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.setAttribute, {
+        tenantId: TENANT,
         userId: "user_123",
         key: "department",
         value: "engineering",
       });
 
       await t.mutation(api.mutations.setAttribute, {
+        tenantId: TENANT,
         userId: "user_123",
         key: "level",
         value: 5,
       });
 
       const attributes = await t.query(api.queries.getUserAttributes, {
+        tenantId: TENANT,
         userId: "user_123",
       });
 
@@ -279,12 +310,14 @@ describe("authz component", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.setAttribute, {
+        tenantId: TENANT,
         userId: "user_123",
         key: "department",
         value: "engineering",
       });
 
       const removed = await t.mutation(api.mutations.removeAttribute, {
+        tenantId: TENANT,
         userId: "user_123",
         key: "department",
       });
@@ -292,6 +325,7 @@ describe("authz component", () => {
       expect(removed).toBe(true);
 
       const value = await t.query(api.queries.getUserAttribute, {
+        tenantId: TENANT,
         userId: "user_123",
         key: "department",
       });
@@ -305,11 +339,13 @@ describe("authz component", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "editor",
       });
 
       const result = await t.query(api.queries.getEffectivePermissions, {
+        tenantId: TENANT,
         userId: "user_123",
         rolePermissions: {
           editor: ["documents:read", "documents:write"],
@@ -326,16 +362,19 @@ describe("authz component", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
 
       await t.mutation(api.mutations.denyPermission, {
+        tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
       });
 
       const result = await t.query(api.queries.getEffectivePermissions, {
+        tenantId: TENANT,
         userId: "user_123",
         rolePermissions: {
           admin: ["documents:read", "documents:write", "documents:delete"],
@@ -352,6 +391,7 @@ describe("authz component", () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.mutations.assignRole, {
+        tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         assignedBy: "admin_user",
@@ -359,6 +399,7 @@ describe("authz component", () => {
       });
 
       const logsResult = await t.query(api.queries.getAuditLog, {
+        tenantId: TENANT,
         userId: "user_123",
       });
       const logs = Array.isArray(logsResult) ? logsResult : logsResult.page;

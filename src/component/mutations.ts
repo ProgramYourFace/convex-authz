@@ -1,13 +1,8 @@
 import { v, ConvexError } from "convex/values";
 import { mutation } from "./_generated/server";
 import { isExpired } from "./helpers";
+import { scopeValidator } from "./validators";
 
-const scopeValidator = v.optional(
-  v.object({
-    type: v.string(),
-    id: v.string(),
-  })
-);
 const MAX_BULK_ROLES = 100;
 
 /**
@@ -15,14 +10,10 @@ const MAX_BULK_ROLES = 100;
  */
 export const assignRole = mutation({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     role: v.string(),
-    scope: v.optional(
-      v.object({
-        type: v.string(),
-        id: v.string(),
-      })
-    ),
+    scope: scopeValidator,
     metadata: v.optional(v.any()),
     assignedBy: v.optional(v.string()),
     expiresAt: v.optional(v.number()),
@@ -33,8 +24,11 @@ export const assignRole = mutation({
     // Check if this exact role assignment already exists
     const existingAssignments = await ctx.db
       .query("roleAssignments")
-      .withIndex("by_user_and_role", (q) =>
-        q.eq("userId", args.userId).eq("role", args.role)
+      .withIndex("by_tenant_user_and_role", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("userId", args.userId)
+          .eq("role", args.role),
       )
       .collect();
 
@@ -57,6 +51,7 @@ export const assignRole = mutation({
 
     // Create the role assignment
     const assignmentId = await ctx.db.insert("roleAssignments", {
+      tenantId: args.tenantId,
       userId: args.userId,
       role: args.role,
       scope: args.scope,
@@ -68,6 +63,7 @@ export const assignRole = mutation({
     // Log audit entry if enabled
     if (args.enableAudit) {
       await ctx.db.insert("auditLog", {
+        tenantId: args.tenantId,
         timestamp: Date.now(),
         action: "role_assigned",
         userId: args.userId,
@@ -88,14 +84,10 @@ export const assignRole = mutation({
  */
 export const revokeRole = mutation({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     role: v.string(),
-    scope: v.optional(
-      v.object({
-        type: v.string(),
-        id: v.string(),
-      })
-    ),
+    scope: scopeValidator,
     revokedBy: v.optional(v.string()),
     enableAudit: v.optional(v.boolean()),
   },
@@ -103,8 +95,11 @@ export const revokeRole = mutation({
   handler: async (ctx, args) => {
     const assignments = await ctx.db
       .query("roleAssignments")
-      .withIndex("by_user_and_role", (q) =>
-        q.eq("userId", args.userId).eq("role", args.role)
+      .withIndex("by_tenant_user_and_role", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("userId", args.userId)
+          .eq("role", args.role),
       )
       .collect();
 
@@ -124,6 +119,7 @@ export const revokeRole = mutation({
     // Log audit entry if enabled
     if (args.enableAudit) {
       await ctx.db.insert("auditLog", {
+        tenantId: args.tenantId,
         timestamp: Date.now(),
         action: "role_revoked",
         userId: args.userId,
@@ -144,13 +140,9 @@ export const revokeRole = mutation({
  */
 export const revokeAllRoles = mutation({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
-    scope: v.optional(
-      v.object({
-        type: v.string(),
-        id: v.string(),
-      })
-    ),
+    scope: scopeValidator,
     revokedBy: v.optional(v.string()),
     enableAudit: v.optional(v.boolean()),
   },
@@ -158,7 +150,9 @@ export const revokeAllRoles = mutation({
   handler: async (ctx, args) => {
     const assignments = await ctx.db
       .query("roleAssignments")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_tenant_user", (q) =>
+        q.eq("tenantId", args.tenantId).eq("userId", args.userId),
+      )
       .collect();
 
     let revokedCount = 0;
@@ -181,6 +175,7 @@ export const revokeAllRoles = mutation({
       // Log audit entry if enabled
       if (args.enableAudit) {
         await ctx.db.insert("auditLog", {
+          tenantId: args.tenantId,
           timestamp: Date.now(),
           action: "role_revoked",
           userId: args.userId,
@@ -202,6 +197,7 @@ export const revokeAllRoles = mutation({
  */
 export const assignRoles = mutation({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     roles: v.array(
       v.object({
@@ -209,7 +205,7 @@ export const assignRoles = mutation({
         scope: scopeValidator,
         expiresAt: v.optional(v.number()),
         metadata: v.optional(v.any()),
-      })
+      }),
     ),
     assignedBy: v.optional(v.string()),
     enableAudit: v.optional(v.boolean()),
@@ -224,7 +220,7 @@ export const assignRoles = mutation({
     }
     if (args.roles.length > MAX_BULK_ROLES) {
       throw new Error(
-        `roles must not exceed ${MAX_BULK_ROLES} items (got ${args.roles.length})`
+        `roles must not exceed ${MAX_BULK_ROLES} items (got ${args.roles.length})`,
       );
     }
 
@@ -234,8 +230,11 @@ export const assignRoles = mutation({
     for (const item of args.roles) {
       const existingAssignments = await ctx.db
         .query("roleAssignments")
-        .withIndex("by_user_and_role", (q) =>
-          q.eq("userId", args.userId).eq("role", item.role)
+        .withIndex("by_tenant_user_and_role", (q) =>
+          q
+            .eq("tenantId", args.tenantId)
+            .eq("userId", args.userId)
+            .eq("role", item.role),
         )
         .collect();
 
@@ -254,6 +253,7 @@ export const assignRoles = mutation({
       }
 
       const assignmentId = await ctx.db.insert("roleAssignments", {
+        tenantId: args.tenantId,
         userId: args.userId,
         role: item.role,
         scope: item.scope,
@@ -266,6 +266,7 @@ export const assignRoles = mutation({
 
       if (args.enableAudit) {
         await ctx.db.insert("auditLog", {
+          tenantId: args.tenantId,
           timestamp: Date.now(),
           action: "role_assigned",
           userId: args.userId,
@@ -284,12 +285,13 @@ export const assignRoles = mutation({
  */
 export const revokeRoles = mutation({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     roles: v.array(
       v.object({
         role: v.string(),
         scope: scopeValidator,
-      })
+      }),
     ),
     revokedBy: v.optional(v.string()),
     enableAudit: v.optional(v.boolean()),
@@ -303,7 +305,7 @@ export const revokeRoles = mutation({
     }
     if (args.roles.length > MAX_BULK_ROLES) {
       throw new Error(
-        `roles must not exceed ${MAX_BULK_ROLES} items (got ${args.roles.length})`
+        `roles must not exceed ${MAX_BULK_ROLES} items (got ${args.roles.length})`,
       );
     }
 
@@ -312,8 +314,11 @@ export const revokeRoles = mutation({
     for (const item of args.roles) {
       const assignments = await ctx.db
         .query("roleAssignments")
-        .withIndex("by_user_and_role", (q) =>
-          q.eq("userId", args.userId).eq("role", item.role)
+        .withIndex("by_tenant_user_and_role", (q) =>
+          q
+            .eq("tenantId", args.tenantId)
+            .eq("userId", args.userId)
+            .eq("role", item.role),
         )
         .collect();
 
@@ -330,6 +335,7 @@ export const revokeRoles = mutation({
 
       if (args.enableAudit) {
         await ctx.db.insert("auditLog", {
+          tenantId: args.tenantId,
           timestamp: Date.now(),
           action: "role_revoked",
           userId: args.userId,
@@ -344,6 +350,7 @@ export const revokeRoles = mutation({
 });
 
 type OffboardUserArgs = {
+  tenantId: string;
   userId: string;
   scope?: { type: string; id: string };
   revokedBy?: string;
@@ -354,8 +361,12 @@ type OffboardUserArgs = {
 };
 
 async function offboardUserImpl(
-  ctx: { db: import("convex/server").GenericMutationCtx<import("./_generated/dataModel").DataModel>["db"] },
-  args: OffboardUserArgs
+  ctx: {
+    db: import("convex/server").GenericMutationCtx<
+      import("./_generated/dataModel").DataModel
+    >["db"];
+  },
+  args: OffboardUserArgs,
 ): Promise<{
   rolesRevoked: number;
   overridesRemoved: number;
@@ -368,9 +379,7 @@ async function offboardUserImpl(
   const removeAttrs = args.removeAttributes !== false;
   const removeOverridesFlag = args.removeOverrides !== false;
   const removeRels = args.removeRelationships !== false;
-  const scopeKey = args.scope
-    ? `${args.scope.type}:${args.scope.id}`
-    : null;
+  const scopeKey = args.scope ? `${args.scope.type}:${args.scope.id}` : null;
   const fullDeprovision = args.scope === undefined;
 
   let rolesRevoked = 0;
@@ -384,7 +393,9 @@ async function offboardUserImpl(
   // 1. Role assignments (source table)
   const assignments = await ctx.db
     .query("roleAssignments")
-    .withIndex("by_user", (q) => q.eq("userId", args.userId))
+    .withIndex("by_tenant_user", (q) =>
+      q.eq("tenantId", args.tenantId).eq("userId", args.userId),
+    )
     .collect();
 
   for (const a of assignments) {
@@ -397,6 +408,7 @@ async function offboardUserImpl(
     rolesRevoked++;
     if (args.enableAudit) {
       await ctx.db.insert("auditLog", {
+        tenantId: args.tenantId,
         timestamp: Date.now(),
         action: "role_revoked",
         userId: args.userId,
@@ -410,7 +422,9 @@ async function offboardUserImpl(
   if (removeOverridesFlag) {
     const overrides = await ctx.db
       .query("permissionOverrides")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_tenant_user", (q) =>
+        q.eq("tenantId", args.tenantId).eq("userId", args.userId),
+      )
       .collect();
 
     for (const o of overrides) {
@@ -428,7 +442,9 @@ async function offboardUserImpl(
   if (removeAttrs) {
     const attributes = await ctx.db
       .query("userAttributes")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_tenant_user", (q) =>
+        q.eq("tenantId", args.tenantId).eq("userId", args.userId),
+      )
       .collect();
 
     for (const a of attributes) {
@@ -436,6 +452,7 @@ async function offboardUserImpl(
       attributesRemoved++;
       if (args.enableAudit) {
         await ctx.db.insert("auditLog", {
+          tenantId: args.tenantId,
           timestamp: Date.now(),
           action: "attribute_removed",
           userId: args.userId,
@@ -450,8 +467,11 @@ async function offboardUserImpl(
   if (fullDeprovision && removeRels) {
     const relationships = await ctx.db
       .query("relationships")
-      .withIndex("by_subject", (q) =>
-        q.eq("subjectType", "user").eq("subjectId", args.userId)
+      .withIndex("by_tenant_subject", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("subjectType", "user")
+          .eq("subjectId", args.userId),
       )
       .collect();
 
@@ -463,7 +483,9 @@ async function offboardUserImpl(
     const userSubjectKey = `user:${args.userId}`;
     const effectiveRels = await ctx.db
       .query("effectiveRelationships")
-      .withIndex("by_subject", (q) => q.eq("subjectKey", userSubjectKey))
+      .withIndex("by_tenant_subject", (q) =>
+        q.eq("tenantId", args.tenantId).eq("subjectKey", userSubjectKey),
+      )
       .collect();
 
     for (const er of effectiveRels) {
@@ -475,7 +497,9 @@ async function offboardUserImpl(
   // 5. Indexed tables: effectiveRoles, effectivePermissions
   const effectiveRoles = await ctx.db
     .query("effectiveRoles")
-    .withIndex("by_user", (q) => q.eq("userId", args.userId))
+    .withIndex("by_tenant_user", (q) =>
+      q.eq("tenantId", args.tenantId).eq("userId", args.userId),
+    )
     .collect();
 
   for (const r of effectiveRoles) {
@@ -486,7 +510,9 @@ async function offboardUserImpl(
 
   const effectivePerms = await ctx.db
     .query("effectivePermissions")
-    .withIndex("by_user", (q) => q.eq("userId", args.userId))
+    .withIndex("by_tenant_user", (q) =>
+      q.eq("tenantId", args.tenantId).eq("userId", args.userId),
+    )
     .collect();
 
   for (const p of effectivePerms) {
@@ -517,6 +543,7 @@ async function offboardUserImpl(
  */
 export const offboardUser = mutation({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     scope: scopeValidator,
     revokedBy: v.optional(v.string()),
@@ -546,6 +573,7 @@ export const offboardUser = mutation({
  */
 export const deprovisionUser = mutation({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     revokedBy: v.optional(v.string()),
     enableAudit: v.optional(v.boolean()),
@@ -561,6 +589,7 @@ export const deprovisionUser = mutation({
   }),
   handler: async (ctx, args) =>
     offboardUserImpl(ctx, {
+      tenantId: args.tenantId,
       userId: args.userId,
       revokedBy: args.revokedBy,
       removeAttributes: true,
@@ -575,6 +604,7 @@ export const deprovisionUser = mutation({
  */
 export const setAttribute = mutation({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     key: v.string(),
     value: v.any(),
@@ -586,8 +616,11 @@ export const setAttribute = mutation({
     // Check if attribute already exists
     const existing = await ctx.db
       .query("userAttributes")
-      .withIndex("by_user_and_key", (q) =>
-        q.eq("userId", args.userId).eq("key", args.key)
+      .withIndex("by_tenant_user_and_key", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("userId", args.userId)
+          .eq("key", args.key),
       )
       .unique();
 
@@ -598,6 +631,7 @@ export const setAttribute = mutation({
       // Log audit entry if enabled
       if (args.enableAudit) {
         await ctx.db.insert("auditLog", {
+          tenantId: args.tenantId,
           timestamp: Date.now(),
           action: "attribute_set",
           userId: args.userId,
@@ -616,6 +650,7 @@ export const setAttribute = mutation({
 
     // Create new attribute
     const attributeId = await ctx.db.insert("userAttributes", {
+      tenantId: args.tenantId,
       userId: args.userId,
       key: args.key,
       value: args.value,
@@ -624,6 +659,7 @@ export const setAttribute = mutation({
     // Log audit entry if enabled
     if (args.enableAudit) {
       await ctx.db.insert("auditLog", {
+        tenantId: args.tenantId,
         timestamp: Date.now(),
         action: "attribute_set",
         userId: args.userId,
@@ -646,6 +682,7 @@ export const setAttribute = mutation({
  */
 export const removeAttribute = mutation({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     key: v.string(),
     removedBy: v.optional(v.string()),
@@ -655,8 +692,11 @@ export const removeAttribute = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("userAttributes")
-      .withIndex("by_user_and_key", (q) =>
-        q.eq("userId", args.userId).eq("key", args.key)
+      .withIndex("by_tenant_user_and_key", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("userId", args.userId)
+          .eq("key", args.key),
       )
       .unique();
 
@@ -669,6 +709,7 @@ export const removeAttribute = mutation({
     // Log audit entry if enabled
     if (args.enableAudit) {
       await ctx.db.insert("auditLog", {
+        tenantId: args.tenantId,
         timestamp: Date.now(),
         action: "attribute_removed",
         userId: args.userId,
@@ -690,6 +731,7 @@ export const removeAttribute = mutation({
  */
 export const removeAllAttributes = mutation({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     removedBy: v.optional(v.string()),
     enableAudit: v.optional(v.boolean()),
@@ -698,7 +740,9 @@ export const removeAllAttributes = mutation({
   handler: async (ctx, args) => {
     const attributes = await ctx.db
       .query("userAttributes")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_tenant_user", (q) =>
+        q.eq("tenantId", args.tenantId).eq("userId", args.userId),
+      )
       .collect();
 
     for (const attribute of attributes) {
@@ -707,6 +751,7 @@ export const removeAllAttributes = mutation({
       // Log audit entry if enabled
       if (args.enableAudit) {
         await ctx.db.insert("auditLog", {
+          tenantId: args.tenantId,
           timestamp: Date.now(),
           action: "attribute_removed",
           userId: args.userId,
@@ -729,14 +774,10 @@ export const removeAllAttributes = mutation({
  */
 export const grantPermission = mutation({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     permission: v.string(),
-    scope: v.optional(
-      v.object({
-        type: v.string(),
-        id: v.string(),
-      })
-    ),
+    scope: scopeValidator,
     reason: v.optional(v.string()),
     createdBy: v.optional(v.string()),
     expiresAt: v.optional(v.number()),
@@ -747,8 +788,11 @@ export const grantPermission = mutation({
     // Check for existing override with same permission and scope
     const existing = await ctx.db
       .query("permissionOverrides")
-      .withIndex("by_user_and_permission", (q) =>
-        q.eq("userId", args.userId).eq("permission", args.permission)
+      .withIndex("by_tenant_user_and_permission", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("userId", args.userId)
+          .eq("permission", args.permission),
       )
       .collect();
 
@@ -771,6 +815,7 @@ export const grantPermission = mutation({
       // Log audit entry if enabled
       if (args.enableAudit) {
         await ctx.db.insert("auditLog", {
+          tenantId: args.tenantId,
           timestamp: Date.now(),
           action: "permission_granted",
           userId: args.userId,
@@ -788,6 +833,7 @@ export const grantPermission = mutation({
 
     // Create new override
     const overrideId = await ctx.db.insert("permissionOverrides", {
+      tenantId: args.tenantId,
       userId: args.userId,
       permission: args.permission,
       effect: "allow",
@@ -800,6 +846,7 @@ export const grantPermission = mutation({
     // Log audit entry if enabled
     if (args.enableAudit) {
       await ctx.db.insert("auditLog", {
+        tenantId: args.tenantId,
         timestamp: Date.now(),
         action: "permission_granted",
         userId: args.userId,
@@ -821,14 +868,10 @@ export const grantPermission = mutation({
  */
 export const denyPermission = mutation({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     permission: v.string(),
-    scope: v.optional(
-      v.object({
-        type: v.string(),
-        id: v.string(),
-      })
-    ),
+    scope: scopeValidator,
     reason: v.optional(v.string()),
     createdBy: v.optional(v.string()),
     expiresAt: v.optional(v.number()),
@@ -839,8 +882,11 @@ export const denyPermission = mutation({
     // Check for existing override with same permission and scope
     const existing = await ctx.db
       .query("permissionOverrides")
-      .withIndex("by_user_and_permission", (q) =>
-        q.eq("userId", args.userId).eq("permission", args.permission)
+      .withIndex("by_tenant_user_and_permission", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("userId", args.userId)
+          .eq("permission", args.permission),
       )
       .collect();
 
@@ -863,6 +909,7 @@ export const denyPermission = mutation({
       // Log audit entry if enabled
       if (args.enableAudit) {
         await ctx.db.insert("auditLog", {
+          tenantId: args.tenantId,
           timestamp: Date.now(),
           action: "permission_denied",
           userId: args.userId,
@@ -880,6 +927,7 @@ export const denyPermission = mutation({
 
     // Create new override
     const overrideId = await ctx.db.insert("permissionOverrides", {
+      tenantId: args.tenantId,
       userId: args.userId,
       permission: args.permission,
       effect: "deny",
@@ -892,6 +940,7 @@ export const denyPermission = mutation({
     // Log audit entry if enabled
     if (args.enableAudit) {
       await ctx.db.insert("auditLog", {
+        tenantId: args.tenantId,
         timestamp: Date.now(),
         action: "permission_denied",
         userId: args.userId,
@@ -913,14 +962,10 @@ export const denyPermission = mutation({
  */
 export const removePermissionOverride = mutation({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     permission: v.string(),
-    scope: v.optional(
-      v.object({
-        type: v.string(),
-        id: v.string(),
-      })
-    ),
+    scope: scopeValidator,
     removedBy: v.optional(v.string()),
     enableAudit: v.optional(v.boolean()),
   },
@@ -928,8 +973,11 @@ export const removePermissionOverride = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("permissionOverrides")
-      .withIndex("by_user_and_permission", (q) =>
-        q.eq("userId", args.userId).eq("permission", args.permission)
+      .withIndex("by_tenant_user_and_permission", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("userId", args.userId)
+          .eq("permission", args.permission),
       )
       .collect();
 
@@ -948,8 +996,12 @@ export const removePermissionOverride = mutation({
     // Log audit entry if enabled
     if (args.enableAudit) {
       await ctx.db.insert("auditLog", {
+        tenantId: args.tenantId,
         timestamp: Date.now(),
-        action: toRemove.effect === "allow" ? "permission_denied" : "permission_granted",
+        action:
+          toRemove.effect === "allow"
+            ? "permission_denied"
+            : "permission_granted",
         userId: args.userId,
         actorId: args.removedBy,
         details: {
@@ -969,20 +1021,17 @@ export const removePermissionOverride = mutation({
  */
 export const logPermissionCheck = mutation({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     permission: v.string(),
     result: v.boolean(),
-    scope: v.optional(
-      v.object({
-        type: v.string(),
-        id: v.string(),
-      })
-    ),
+    scope: scopeValidator,
     reason: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     await ctx.db.insert("auditLog", {
+      tenantId: args.tenantId,
       timestamp: Date.now(),
       action: "permission_check",
       userId: args.userId,
@@ -1002,28 +1051,42 @@ export const logPermissionCheck = mutation({
  * Clean up expired role assignments and permission overrides
  */
 export const cleanupExpired = mutation({
-  args: {},
+  args: {
+    tenantId: v.optional(v.string()),
+  },
   returns: v.object({
     expiredRoles: v.number(),
     expiredOverrides: v.number(),
   }),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const now = Date.now();
     let expiredRoles = 0;
     let expiredOverrides = 0;
 
-    // Clean up expired role assignments
-    const allRoleAssignments = await ctx.db.query("roleAssignments").collect();
-    for (const assignment of allRoleAssignments) {
+    const roleAssignments = args.tenantId
+      ? await ctx.db
+          .query("roleAssignments")
+          .withIndex("by_tenant_user", (q) =>
+            q.eq("tenantId", args.tenantId!),
+          )
+          .collect()
+      : await ctx.db.query("roleAssignments").collect();
+    for (const assignment of roleAssignments) {
       if (assignment.expiresAt && assignment.expiresAt < now) {
         await ctx.db.delete(assignment._id);
         expiredRoles++;
       }
     }
 
-    // Clean up expired permission overrides
-    const allOverrides = await ctx.db.query("permissionOverrides").collect();
-    for (const override of allOverrides) {
+    const overrides = args.tenantId
+      ? await ctx.db
+          .query("permissionOverrides")
+          .withIndex("by_tenant_user", (q) =>
+            q.eq("tenantId", args.tenantId!),
+          )
+          .collect()
+      : await ctx.db.query("permissionOverrides").collect();
+    for (const override of overrides) {
       if (override.expiresAt && override.expiresAt < now) {
         await ctx.db.delete(override._id);
         expiredOverrides++;
@@ -1043,14 +1106,16 @@ export const cleanupExpired = mutation({
  * You can also define it manually in your app's convex/crons.ts if you prefer.
  */
 export const runScheduledCleanup = mutation({
-  args: {},
+  args: {
+    tenantId: v.optional(v.string()),
+  },
   returns: v.object({
     expiredRoleAssignments: v.number(),
     expiredOverrides: v.number(),
     expiredEffectiveRoles: v.number(),
     expiredEffectivePermissions: v.number(),
   }),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const now = Date.now();
     let expiredRoleAssignments = 0;
     let expiredOverrides = 0;
@@ -1058,16 +1123,30 @@ export const runScheduledCleanup = mutation({
     let expiredEffectivePermissions = 0;
 
     // 1. Source tables: roleAssignments, permissionOverrides
-    const allRoleAssignments = await ctx.db.query("roleAssignments").collect();
-    for (const assignment of allRoleAssignments) {
+    const roleAssignments = args.tenantId
+      ? await ctx.db
+          .query("roleAssignments")
+          .withIndex("by_tenant_user", (q) =>
+            q.eq("tenantId", args.tenantId!),
+          )
+          .collect()
+      : await ctx.db.query("roleAssignments").collect();
+    for (const assignment of roleAssignments) {
       if (assignment.expiresAt && assignment.expiresAt < now) {
         await ctx.db.delete(assignment._id);
         expiredRoleAssignments++;
       }
     }
 
-    const allOverrides = await ctx.db.query("permissionOverrides").collect();
-    for (const override of allOverrides) {
+    const overrides = args.tenantId
+      ? await ctx.db
+          .query("permissionOverrides")
+          .withIndex("by_tenant_user", (q) =>
+            q.eq("tenantId", args.tenantId!),
+          )
+          .collect()
+      : await ctx.db.query("permissionOverrides").collect();
+    for (const override of overrides) {
       if (override.expiresAt && override.expiresAt < now) {
         await ctx.db.delete(override._id);
         expiredOverrides++;
@@ -1075,17 +1154,30 @@ export const runScheduledCleanup = mutation({
     }
 
     // 2. Indexed tables: effectiveRoles, effectivePermissions
-    const allEffectiveRoles = await ctx.db.query("effectiveRoles").collect();
-    for (const row of allEffectiveRoles) {
+    const effectiveRoles = args.tenantId
+      ? await ctx.db
+          .query("effectiveRoles")
+          .withIndex("by_tenant_user", (q) =>
+            q.eq("tenantId", args.tenantId!),
+          )
+          .collect()
+      : await ctx.db.query("effectiveRoles").collect();
+    for (const row of effectiveRoles) {
       if (row.expiresAt && row.expiresAt < now) {
         await ctx.db.delete(row._id);
         expiredEffectiveRoles++;
       }
     }
 
-    const allEffectivePermissions =
-      await ctx.db.query("effectivePermissions").collect();
-    for (const row of allEffectivePermissions) {
+    const effectivePermissions = args.tenantId
+      ? await ctx.db
+          .query("effectivePermissions")
+          .withIndex("by_tenant_user", (q) =>
+            q.eq("tenantId", args.tenantId!),
+          )
+          .collect()
+      : await ctx.db.query("effectivePermissions").collect();
+    for (const row of effectivePermissions) {
       if (row.expiresAt && row.expiresAt < now) {
         await ctx.db.delete(row._id);
         expiredEffectivePermissions++;
@@ -1123,6 +1215,7 @@ function getOptionalEnvNumber(name: string): number | undefined {
  */
 export const runAuditRetentionCleanup = mutation({
   args: v.object({
+    tenantId: v.optional(v.string()),
     maxAgeDays: v.optional(v.number()),
     maxEntries: v.optional(v.number()),
   }),
@@ -1141,26 +1234,41 @@ export const runAuditRetentionCleanup = mutation({
 
     if (maxAgeDays !== undefined && maxAgeDays > 0) {
       const cutoff = Date.now() - maxAgeDays * MS_PER_DAY;
-      while (true) {
-        const batch = await ctx.db
-          .query("auditLog")
-          .withIndex("by_timestamp", (q) => q.lt("timestamp", cutoff))
-          .order("asc")
-          .take(BATCH_SIZE);
-        if (batch.length === 0) break;
-        for (const doc of batch) {
-          await ctx.db.delete(doc._id);
-          deletedByAge++;
+      if (args.tenantId) {
+        while (true) {
+          const batch = await ctx.db
+            .query("auditLog")
+            .withIndex("by_tenant_timestamp", (q) =>
+              q.eq("tenantId", args.tenantId!).lt("timestamp", cutoff),
+            )
+            .order("asc")
+            .take(BATCH_SIZE);
+          if (batch.length === 0) break;
+          for (const doc of batch) {
+            await ctx.db.delete(doc._id);
+            deletedByAge++;
+          }
+        }
+      } else {
+        const all = await ctx.db.query("auditLog").collect();
+        for (const doc of all) {
+          if (doc.timestamp < cutoff) {
+            await ctx.db.delete(doc._id);
+            deletedByAge++;
+          }
         }
       }
     }
 
     if (maxEntries !== undefined && maxEntries > 0) {
       const all = await ctx.db.query("auditLog").collect();
-      const count = all.length;
+      const filtered = args.tenantId
+        ? all.filter((doc) => doc.tenantId === args.tenantId)
+        : all;
+      const count = filtered.length;
       if (count > maxEntries) {
         const toDelete = count - maxEntries;
-        const byTimestamp = all.sort((a, b) => a.timestamp - b.timestamp);
+        const byTimestamp = filtered.sort((a, b) => a.timestamp - b.timestamp);
         const toRemove = byTimestamp.slice(0, toDelete);
         for (const doc of toRemove) {
           await ctx.db.delete(doc._id);

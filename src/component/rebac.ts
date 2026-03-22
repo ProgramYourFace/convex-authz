@@ -24,6 +24,7 @@ import { mutation, query } from "./_generated/server";
  */
 export const addRelation = mutation({
   args: {
+    tenantId: v.string(),
     subjectType: v.string(), // e.g., "user", "team"
     subjectId: v.string(), // e.g., "123"
     relation: v.string(), // e.g., "member", "owner", "viewer"
@@ -36,13 +37,14 @@ export const addRelation = mutation({
     // Check if relation already exists
     const existing = await ctx.db
       .query("relationships")
-      .withIndex("by_subject_relation_object", (q) =>
+      .withIndex("by_tenant_subject_relation_object", (q) =>
         q
+          .eq("tenantId", args.tenantId)
           .eq("subjectType", args.subjectType)
           .eq("subjectId", args.subjectId)
           .eq("relation", args.relation)
           .eq("objectType", args.objectType)
-          .eq("objectId", args.objectId)
+          .eq("objectId", args.objectId),
       )
       .unique();
 
@@ -51,6 +53,7 @@ export const addRelation = mutation({
     }
 
     const id = await ctx.db.insert("relationships", {
+      tenantId: args.tenantId,
       subjectType: args.subjectType,
       subjectId: args.subjectId,
       relation: args.relation,
@@ -69,6 +72,7 @@ export const addRelation = mutation({
  */
 export const removeRelation = mutation({
   args: {
+    tenantId: v.string(),
     subjectType: v.string(),
     subjectId: v.string(),
     relation: v.string(),
@@ -79,13 +83,14 @@ export const removeRelation = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("relationships")
-      .withIndex("by_subject_relation_object", (q) =>
+      .withIndex("by_tenant_subject_relation_object", (q) =>
         q
+          .eq("tenantId", args.tenantId)
           .eq("subjectType", args.subjectType)
           .eq("subjectId", args.subjectId)
           .eq("relation", args.relation)
           .eq("objectType", args.objectType)
-          .eq("objectId", args.objectId)
+          .eq("objectId", args.objectId),
       )
       .unique();
 
@@ -102,6 +107,7 @@ export const removeRelation = mutation({
  */
 export const hasDirectRelation = query({
   args: {
+    tenantId: v.string(),
     subjectType: v.string(),
     subjectId: v.string(),
     relation: v.string(),
@@ -112,13 +118,14 @@ export const hasDirectRelation = query({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("relationships")
-      .withIndex("by_subject_relation_object", (q) =>
+      .withIndex("by_tenant_subject_relation_object", (q) =>
         q
+          .eq("tenantId", args.tenantId)
           .eq("subjectType", args.subjectType)
           .eq("subjectId", args.subjectId)
           .eq("relation", args.relation)
           .eq("objectType", args.objectType)
-          .eq("objectId", args.objectId)
+          .eq("objectId", args.objectId),
       )
       .unique();
 
@@ -131,6 +138,7 @@ export const hasDirectRelation = query({
  */
 export const getSubjectRelations = query({
   args: {
+    tenantId: v.string(),
     subjectType: v.string(),
     subjectId: v.string(),
     objectType: v.optional(v.string()),
@@ -141,13 +149,16 @@ export const getSubjectRelations = query({
       relation: v.string(),
       objectType: v.string(),
       objectId: v.string(),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     let relations = await ctx.db
       .query("relationships")
-      .withIndex("by_subject", (q) =>
-        q.eq("subjectType", args.subjectType).eq("subjectId", args.subjectId)
+      .withIndex("by_tenant_subject", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("subjectType", args.subjectType)
+          .eq("subjectId", args.subjectId),
       )
       .collect();
 
@@ -169,6 +180,7 @@ export const getSubjectRelations = query({
  */
 export const getObjectRelations = query({
   args: {
+    tenantId: v.string(),
     objectType: v.string(),
     objectId: v.string(),
     relation: v.optional(v.string()),
@@ -179,13 +191,16 @@ export const getObjectRelations = query({
       subjectType: v.string(),
       subjectId: v.string(),
       relation: v.string(),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     let relations = await ctx.db
       .query("relationships")
-      .withIndex("by_object", (q) =>
-        q.eq("objectType", args.objectType).eq("objectId", args.objectId)
+      .withIndex("by_tenant_object", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("objectType", args.objectType)
+          .eq("objectId", args.objectId),
       )
       .collect();
 
@@ -226,6 +241,7 @@ export const getObjectRelations = query({
  */
 export const checkRelationWithTraversal = query({
   args: {
+    tenantId: v.string(),
     subjectType: v.string(),
     subjectId: v.string(),
     relation: v.string(),
@@ -247,20 +263,23 @@ export const checkRelationWithTraversal = query({
     // Check direct relation first
     const direct = await ctx.db
       .query("relationships")
-      .withIndex("by_subject_relation_object", (q) =>
+      .withIndex("by_tenant_subject_relation_object", (q) =>
         q
+          .eq("tenantId", args.tenantId)
           .eq("subjectType", args.subjectType)
           .eq("subjectId", args.subjectId)
           .eq("relation", args.relation)
           .eq("objectType", args.objectType)
-          .eq("objectId", args.objectId)
+          .eq("objectId", args.objectId),
       )
       .unique();
 
     if (direct) {
       return {
         allowed: true,
-        path: [`${args.subjectType}:${args.subjectId} -[${args.relation}]-> ${args.objectType}:${args.objectId}`],
+        path: [
+          `${args.subjectType}:${args.subjectId} -[${args.relation}]-> ${args.objectType}:${args.objectId}`,
+        ],
         reason: "Direct relationship",
       };
     }
@@ -293,7 +312,7 @@ export const checkRelationWithTraversal = query({
       path: string[];
     }
 
-    const queue: QueueItem[] = [
+    const queue: Array<QueueItem> = [
       {
         objectType: args.objectType,
         objectId: args.objectId,
@@ -316,13 +335,14 @@ export const checkRelationWithTraversal = query({
       // Check if subject has this relation to current object
       const hasRelation = await ctx.db
         .query("relationships")
-        .withIndex("by_subject_relation_object", (q) =>
+        .withIndex("by_tenant_subject_relation_object", (q) =>
           q
+            .eq("tenantId", args.tenantId)
             .eq("subjectType", args.subjectType)
             .eq("subjectId", args.subjectId)
             .eq("relation", current.relation)
             .eq("objectType", current.objectType)
-            .eq("objectId", current.objectId)
+            .eq("objectId", current.objectId),
         )
         .unique();
 
@@ -350,17 +370,18 @@ export const checkRelationWithTraversal = query({
         // E.g., find accounts that have "parent" relation to this deal
         const parentRelations = await ctx.db
           .query("relationships")
-          .withIndex("by_object_relation", (q) =>
+          .withIndex("by_tenant_object_relation", (q) =>
             q
+              .eq("tenantId", args.tenantId)
               .eq("objectType", current.objectType)
               .eq("objectId", current.objectId)
-              .eq("relation", rule.via)
+              .eq("relation", rule.via),
           )
           .collect();
 
         // Filter to only the intermediate object type we're looking for
         const parents = parentRelations.filter(
-          (r) => r.subjectType === rule.through
+          (r) => r.subjectType === rule.through,
         );
 
         for (const parent of parents) {
@@ -397,6 +418,7 @@ export const checkRelationWithTraversal = query({
  */
 export const listAccessibleObjects = query({
   args: {
+    tenantId: v.string(),
     subjectType: v.string(),
     subjectId: v.string(),
     relation: v.string(),
@@ -407,7 +429,7 @@ export const listAccessibleObjects = query({
     v.object({
       objectId: v.string(),
       via: v.string(),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     const results: Array<{ objectId: string; via: string }> = [];
@@ -415,13 +437,16 @@ export const listAccessibleObjects = query({
     // Direct relations
     const directRelations = await ctx.db
       .query("relationships")
-      .withIndex("by_subject", (q) =>
-        q.eq("subjectType", args.subjectType).eq("subjectId", args.subjectId)
+      .withIndex("by_tenant_subject", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("subjectType", args.subjectType)
+          .eq("subjectId", args.subjectId),
       )
       .collect();
 
     const directObjects = directRelations.filter(
-      (r) => r.relation === args.relation && r.objectType === args.objectType
+      (r) => r.relation === args.relation && r.objectType === args.objectType,
     );
 
     for (const obj of directObjects) {
@@ -440,6 +465,7 @@ export const listAccessibleObjects = query({
  */
 export const listUsersWithAccess = query({
   args: {
+    tenantId: v.string(),
     objectType: v.string(),
     objectId: v.string(),
     relation: v.string(),
@@ -448,7 +474,7 @@ export const listUsersWithAccess = query({
     v.object({
       userId: v.string(),
       via: v.string(),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     const results: Array<{ userId: string; via: string }> = [];
@@ -456,13 +482,16 @@ export const listUsersWithAccess = query({
     // Direct relations
     const directRelations = await ctx.db
       .query("relationships")
-      .withIndex("by_object", (q) =>
-        q.eq("objectType", args.objectType).eq("objectId", args.objectId)
+      .withIndex("by_tenant_object", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("objectType", args.objectType)
+          .eq("objectId", args.objectId),
       )
       .collect();
 
     const directUsers = directRelations.filter(
-      (r) => r.relation === args.relation && r.subjectType === "user"
+      (r) => r.relation === args.relation && r.subjectType === "user",
     );
 
     for (const user of directUsers) {

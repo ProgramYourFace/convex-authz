@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- **BREAKING: Tenant-level data isolation**: All tables now include a required `tenantId` field. All indexes have been replaced with tenant-prefixed versions (`tenantId` as the first column). This is a breaking schema change.
+
+- **BREAKING: tenantId required in constructors**: The `Authz` and `IndexedAuthz` constructors now require a `tenantId: string` option. Single-tenant apps should pass any constant string (e.g. `"my-app"`). Multi-tenant apps should pass their tenant/organization identifier.
+
+- **BREAKING: All component function args require tenantId**: Every mutation, query, indexed function, and ReBAC function now requires `tenantId: v.string()` as the first argument. Cleanup/cron mutations (`cleanupExpired`, `runScheduledCleanup`, `runAuditRetentionCleanup`) accept it as optional for global cleanup.
+
+- **BREAKING: Index names changed**: All database indexes renamed from `by_user`, `by_role`, etc. to `by_tenant_user`, `by_tenant_role`, etc.
+
+- **New: `withTenant()` fluent API**: Both `Authz` and `IndexedAuthz` now have a `withTenant(tenantId)` method that returns a new instance scoped to a different tenant, for rare cross-tenant admin operations.
+
+- Extracted shared `scopeValidator` constant into `src/component/validators.ts`; removed ~30 inline duplicates.
+
+### Migration guide
+
+1. Add `tenantId` to your constructor:
+   ```typescript
+   // Before
+   const authz = new Authz(components.authz, { permissions, roles });
+   // After
+   const authz = new Authz(components.authz, { permissions, roles, tenantId: "my-app" });
+   ```
+2. If you call component functions directly, add `tenantId` to every call.
+3. Existing data must be migrated: all rows need a `tenantId` value. Run a one-time migration or redeploy with fresh data.
+
 - **Role inheritance and composition**: Roles can be defined with optional `inherits` (single parent) and/or `includes` (multiple roles). Effective permissions are the union of inherited/included and direct permissions. Resolved at client build time with cycle and unknown-role validation. The keys `inherits` and `includes` are reserved in role definitions. Existing permission-only role definitions are unchanged.
 
 ## 0.1.7

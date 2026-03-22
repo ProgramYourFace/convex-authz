@@ -18,7 +18,7 @@
  *   viewer: { documents: ["read"] },
  * });
  *
- * export const authz = new Authz(components.authz, { permissions, roles });
+ * export const authz = new Authz(components.authz, { permissions, roles, tenantId: "my-app" });
  * ```
  */
 
@@ -30,6 +30,7 @@ import type {
 } from "convex/server";
 import type { ComponentApi } from "../component/_generated/component.js";
 import {
+  validateTenantId,
   validateUserId,
   validatePermission,
   validateScope,
@@ -336,7 +337,7 @@ type ActionCtx = Pick<
  *
  * @example
  * ```typescript
- * const authz = new Authz(components.authz, { permissions, roles });
+ * const authz = new Authz(components.authz, { permissions, roles, tenantId: "my-app" });
  *
  * // In a mutation or query
  * const canEdit = await authz.can(ctx, userId, "documents:update");
@@ -355,8 +356,16 @@ export class Authz<
       roles: R;
       policies?: Policy;
       defaultActorId?: string;
+      tenantId: string;
     }
-  ) {}
+  ) {
+    validateTenantId(options.tenantId);
+  }
+
+  withTenant(tenantId: string): Authz<P, R, Policy> {
+    validateTenantId(tenantId);
+    return new Authz(this.component, { ...this.options, tenantId });
+  }
 
   /**
    * Build role permissions map for queries
@@ -393,6 +402,7 @@ export class Authz<
       permission,
       scope,
       rolePermissions: this.buildRolePermissionsMap(),
+      tenantId: this.options.tenantId,
     });
 
     return result.allowed;
@@ -417,6 +427,7 @@ export class Authz<
       permission,
       scope,
       rolePermissions: this.buildRolePermissionsMap(),
+      tenantId: this.options.tenantId,
     });
 
     if (!result.allowed) {
@@ -445,6 +456,7 @@ export class Authz<
       permissions,
       scope,
       rolePermissions: this.buildRolePermissionsMap(),
+      tenantId: this.options.tenantId,
     });
     return result.allowed;
   }
@@ -465,6 +477,7 @@ export class Authz<
       userId,
       role,
       scope,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -477,6 +490,7 @@ export class Authz<
     return await ctx.runQuery(this.component.queries.getUserRoles, {
       userId,
       scope,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -494,6 +508,7 @@ export class Authz<
       userId,
       rolePermissions: this.buildRolePermissionsMap(),
       scope,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -504,6 +519,7 @@ export class Authz<
     validateUserId(userId);
     return await ctx.runQuery(this.component.queries.getUserAttributes, {
       userId,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -529,6 +545,7 @@ export class Authz<
       expiresAt,
       assignedBy: actorId ?? this.options.defaultActorId,
       enableAudit: true,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -551,6 +568,7 @@ export class Authz<
       scope,
       revokedBy: actorId ?? this.options.defaultActorId,
       enableAudit: true,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -577,6 +595,7 @@ export class Authz<
       })),
       assignedBy,
       enableAudit: true,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -597,6 +616,7 @@ export class Authz<
       roles: roles.map((r) => ({ role: r.role, scope: r.scope })),
       revokedBy: actorId ?? this.options.defaultActorId,
       enableAudit: true,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -617,6 +637,7 @@ export class Authz<
       scope,
       revokedBy: actorId ?? this.options.defaultActorId,
       enableAudit: true,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -654,6 +675,7 @@ export class Authz<
       removeOverrides: options?.removeOverrides,
       removeRelationships: options?.removeRelationships,
       enableAudit: true,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -680,6 +702,7 @@ export class Authz<
       userId,
       revokedBy: options?.actorId ?? this.options.defaultActorId,
       enableAudit: options?.enableAudit ?? true,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -701,6 +724,7 @@ export class Authz<
       value,
       setBy: actorId ?? this.options.defaultActorId,
       enableAudit: true,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -720,6 +744,7 @@ export class Authz<
       key,
       removedBy: actorId ?? this.options.defaultActorId,
       enableAudit: true,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -750,6 +775,7 @@ export class Authz<
       expiresAt,
       createdBy: actorId ?? this.options.defaultActorId,
       enableAudit: true,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -779,6 +805,7 @@ export class Authz<
       expiresAt,
       createdBy: actorId ?? this.options.defaultActorId,
       enableAudit: true,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -847,6 +874,7 @@ export class Authz<
         | undefined,
       limit: options?.limit,
       paginationOpts,
+      tenantId: this.options.tenantId,
     });
   }
 }
@@ -863,7 +891,7 @@ export class Authz<
  *
  * @example
  * ```typescript
- * const authz = new IndexedAuthz(components.authz, { permissions, roles });
+ * const authz = new IndexedAuthz(components.authz, { permissions, roles, tenantId: "my-app" });
  *
  * // O(1) permission check
  * const canEdit = await authz.can(ctx, userId, "documents:update");
@@ -879,8 +907,16 @@ export class IndexedAuthz<
       permissions: P;
       roles: R;
       defaultActorId?: string;
+      tenantId: string;
     }
-  ) {}
+  ) {
+    validateTenantId(options.tenantId);
+  }
+
+  withTenant(tenantId: string): IndexedAuthz<P, R> {
+    validateTenantId(tenantId);
+    return new IndexedAuthz(this.component, { ...this.options, tenantId });
+  }
 
   /**
    * Check permission - O(1) indexed lookup.
@@ -902,6 +938,7 @@ export class IndexedAuthz<
       permission,
       objectType: scope?.type,
       objectId: scope?.id,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -945,6 +982,7 @@ export class IndexedAuthz<
       permissions,
       objectType: scope?.type,
       objectId: scope?.id,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -965,6 +1003,7 @@ export class IndexedAuthz<
       role,
       objectType: scope?.type,
       objectId: scope?.id,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -986,6 +1025,7 @@ export class IndexedAuthz<
       relation,
       objectType,
       objectId,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -1003,6 +1043,7 @@ export class IndexedAuthz<
     return await ctx.runQuery(this.component.indexed.getUserPermissionsFast, {
       userId,
       scopeKey,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -1016,6 +1057,7 @@ export class IndexedAuthz<
     return await ctx.runQuery(this.component.indexed.getUserRolesFast, {
       userId,
       scopeKey,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -1046,6 +1088,7 @@ export class IndexedAuthz<
       scope,
       expiresAt,
       assignedBy: assignedBy ?? this.options.defaultActorId,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -1071,6 +1114,7 @@ export class IndexedAuthz<
       role: roleName,
       rolePermissions,
       scope,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -1106,6 +1150,7 @@ export class IndexedAuthz<
         })),
         rolePermissionsMap,
         assignedBy: actorId ?? this.options.defaultActorId,
+        tenantId: this.options.tenantId,
       }
     );
   }
@@ -1136,6 +1181,7 @@ export class IndexedAuthz<
         userId,
         roles: roles.map((r) => ({ role: r.role, scope: r.scope })),
         rolePermissionsMap,
+        tenantId: this.options.tenantId,
       }
     );
   }
@@ -1161,6 +1207,7 @@ export class IndexedAuthz<
         removeAttributes: false,
         removeOverrides: false,
         enableAudit: true,
+        tenantId: this.options.tenantId,
       }
     );
     return result.rolesRevoked + result.effectiveRolesRemoved;
@@ -1200,6 +1247,7 @@ export class IndexedAuthz<
       removeOverrides: options?.removeOverrides,
       removeRelationships: options?.removeRelationships,
       enableAudit: true,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -1225,6 +1273,7 @@ export class IndexedAuthz<
       userId,
       revokedBy: options?.actorId ?? this.options.defaultActorId,
       enableAudit: options?.enableAudit ?? true,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -1254,6 +1303,7 @@ export class IndexedAuthz<
       reason,
       grantedBy: grantedBy ?? this.options.defaultActorId,
       expiresAt,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -1282,6 +1332,7 @@ export class IndexedAuthz<
       reason,
       deniedBy: deniedBy ?? this.options.defaultActorId,
       expiresAt,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -1311,6 +1362,7 @@ export class IndexedAuthz<
       objectId,
       inheritedRelations,
       createdBy: createdBy ?? this.options.defaultActorId,
+      tenantId: this.options.tenantId,
     });
   }
 
@@ -1334,6 +1386,7 @@ export class IndexedAuthz<
         relation,
         objectType,
         objectId,
+        tenantId: this.options.tenantId,
       }
     );
   }

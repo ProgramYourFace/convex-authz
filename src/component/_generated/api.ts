@@ -14,6 +14,7 @@ import type * as indexed from "../indexed.js";
 import type * as mutations from "../mutations.js";
 import type * as queries from "../queries.js";
 import type * as rebac from "../rebac.js";
+import type * as validators from "../validators.js";
 
 import type {
   ApiFromModules,
@@ -29,6 +30,7 @@ const fullApi: ApiFromModules<{
   mutations: typeof mutations;
   queries: typeof queries;
   rebac: typeof rebac;
+  validators: typeof validators;
 }> = anyApi as any;
 
 /**

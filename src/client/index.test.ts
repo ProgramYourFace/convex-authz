@@ -433,40 +433,40 @@ describe("wildcard and pattern matching", () => {
 
     it("grantPermission accepts documents:* and passes it to mutation", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("override_id"),
       };
       await authz.grantPermission(ctx, "user_123", "documents:*", undefined, "Full access");
       expect(ctx.runMutation).toHaveBeenCalledWith(
         component.mutations.grantPermission,
-        expect.objectContaining({ permission: "documents:*", reason: "Full access" })
+        expect.objectContaining({ permission: "documents:*", reason: "Full access", tenantId: "test-tenant" })
       );
     });
 
     it("grantPermission accepts * and passes it to mutation", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("override_id"),
       };
       await authz.grantPermission(ctx, "user_123", "*");
       expect(ctx.runMutation).toHaveBeenCalledWith(
         component.mutations.grantPermission,
-        expect.objectContaining({ permission: "*" })
+        expect.objectContaining({ permission: "*", tenantId: "test-tenant" })
       );
     });
 
     it("denyPermission accepts documents:* and passes it to mutation", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("override_id"),
       };
       await authz.denyPermission(ctx, "user_123", "documents:*", undefined, "Revoke all");
       expect(ctx.runMutation).toHaveBeenCalledWith(
         component.mutations.denyPermission,
-        expect.objectContaining({ permission: "documents:*", reason: "Revoke all" })
+        expect.objectContaining({ permission: "documents:*", reason: "Revoke all", tenantId: "test-tenant" })
       );
     });
   });
@@ -494,27 +494,27 @@ describe("wildcard and pattern matching", () => {
 
     it("grantPermission accepts documents:* and passes it to indexed mutation", async () => {
       const component = createMockIndexedComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("override_id"),
       };
       await authz.grantPermission(ctx, "user_123", "documents:*", undefined, "Full access");
       expect(ctx.runMutation).toHaveBeenCalledWith(
         component.indexed.grantPermissionDirect,
-        expect.objectContaining({ permission: "documents:*" })
+        expect.objectContaining({ permission: "documents:*", tenantId: "test-tenant" })
       );
     });
 
     it("denyPermission accepts *:read and passes it to indexed mutation", async () => {
       const component = createMockIndexedComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("override_id"),
       };
       await authz.denyPermission(ctx, "user_123", "*:read");
       expect(ctx.runMutation).toHaveBeenCalledWith(
         component.indexed.denyPermissionDirect,
-        expect.objectContaining({ permission: "*:read" })
+        expect.objectContaining({ permission: "*:read", tenantId: "test-tenant" })
       );
     });
   });
@@ -564,7 +564,7 @@ describe("Authz class", () => {
   describe("can", () => {
     it("should call runQuery with checkPermission and return result", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue({ allowed: true, reason: "Granted" }),
@@ -587,13 +587,14 @@ describe("Authz class", () => {
             ],
             viewer: ["documents:read"],
           },
+          tenantId: "test-tenant",
         })
       );
     });
 
     it("should pass scope when provided", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue({ allowed: false, reason: "Denied" }),
@@ -608,6 +609,7 @@ describe("Authz class", () => {
         component.queries.checkPermission,
         expect.objectContaining({
           scope: { type: "team", id: "team_456" },
+          tenantId: "test-tenant",
         })
       );
     });
@@ -625,6 +627,7 @@ describe("Authz class", () => {
       const authz = new Authz(component, {
         permissions: permissionsWithDocs,
         roles: rolesWithInheritance,
+        tenantId: "test-tenant",
       });
       const ctx = {
         runQuery: vi.fn().mockResolvedValue({ allowed: true, reason: "Granted" }),
@@ -644,7 +647,7 @@ describe("Authz class", () => {
   describe("require", () => {
     it("should not throw when permission is allowed", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue({ allowed: true, reason: "Granted" }),
@@ -657,7 +660,7 @@ describe("Authz class", () => {
 
     it("should throw when permission is denied", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue({
@@ -673,7 +676,7 @@ describe("Authz class", () => {
 
     it("should include scope in error message when provided", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue({
@@ -696,7 +699,7 @@ describe("Authz class", () => {
   describe("hasRole", () => {
     it("should check role via runQuery", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue(true),
@@ -708,12 +711,13 @@ describe("Authz class", () => {
         userId: "user_123",
         role: "admin",
         scope: undefined,
+        tenantId: "test-tenant",
       });
     });
 
     it("should pass scope when provided", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue(false),
@@ -727,6 +731,7 @@ describe("Authz class", () => {
         userId: "user_123",
         role: "admin",
         scope: { type: "org", id: "org_1" },
+        tenantId: "test-tenant",
       });
     });
   });
@@ -734,7 +739,7 @@ describe("Authz class", () => {
   describe("getUserRoles", () => {
     it("should get user roles via runQuery", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const mockRoles = [{ role: "admin", scope: undefined }];
       const ctx = {
@@ -745,13 +750,13 @@ describe("Authz class", () => {
       expect(result).toEqual(mockRoles);
       expect(ctx.runQuery).toHaveBeenCalledWith(
         component.queries.getUserRoles,
-        { userId: "user_123", scope: undefined }
+        { userId: "user_123", scope: undefined, tenantId: "test-tenant" }
       );
     });
 
     it("should pass scope when provided", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue([]),
@@ -763,7 +768,7 @@ describe("Authz class", () => {
       });
       expect(ctx.runQuery).toHaveBeenCalledWith(
         component.queries.getUserRoles,
-        { userId: "user_123", scope: { type: "team", id: "team_1" } }
+        { userId: "user_123", scope: { type: "team", id: "team_1" }, tenantId: "test-tenant" }
       );
     });
   });
@@ -771,7 +776,7 @@ describe("Authz class", () => {
   describe("getUserPermissions", () => {
     it("should get user permissions via runQuery", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const mockPerms = {
         permissions: ["documents:read"],
@@ -788,7 +793,7 @@ describe("Authz class", () => {
 
     it("should pass scope when provided", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue({
@@ -806,6 +811,7 @@ describe("Authz class", () => {
         component.queries.getEffectivePermissions,
         expect.objectContaining({
           scope: { type: "org", id: "org_1" },
+          tenantId: "test-tenant",
         })
       );
     });
@@ -814,7 +820,7 @@ describe("Authz class", () => {
   describe("getUserAttributes", () => {
     it("should get user attributes via runQuery", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const mockAttrs = [{ key: "dept", value: "eng" }];
       const ctx = {
@@ -825,7 +831,7 @@ describe("Authz class", () => {
       expect(result).toEqual(mockAttrs);
       expect(ctx.runQuery).toHaveBeenCalledWith(
         component.queries.getUserAttributes,
-        { userId: "user_123" }
+        { userId: "user_123", tenantId: "test-tenant" }
       );
     });
   });
@@ -833,7 +839,7 @@ describe("Authz class", () => {
   describe("canAny", () => {
     it("should call runQuery with checkPermissions and return result.allowed", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue({
@@ -853,13 +859,14 @@ describe("Authz class", () => {
           userId: "user_123",
           permissions: ["documents:delete", "documents:read"],
           scope: undefined,
+          tenantId: "test-tenant",
         })
       );
     });
 
     it("should reject empty permissions array", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = { runQuery: vi.fn() };
 
       await expect(
@@ -871,7 +878,7 @@ describe("Authz class", () => {
   describe("assignRole", () => {
     it("should assign role via runMutation", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("assignment_id"),
@@ -885,13 +892,14 @@ describe("Authz class", () => {
           userId: "user_123",
           role: "admin",
           enableAudit: true,
+          tenantId: "test-tenant",
         })
       );
     });
 
     it("should use provided actorId", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("assignment_id"),
@@ -909,6 +917,7 @@ describe("Authz class", () => {
         component.mutations.assignRole,
         expect.objectContaining({
           assignedBy: "actor_1",
+          tenantId: "test-tenant",
         })
       );
     });
@@ -919,6 +928,7 @@ describe("Authz class", () => {
         permissions,
         roles,
         defaultActorId: "default_actor",
+        tenantId: "test-tenant",
       });
 
       const ctx = {
@@ -930,13 +940,14 @@ describe("Authz class", () => {
         component.mutations.assignRole,
         expect.objectContaining({
           assignedBy: "default_actor",
+          tenantId: "test-tenant",
         })
       );
     });
 
     it("should pass scope and expiresAt", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("assignment_id"),
@@ -951,6 +962,7 @@ describe("Authz class", () => {
         expect.objectContaining({
           scope,
           expiresAt,
+          tenantId: "test-tenant",
         })
       );
     });
@@ -959,7 +971,7 @@ describe("Authz class", () => {
   describe("revokeRole", () => {
     it("should revoke role via runMutation", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue(true),
@@ -973,13 +985,14 @@ describe("Authz class", () => {
           userId: "user_123",
           role: "admin",
           enableAudit: true,
+          tenantId: "test-tenant",
         })
       );
     });
 
     it("should use provided actorId", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue(true),
@@ -990,6 +1003,7 @@ describe("Authz class", () => {
         component.mutations.revokeRole,
         expect.objectContaining({
           revokedBy: "actor_1",
+          tenantId: "test-tenant",
         })
       );
     });
@@ -1000,6 +1014,7 @@ describe("Authz class", () => {
         permissions,
         roles,
         defaultActorId: "default_actor",
+        tenantId: "test-tenant",
       });
 
       const ctx = {
@@ -1011,6 +1026,7 @@ describe("Authz class", () => {
         component.mutations.revokeRole,
         expect.objectContaining({
           revokedBy: "default_actor",
+          tenantId: "test-tenant",
         })
       );
     });
@@ -1019,7 +1035,7 @@ describe("Authz class", () => {
   describe("assignRoles", () => {
     it("should call runMutation with assignRoles", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue({
@@ -1042,6 +1058,7 @@ describe("Authz class", () => {
             { role: "admin", scope: undefined, expiresAt: undefined, metadata: undefined },
             { role: "viewer", scope: { type: "team", id: "t1" }, expiresAt: undefined, metadata: undefined },
           ],
+          tenantId: "test-tenant",
         })
       );
     });
@@ -1050,7 +1067,7 @@ describe("Authz class", () => {
   describe("revokeRoles", () => {
     it("should call runMutation with revokeRoles", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue({ revoked: 2 }),
@@ -1066,6 +1083,7 @@ describe("Authz class", () => {
         expect.objectContaining({
           userId: "user_123",
           roles: [{ role: "admin", scope: undefined }, { role: "viewer", scope: undefined }],
+          tenantId: "test-tenant",
         })
       );
     });
@@ -1074,7 +1092,7 @@ describe("Authz class", () => {
   describe("revokeAllRoles", () => {
     it("should call runMutation with revokeAllRoles", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue(3),
@@ -1087,6 +1105,7 @@ describe("Authz class", () => {
         expect.objectContaining({
           userId: "user_123",
           scope: undefined,
+          tenantId: "test-tenant",
         })
       );
     });
@@ -1095,7 +1114,7 @@ describe("Authz class", () => {
   describe("offboardUser", () => {
     it("should call runMutation with offboardUser", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue({
@@ -1119,6 +1138,7 @@ describe("Authz class", () => {
           scope: { type: "team", id: "t1" },
           revokedBy: "actor_1",
           enableAudit: true,
+          tenantId: "test-tenant",
         })
       );
     });
@@ -1127,7 +1147,7 @@ describe("Authz class", () => {
   describe("setAttribute", () => {
     it("should set attribute via runMutation", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("attr_id"),
@@ -1147,13 +1167,14 @@ describe("Authz class", () => {
           key: "department",
           value: "engineering",
           enableAudit: true,
+          tenantId: "test-tenant",
         })
       );
     });
 
     it("should use provided actorId", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("attr_id"),
@@ -1162,7 +1183,7 @@ describe("Authz class", () => {
       await authz.setAttribute(ctx, "user_123", "key", "val", "actor_1");
       expect(ctx.runMutation).toHaveBeenCalledWith(
         component.mutations.setAttribute,
-        expect.objectContaining({ setBy: "actor_1" })
+        expect.objectContaining({ setBy: "actor_1", tenantId: "test-tenant" })
       );
     });
 
@@ -1172,6 +1193,7 @@ describe("Authz class", () => {
         permissions,
         roles,
         defaultActorId: "default_actor",
+        tenantId: "test-tenant",
       });
 
       const ctx = {
@@ -1181,7 +1203,7 @@ describe("Authz class", () => {
       await authz.setAttribute(ctx, "user_123", "key", "val");
       expect(ctx.runMutation).toHaveBeenCalledWith(
         component.mutations.setAttribute,
-        expect.objectContaining({ setBy: "default_actor" })
+        expect.objectContaining({ setBy: "default_actor", tenantId: "test-tenant" })
       );
     });
   });
@@ -1189,7 +1211,7 @@ describe("Authz class", () => {
   describe("removeAttribute", () => {
     it("should remove attribute via runMutation", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue(true),
@@ -1203,13 +1225,14 @@ describe("Authz class", () => {
           userId: "user_123",
           key: "department",
           enableAudit: true,
+          tenantId: "test-tenant",
         })
       );
     });
 
     it("should use provided actorId", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue(true),
@@ -1218,7 +1241,7 @@ describe("Authz class", () => {
       await authz.removeAttribute(ctx, "user_123", "key", "actor_1");
       expect(ctx.runMutation).toHaveBeenCalledWith(
         component.mutations.removeAttribute,
-        expect.objectContaining({ removedBy: "actor_1" })
+        expect.objectContaining({ removedBy: "actor_1", tenantId: "test-tenant" })
       );
     });
   });
@@ -1226,7 +1249,7 @@ describe("Authz class", () => {
   describe("grantPermission", () => {
     it("should grant permission via runMutation", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("override_id"),
@@ -1244,13 +1267,14 @@ describe("Authz class", () => {
           userId: "user_123",
           permission: "documents:delete",
           enableAudit: true,
+          tenantId: "test-tenant",
         })
       );
     });
 
     it("should pass all optional parameters", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("override_id"),
@@ -1275,6 +1299,7 @@ describe("Authz class", () => {
           reason: "Temporary",
           expiresAt,
           createdBy: "actor_1",
+          tenantId: "test-tenant",
         })
       );
     });
@@ -1285,6 +1310,7 @@ describe("Authz class", () => {
         permissions,
         roles,
         defaultActorId: "default_actor",
+        tenantId: "test-tenant",
       });
 
       const ctx = {
@@ -1294,7 +1320,7 @@ describe("Authz class", () => {
       await authz.grantPermission(ctx, "user_123", "documents:delete");
       expect(ctx.runMutation).toHaveBeenCalledWith(
         component.mutations.grantPermission,
-        expect.objectContaining({ createdBy: "default_actor" })
+        expect.objectContaining({ createdBy: "default_actor", tenantId: "test-tenant" })
       );
     });
   });
@@ -1302,7 +1328,7 @@ describe("Authz class", () => {
   describe("denyPermission", () => {
     it("should deny permission via runMutation", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("override_id"),
@@ -1318,7 +1344,7 @@ describe("Authz class", () => {
 
     it("should pass all optional parameters", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("override_id"),
@@ -1343,6 +1369,7 @@ describe("Authz class", () => {
           reason: "Security",
           expiresAt,
           createdBy: "actor_1",
+          tenantId: "test-tenant",
         })
       );
     });
@@ -1353,6 +1380,7 @@ describe("Authz class", () => {
         permissions,
         roles,
         defaultActorId: "default_actor",
+        tenantId: "test-tenant",
       });
 
       const ctx = {
@@ -1362,7 +1390,7 @@ describe("Authz class", () => {
       await authz.denyPermission(ctx, "user_123", "documents:delete");
       expect(ctx.runMutation).toHaveBeenCalledWith(
         component.mutations.denyPermission,
-        expect.objectContaining({ createdBy: "default_actor" })
+        expect.objectContaining({ createdBy: "default_actor", tenantId: "test-tenant" })
       );
     });
   });
@@ -1370,7 +1398,7 @@ describe("Authz class", () => {
   describe("getAuditLog", () => {
     it("should get audit log with no options", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue([]),
@@ -1384,13 +1412,14 @@ describe("Authz class", () => {
           userId: undefined,
           action: undefined,
           limit: undefined,
+          tenantId: "test-tenant",
         })
       );
     });
 
     it("should request pagination when numItems provided", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const paginatedResponse = {
         page: [{ _id: "1", timestamp: 1, action: "role_assigned", userId: "u", details: {} }],
@@ -1408,13 +1437,14 @@ describe("Authz class", () => {
         component.queries.getAuditLog,
         expect.objectContaining({
           paginationOpts: { numItems: 50, cursor: null },
+          tenantId: "test-tenant",
         })
       );
     });
 
     it("should request next page when cursor provided", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue({
@@ -1429,13 +1459,14 @@ describe("Authz class", () => {
         component.queries.getAuditLog,
         expect.objectContaining({
           paginationOpts: { numItems: 100, cursor: "prevCursor" },
+          tenantId: "test-tenant",
         })
       );
     });
 
     it("should pass userId filter", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue([]),
@@ -1444,13 +1475,13 @@ describe("Authz class", () => {
       await authz.getAuditLog(ctx, { userId: "user_123" });
       expect(ctx.runQuery).toHaveBeenCalledWith(
         component.queries.getAuditLog,
-        expect.objectContaining({ userId: "user_123" })
+        expect.objectContaining({ userId: "user_123", tenantId: "test-tenant" })
       );
     });
 
     it("should pass action filter", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue([]),
@@ -1459,13 +1490,13 @@ describe("Authz class", () => {
       await authz.getAuditLog(ctx, { action: "role_assigned" });
       expect(ctx.runQuery).toHaveBeenCalledWith(
         component.queries.getAuditLog,
-        expect.objectContaining({ action: "role_assigned" })
+        expect.objectContaining({ action: "role_assigned", tenantId: "test-tenant" })
       );
     });
 
     it("should pass limit option", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue([]),
@@ -1474,7 +1505,7 @@ describe("Authz class", () => {
       await authz.getAuditLog(ctx, { limit: 50 });
       expect(ctx.runQuery).toHaveBeenCalledWith(
         component.queries.getAuditLog,
-        expect.objectContaining({ limit: 50 })
+        expect.objectContaining({ limit: 50, tenantId: "test-tenant" })
       );
     });
   });
@@ -1547,7 +1578,7 @@ describe("input validation", () => {
   describe("Authz", () => {
     it("throws for empty userId", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = {
         runQuery: vi.fn().mockResolvedValue({ allowed: true, reason: "ok" }),
       };
@@ -1562,7 +1593,7 @@ describe("input validation", () => {
 
     it("throws for invalid permission format", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = {
         runQuery: vi.fn().mockResolvedValue({ allowed: false, reason: "ok" }),
       };
@@ -1580,7 +1611,7 @@ describe("input validation", () => {
 
     it("throws for invalid scope when provided", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = {
         runQuery: vi.fn().mockResolvedValue({ allowed: true, reason: "ok" }),
       };
@@ -1596,7 +1627,7 @@ describe("input validation", () => {
 
     it("throws for unknown role in assignRole and hasRole", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = {
         runQuery: vi.fn().mockResolvedValue(false),
         runMutation: vi.fn().mockResolvedValue("id"),
@@ -1613,7 +1644,7 @@ describe("input validation", () => {
 
     it("throws for invalid expiresAt when provided", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("id"),
       };
@@ -1636,7 +1667,7 @@ describe("input validation", () => {
 
     it("throws for empty attribute key in setAttribute and removeAttribute", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("id"),
       };
@@ -1652,7 +1683,7 @@ describe("input validation", () => {
 
     it("throws for invalid getAuditLog limit when provided", async () => {
       const component = createMockComponent();
-      const authz = new Authz(component, { permissions, roles });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = {
         runQuery: vi.fn().mockResolvedValue([]),
       };
@@ -1670,7 +1701,7 @@ describe("input validation", () => {
   describe("IndexedAuthz", () => {
     it("throws for empty userId and invalid permission", async () => {
       const component = createMockIndexedComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = {
         runQuery: vi.fn().mockResolvedValue(true),
       };
@@ -1685,7 +1716,7 @@ describe("input validation", () => {
 
     it("throws for unknown role and invalid scope", async () => {
       const component = createMockIndexedComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = {
         runQuery: vi.fn().mockResolvedValue([]),
         runMutation: vi.fn().mockResolvedValue("id"),
@@ -1702,7 +1733,7 @@ describe("input validation", () => {
 
     it("throws for invalid relation args in hasRelation and addRelation", async () => {
       const component = createMockIndexedComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = {
         runQuery: vi.fn().mockResolvedValue(false),
         runMutation: vi.fn().mockResolvedValue("id"),
@@ -1760,7 +1791,7 @@ describe("IndexedAuthz class", () => {
   describe("can", () => {
     it("should check permission via indexed lookup", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue(true),
@@ -1775,13 +1806,14 @@ describe("IndexedAuthz class", () => {
           permission: "documents:read",
           objectType: undefined,
           objectId: undefined,
+          tenantId: "test-tenant",
         }
       );
     });
 
     it("should pass scope as objectType/objectId", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue(false),
@@ -1798,6 +1830,7 @@ describe("IndexedAuthz class", () => {
           permission: "documents:read",
           objectType: "team",
           objectId: "team_1",
+          tenantId: "test-tenant",
         }
       );
     });
@@ -1806,7 +1839,7 @@ describe("IndexedAuthz class", () => {
   describe("require", () => {
     it("should not throw when permission is allowed", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue(true),
@@ -1819,7 +1852,7 @@ describe("IndexedAuthz class", () => {
 
     it("should throw when permission is denied", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue(false),
@@ -1832,7 +1865,7 @@ describe("IndexedAuthz class", () => {
 
     it("should include scope in error message", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue(false),
@@ -1850,7 +1883,7 @@ describe("IndexedAuthz class", () => {
   describe("hasRole", () => {
     it("should check role via indexed lookup", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue(true),
@@ -1865,13 +1898,14 @@ describe("IndexedAuthz class", () => {
           role: "admin",
           objectType: undefined,
           objectId: undefined,
+          tenantId: "test-tenant",
         }
       );
     });
 
     it("should pass scope", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue(false),
@@ -1886,6 +1920,7 @@ describe("IndexedAuthz class", () => {
         expect.objectContaining({
           objectType: "org",
           objectId: "org_1",
+          tenantId: "test-tenant",
         })
       );
     });
@@ -1894,7 +1929,7 @@ describe("IndexedAuthz class", () => {
   describe("hasRelation", () => {
     it("should check relation via indexed lookup", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue(true),
@@ -1917,6 +1952,7 @@ describe("IndexedAuthz class", () => {
           relation: "member",
           objectType: "team",
           objectId: "sales",
+          tenantId: "test-tenant",
         }
       );
     });
@@ -1925,7 +1961,7 @@ describe("IndexedAuthz class", () => {
   describe("getUserPermissions", () => {
     it("should get permissions without scope", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue([]),
@@ -1934,13 +1970,13 @@ describe("IndexedAuthz class", () => {
       await authz.getUserPermissions(ctx, "user_123");
       expect(ctx.runQuery).toHaveBeenCalledWith(
         component.indexed.getUserPermissionsFast,
-        { userId: "user_123", scopeKey: undefined }
+        { userId: "user_123", scopeKey: undefined, tenantId: "test-tenant" }
       );
     });
 
     it("should get permissions with scope", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue([]),
@@ -1952,7 +1988,7 @@ describe("IndexedAuthz class", () => {
       });
       expect(ctx.runQuery).toHaveBeenCalledWith(
         component.indexed.getUserPermissionsFast,
-        { userId: "user_123", scopeKey: "team:team_1" }
+        { userId: "user_123", scopeKey: "team:team_1", tenantId: "test-tenant" }
       );
     });
   });
@@ -1960,7 +1996,7 @@ describe("IndexedAuthz class", () => {
   describe("getUserRoles", () => {
     it("should get roles without scope", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue([]),
@@ -1969,13 +2005,13 @@ describe("IndexedAuthz class", () => {
       await authz.getUserRoles(ctx, "user_123");
       expect(ctx.runQuery).toHaveBeenCalledWith(
         component.indexed.getUserRolesFast,
-        { userId: "user_123", scopeKey: undefined }
+        { userId: "user_123", scopeKey: undefined, tenantId: "test-tenant" }
       );
     });
 
     it("should get roles with scope", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue([]),
@@ -1987,7 +2023,7 @@ describe("IndexedAuthz class", () => {
       });
       expect(ctx.runQuery).toHaveBeenCalledWith(
         component.indexed.getUserRolesFast,
-        { userId: "user_123", scopeKey: "org:org_1" }
+        { userId: "user_123", scopeKey: "org:org_1", tenantId: "test-tenant" }
       );
     });
   });
@@ -1995,7 +2031,7 @@ describe("IndexedAuthz class", () => {
   describe("assignRole", () => {
     it("should assign role with computed permissions", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("role_id"),
@@ -2014,13 +2050,14 @@ describe("IndexedAuthz class", () => {
             "documents:update",
             "documents:delete",
           ],
+          tenantId: "test-tenant",
         })
       );
     });
 
     it("should pass scope and expiresAt", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("role_id"),
@@ -2032,13 +2069,13 @@ describe("IndexedAuthz class", () => {
       await authz.assignRole(ctx, "user_123", "admin", scope, expiresAt);
       expect(ctx.runMutation).toHaveBeenCalledWith(
         component.indexed.assignRoleWithCompute,
-        expect.objectContaining({ scope, expiresAt })
+        expect.objectContaining({ scope, expiresAt, tenantId: "test-tenant" })
       );
     });
 
     it("should use assignedBy when provided", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("role_id"),
@@ -2054,7 +2091,7 @@ describe("IndexedAuthz class", () => {
       );
       expect(ctx.runMutation).toHaveBeenCalledWith(
         component.indexed.assignRoleWithCompute,
-        expect.objectContaining({ assignedBy: "actor_1" })
+        expect.objectContaining({ assignedBy: "actor_1", tenantId: "test-tenant" })
       );
     });
 
@@ -2064,6 +2101,7 @@ describe("IndexedAuthz class", () => {
         permissions,
         roles,
         defaultActorId: "default_actor",
+        tenantId: "test-tenant",
       });
 
       const ctx = {
@@ -2073,7 +2111,7 @@ describe("IndexedAuthz class", () => {
       await authz.assignRole(ctx, "user_123", "admin");
       expect(ctx.runMutation).toHaveBeenCalledWith(
         component.indexed.assignRoleWithCompute,
-        expect.objectContaining({ assignedBy: "default_actor" })
+        expect.objectContaining({ assignedBy: "default_actor", tenantId: "test-tenant" })
       );
     });
   });
@@ -2081,7 +2119,7 @@ describe("IndexedAuthz class", () => {
   describe("revokeRole", () => {
     it("should revoke role with computed permissions", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue(true),
@@ -2100,13 +2138,14 @@ describe("IndexedAuthz class", () => {
             "documents:update",
             "documents:delete",
           ],
+          tenantId: "test-tenant",
         })
       );
     });
 
     it("should pass scope", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue(true),
@@ -2120,6 +2159,7 @@ describe("IndexedAuthz class", () => {
         component.indexed.revokeRoleWithCompute,
         expect.objectContaining({
           scope: { type: "team", id: "team_1" },
+          tenantId: "test-tenant",
         })
       );
     });
@@ -2128,7 +2168,7 @@ describe("IndexedAuthz class", () => {
   describe("canAny", () => {
     it("should call runQuery with checkPermissionsFast", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue(true),
@@ -2144,6 +2184,7 @@ describe("IndexedAuthz class", () => {
         expect.objectContaining({
           userId: "user_123",
           permissions: ["documents:read", "documents:delete"],
+          tenantId: "test-tenant",
         })
       );
     });
@@ -2152,7 +2193,7 @@ describe("IndexedAuthz class", () => {
   describe("assignRoles", () => {
     it("should call runMutation with assignRolesWithCompute", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue({
@@ -2172,6 +2213,7 @@ describe("IndexedAuthz class", () => {
           userId: "user_123",
           roles: expect.any(Array),
           rolePermissionsMap: expect.any(Object),
+          tenantId: "test-tenant",
         })
       );
     });
@@ -2180,7 +2222,7 @@ describe("IndexedAuthz class", () => {
   describe("revokeRoles", () => {
     it("should call runMutation with revokeRolesWithCompute", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue({ revoked: 2 }),
@@ -2197,6 +2239,7 @@ describe("IndexedAuthz class", () => {
           userId: "user_123",
           roles: expect.any(Array),
           rolePermissionsMap: expect.any(Object),
+          tenantId: "test-tenant",
         })
       );
     });
@@ -2205,7 +2248,7 @@ describe("IndexedAuthz class", () => {
   describe("revokeAllRoles", () => {
     it("should call offboardUser with removeAttributes and removeOverrides false", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue({
@@ -2225,6 +2268,7 @@ describe("IndexedAuthz class", () => {
           userId: "user_123",
           removeAttributes: false,
           removeOverrides: false,
+          tenantId: "test-tenant",
         })
       );
     });
@@ -2233,7 +2277,7 @@ describe("IndexedAuthz class", () => {
   describe("offboardUser", () => {
     it("should call runMutation with offboardUser", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue({
@@ -2252,6 +2296,7 @@ describe("IndexedAuthz class", () => {
         expect.objectContaining({
           userId: "user_123",
           enableAudit: true,
+          tenantId: "test-tenant",
         })
       );
     });
@@ -2260,7 +2305,7 @@ describe("IndexedAuthz class", () => {
   describe("grantPermission", () => {
     it("should grant permission", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("perm_id"),
@@ -2276,7 +2321,7 @@ describe("IndexedAuthz class", () => {
 
     it("should pass all optional parameters", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("perm_id"),
@@ -2301,6 +2346,7 @@ describe("IndexedAuthz class", () => {
           reason: "Reason",
           expiresAt,
           grantedBy: "actor_1",
+          tenantId: "test-tenant",
         })
       );
     });
@@ -2311,6 +2357,7 @@ describe("IndexedAuthz class", () => {
         permissions,
         roles,
         defaultActorId: "default_actor",
+        tenantId: "test-tenant",
       });
 
       const ctx = {
@@ -2320,7 +2367,7 @@ describe("IndexedAuthz class", () => {
       await authz.grantPermission(ctx, "user_123", "documents:read");
       expect(ctx.runMutation).toHaveBeenCalledWith(
         component.indexed.grantPermissionDirect,
-        expect.objectContaining({ grantedBy: "default_actor" })
+        expect.objectContaining({ grantedBy: "default_actor", tenantId: "test-tenant" })
       );
     });
   });
@@ -2328,7 +2375,7 @@ describe("IndexedAuthz class", () => {
   describe("denyPermission", () => {
     it("should deny permission", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("perm_id"),
@@ -2344,7 +2391,7 @@ describe("IndexedAuthz class", () => {
 
     it("should pass all optional parameters", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("perm_id"),
@@ -2369,6 +2416,7 @@ describe("IndexedAuthz class", () => {
           reason: "Security",
           expiresAt,
           deniedBy: "actor_1",
+          tenantId: "test-tenant",
         })
       );
     });
@@ -2379,6 +2427,7 @@ describe("IndexedAuthz class", () => {
         permissions,
         roles,
         defaultActorId: "default_actor",
+        tenantId: "test-tenant",
       });
 
       const ctx = {
@@ -2388,7 +2437,7 @@ describe("IndexedAuthz class", () => {
       await authz.denyPermission(ctx, "user_123", "documents:delete");
       expect(ctx.runMutation).toHaveBeenCalledWith(
         component.indexed.denyPermissionDirect,
-        expect.objectContaining({ deniedBy: "default_actor" })
+        expect.objectContaining({ deniedBy: "default_actor", tenantId: "test-tenant" })
       );
     });
   });
@@ -2396,7 +2445,7 @@ describe("IndexedAuthz class", () => {
   describe("addRelation", () => {
     it("should add relation", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("rel_id"),
@@ -2421,6 +2470,7 @@ describe("IndexedAuthz class", () => {
           objectId: "sales",
           inheritedRelations: undefined,
           createdBy: undefined,
+          tenantId: "test-tenant",
         }
       );
     });
@@ -2431,6 +2481,7 @@ describe("IndexedAuthz class", () => {
         permissions,
         roles,
         defaultActorId: "default",
+        tenantId: "test-tenant",
       });
 
       const ctx = {
@@ -2460,6 +2511,7 @@ describe("IndexedAuthz class", () => {
         expect.objectContaining({
           inheritedRelations: inherited,
           createdBy: "actor_1",
+          tenantId: "test-tenant",
         })
       );
     });
@@ -2470,6 +2522,7 @@ describe("IndexedAuthz class", () => {
         permissions,
         roles,
         defaultActorId: "default_actor",
+        tenantId: "test-tenant",
       });
 
       const ctx = {
@@ -2479,7 +2532,7 @@ describe("IndexedAuthz class", () => {
       await authz.addRelation(ctx, "user", "alice", "member", "team", "sales");
       expect(ctx.runMutation).toHaveBeenCalledWith(
         component.indexed.addRelationWithCompute,
-        expect.objectContaining({ createdBy: "default_actor" })
+        expect.objectContaining({ createdBy: "default_actor", tenantId: "test-tenant" })
       );
     });
   });
@@ -2487,7 +2540,7 @@ describe("IndexedAuthz class", () => {
   describe("removeRelation", () => {
     it("should remove relation", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles });
+      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue(true),
@@ -2510,8 +2563,211 @@ describe("IndexedAuthz class", () => {
           relation: "member",
           objectType: "team",
           objectId: "sales",
+          tenantId: "test-tenant",
         }
       );
     });
+  });
+});
+
+// ============================================================================
+// withTenant() and constructor validation tests
+// ============================================================================
+
+describe("Authz withTenant()", () => {
+  function createMockComponent() {
+    return {
+      queries: {
+        checkPermission: "queries.checkPermission",
+        checkPermissions: "queries.checkPermissions",
+        hasRole: "queries.hasRole",
+        getUserRoles: "queries.getUserRoles",
+        getEffectivePermissions: "queries.getEffectivePermissions",
+        getUserAttributes: "queries.getUserAttributes",
+        getAuditLog: "queries.getAuditLog",
+      },
+      mutations: {
+        assignRole: "mutations.assignRole",
+        assignRoles: "mutations.assignRoles",
+        revokeRole: "mutations.revokeRole",
+        revokeRoles: "mutations.revokeRoles",
+        revokeAllRoles: "mutations.revokeAllRoles",
+        offboardUser: "mutations.offboardUser",
+        setAttribute: "mutations.setAttribute",
+        removeAttribute: "mutations.removeAttribute",
+        grantPermission: "mutations.grantPermission",
+        denyPermission: "mutations.denyPermission",
+      },
+    } as unknown as ComponentApi;
+  }
+
+  const permissions = definePermissions({
+    documents: { create: true, read: true, update: true, delete: true },
+  });
+
+  const roles = defineRoles(permissions, {
+    admin: { documents: ["create", "read", "update", "delete"] },
+    viewer: { documents: ["read"] },
+  });
+
+  it("should return a new instance scoped to a different tenant", async () => {
+    const component = createMockComponent();
+    const authz = new Authz(component, { permissions, roles, tenantId: "tenant-a" });
+    const other = authz.withTenant("tenant-b");
+
+    const ctx = {
+      runQuery: vi.fn().mockResolvedValue({ allowed: true, reason: "ok" }),
+    };
+    await other.can(ctx, "user1", "documents:read");
+
+    expect(ctx.runQuery).toHaveBeenCalledWith(
+      "queries.checkPermission",
+      expect.objectContaining({ tenantId: "tenant-b" })
+    );
+  });
+
+  it("should not modify the original instance", async () => {
+    const component = createMockComponent();
+    const authz = new Authz(component, { permissions, roles, tenantId: "tenant-a" });
+    authz.withTenant("tenant-b");
+
+    const ctx = {
+      runQuery: vi.fn().mockResolvedValue({ allowed: true, reason: "ok" }),
+    };
+    await authz.can(ctx, "user1", "documents:read");
+
+    expect(ctx.runQuery).toHaveBeenCalledWith(
+      "queries.checkPermission",
+      expect.objectContaining({ tenantId: "tenant-a" })
+    );
+  });
+
+  it("should throw for empty tenantId", () => {
+    const component = createMockComponent();
+    const authz = new Authz(component, { permissions, roles, tenantId: "tenant-a" });
+
+    expect(() => authz.withTenant("")).toThrow("tenantId must be a non-empty string");
+    expect(() => authz.withTenant("   ")).toThrow("tenantId must be a non-empty string");
+  });
+});
+
+describe("Authz constructor validation", () => {
+  const permissions = definePermissions({ documents: { read: true } });
+  const roles = defineRoles(permissions, { viewer: { documents: ["read"] } });
+
+  it("should throw for missing tenantId", () => {
+    const component = {} as unknown as ComponentApi;
+    expect(
+      () => new Authz(component, { permissions, roles, tenantId: "" })
+    ).toThrow("tenantId must be a non-empty string");
+  });
+
+  it("should throw for whitespace-only tenantId", () => {
+    const component = {} as unknown as ComponentApi;
+    expect(
+      () => new Authz(component, { permissions, roles, tenantId: "   " })
+    ).toThrow("tenantId must be a non-empty string");
+  });
+
+  it("should accept a valid tenantId", () => {
+    const component = {} as unknown as ComponentApi;
+    expect(
+      () => new Authz(component, { permissions, roles, tenantId: "my-tenant" })
+    ).not.toThrow();
+  });
+});
+
+describe("IndexedAuthz withTenant()", () => {
+  function createMockComponent() {
+    return {
+      indexed: {
+        checkPermissionFast: "indexed.checkPermissionFast",
+        checkPermissionsFast: "indexed.checkPermissionsFast",
+        hasRoleFast: "indexed.hasRoleFast",
+        hasRelationFast: "indexed.hasRelationFast",
+        getUserPermissionsFast: "indexed.getUserPermissionsFast",
+        getUserRolesFast: "indexed.getUserRolesFast",
+        assignRoleWithCompute: "indexed.assignRoleWithCompute",
+        revokeRoleWithCompute: "indexed.revokeRoleWithCompute",
+        assignRolesWithCompute: "indexed.assignRolesWithCompute",
+        revokeRolesWithCompute: "indexed.revokeRolesWithCompute",
+        grantPermissionDirect: "indexed.grantPermissionDirect",
+        denyPermissionDirect: "indexed.denyPermissionDirect",
+        addRelationWithCompute: "indexed.addRelationWithCompute",
+        removeRelationWithCompute: "indexed.removeRelationWithCompute",
+      },
+      mutations: {
+        offboardUser: "mutations.offboardUser",
+        deprovisionUser: "mutations.deprovisionUser",
+      },
+    } as unknown as ComponentApi;
+  }
+
+  const permissions = definePermissions({
+    documents: { create: true, read: true, update: true, delete: true },
+  });
+
+  const roles = defineRoles(permissions, {
+    admin: { documents: ["create", "read", "update", "delete"] },
+    viewer: { documents: ["read"] },
+  });
+
+  it("should return a new instance scoped to a different tenant", async () => {
+    const component = createMockComponent();
+    const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "tenant-a" });
+    const other = authz.withTenant("tenant-b");
+
+    const ctx = {
+      runQuery: vi.fn().mockResolvedValue(true),
+    };
+    await other.can(ctx, "user1", "documents:read");
+
+    expect(ctx.runQuery).toHaveBeenCalledWith(
+      "indexed.checkPermissionFast",
+      expect.objectContaining({ tenantId: "tenant-b" })
+    );
+  });
+
+  it("should not modify the original instance", async () => {
+    const component = createMockComponent();
+    const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "tenant-a" });
+    authz.withTenant("tenant-b");
+
+    const ctx = {
+      runQuery: vi.fn().mockResolvedValue(true),
+    };
+    await authz.can(ctx, "user1", "documents:read");
+
+    expect(ctx.runQuery).toHaveBeenCalledWith(
+      "indexed.checkPermissionFast",
+      expect.objectContaining({ tenantId: "tenant-a" })
+    );
+  });
+
+  it("should throw for empty tenantId", () => {
+    const component = createMockComponent();
+    const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "tenant-a" });
+
+    expect(() => authz.withTenant("")).toThrow("tenantId must be a non-empty string");
+    expect(() => authz.withTenant("   ")).toThrow("tenantId must be a non-empty string");
+  });
+});
+
+describe("IndexedAuthz constructor validation", () => {
+  const permissions = definePermissions({ documents: { read: true } });
+  const roles = defineRoles(permissions, { viewer: { documents: ["read"] } });
+
+  it("should throw for missing tenantId", () => {
+    const component = {} as unknown as ComponentApi;
+    expect(
+      () => new IndexedAuthz(component, { permissions, roles, tenantId: "" })
+    ).toThrow("tenantId must be a non-empty string");
+  });
+
+  it("should accept a valid tenantId", () => {
+    const component = {} as unknown as ComponentApi;
+    expect(
+      () => new IndexedAuthz(component, { permissions, roles, tenantId: "my-tenant" })
+    ).not.toThrow();
   });
 });

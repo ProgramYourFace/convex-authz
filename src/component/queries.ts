@@ -5,7 +5,8 @@ import {
   isExpired,
   matchesScope,
   matchesPermissionPattern,
-} from "./helpers";
+} from "./helpers.js";
+import { scopeValidator } from "./validators.js";
 
 const MAX_BULK_PERMISSIONS = 100;
 
@@ -14,13 +15,9 @@ const MAX_BULK_PERMISSIONS = 100;
  */
 export const getUserRoles = query({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
-    scope: v.optional(
-      v.object({
-        type: v.string(),
-        id: v.string(),
-      })
-    ),
+    scope: scopeValidator,
   },
   returns: v.array(
     v.object({
@@ -39,7 +36,9 @@ export const getUserRoles = query({
   handler: async (ctx, args) => {
     const assignments = await ctx.db
       .query("roleAssignments")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_tenant_user", (q) =>
+        q.eq("tenantId", args.tenantId).eq("userId", args.userId)
+      )
       .collect();
 
     // Filter out expired assignments and optionally filter by scope
@@ -64,21 +63,20 @@ export const getUserRoles = query({
  */
 export const hasRole = query({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     role: v.string(),
-    scope: v.optional(
-      v.object({
-        type: v.string(),
-        id: v.string(),
-      })
-    ),
+    scope: scopeValidator,
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
     const assignments = await ctx.db
       .query("roleAssignments")
-      .withIndex("by_user_and_role", (q) =>
-        q.eq("userId", args.userId).eq("role", args.role)
+      .withIndex("by_tenant_user_and_role", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("userId", args.userId)
+          .eq("role", args.role)
       )
       .collect();
 
@@ -95,6 +93,7 @@ export const hasRole = query({
  */
 export const getUserAttributes = query({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
   },
   returns: v.array(
@@ -107,7 +106,9 @@ export const getUserAttributes = query({
   handler: async (ctx, args) => {
     const attributes = await ctx.db
       .query("userAttributes")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_tenant_user", (q) =>
+        q.eq("tenantId", args.tenantId).eq("userId", args.userId)
+      )
       .collect();
 
     return attributes.map((a) => ({
@@ -123,6 +124,7 @@ export const getUserAttributes = query({
  */
 export const getUserAttribute = query({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     key: v.string(),
   },
@@ -130,8 +132,11 @@ export const getUserAttribute = query({
   handler: async (ctx, args) => {
     const attribute = await ctx.db
       .query("userAttributes")
-      .withIndex("by_user_and_key", (q) =>
-        q.eq("userId", args.userId).eq("key", args.key)
+      .withIndex("by_tenant_user_and_key", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("userId", args.userId)
+          .eq("key", args.key)
       )
       .unique();
 
@@ -144,6 +149,7 @@ export const getUserAttribute = query({
  */
 export const getPermissionOverrides = query({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     permission: v.optional(v.string()),
   },
@@ -168,19 +174,26 @@ export const getPermissionOverrides = query({
     if (args.permission !== undefined) {
       overrides = await ctx.db
         .query("permissionOverrides")
-        .withIndex("by_user_and_permission", (q) =>
-          q.eq("userId", args.userId).eq("permission", args.permission as string)
+        .withIndex("by_tenant_user_and_permission", (q) =>
+          q
+            .eq("tenantId", args.tenantId)
+            .eq("userId", args.userId)
+            .eq("permission", args.permission as string)
         )
         .collect();
     } else {
       overrides = await ctx.db
         .query("permissionOverrides")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId))
+        .withIndex("by_tenant_user", (q) =>
+          q.eq("tenantId", args.tenantId).eq("userId", args.userId)
+        )
         .collect();
     }
 
     // Filter out expired overrides
-    const validOverrides = overrides.filter((o) => !isExpired(o.expiresAt ?? undefined));
+    const validOverrides = overrides.filter(
+      (o) => !isExpired(o.expiresAt ?? undefined)
+    );
 
     return validOverrides.map((o) => ({
       _id: o._id as string,
@@ -201,15 +214,11 @@ export const getPermissionOverrides = query({
  */
 export const checkPermission = query({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     permission: v.string(),
-    scope: v.optional(
-      v.object({
-        type: v.string(),
-        id: v.string(),
-      })
-    ),
-    rolePermissions: v.record(v.string(), v.array(v.string())), // Role -> Permissions mapping
+    scope: scopeValidator,
+    rolePermissions: v.record(v.string(), v.array(v.string())),
   },
   returns: v.object({
     allowed: v.boolean(),
@@ -221,7 +230,9 @@ export const checkPermission = query({
     // Step 1: Check permission overrides
     const overrides = await ctx.db
       .query("permissionOverrides")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_tenant_user", (q) =>
+        q.eq("tenantId", args.tenantId).eq("userId", args.userId)
+      )
       .collect();
 
     const validOverrides = overrides.filter((o) => !isExpired(o.expiresAt));
@@ -259,7 +270,9 @@ export const checkPermission = query({
     // Step 2: Check role-based permissions
     const roleAssignments = await ctx.db
       .query("roleAssignments")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_tenant_user", (q) =>
+        q.eq("tenantId", args.tenantId).eq("userId", args.userId)
+      )
       .collect();
 
     const validAssignments = roleAssignments.filter((a) => {
@@ -298,14 +311,10 @@ export const checkPermission = query({
  */
 export const checkPermissions = query({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     permissions: v.array(v.string()),
-    scope: v.optional(
-      v.object({
-        type: v.string(),
-        id: v.string(),
-      })
-    ),
+    scope: scopeValidator,
     rolePermissions: v.record(v.string(), v.array(v.string())),
   },
   returns: v.object({
@@ -324,13 +333,17 @@ export const checkPermissions = query({
 
     const overrides = await ctx.db
       .query("permissionOverrides")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_tenant_user", (q) =>
+        q.eq("tenantId", args.tenantId).eq("userId", args.userId)
+      )
       .collect();
     const validOverrides = overrides.filter((o) => !isExpired(o.expiresAt));
 
     const roleAssignments = await ctx.db
       .query("roleAssignments")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_tenant_user", (q) =>
+        q.eq("tenantId", args.tenantId).eq("userId", args.userId)
+      )
       .collect();
     const validAssignments = roleAssignments.filter((a) => {
       if (isExpired(a.expiresAt)) return false;
@@ -381,14 +394,10 @@ export const checkPermissions = query({
  */
 export const getEffectivePermissions = query({
   args: {
+    tenantId: v.string(),
     userId: v.string(),
     rolePermissions: v.record(v.string(), v.array(v.string())),
-    scope: v.optional(
-      v.object({
-        type: v.string(),
-        id: v.string(),
-      })
-    ),
+    scope: scopeValidator,
   },
   returns: v.object({
     permissions: v.array(v.string()),
@@ -399,7 +408,9 @@ export const getEffectivePermissions = query({
     // Get role assignments
     const roleAssignments = await ctx.db
       .query("roleAssignments")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_tenant_user", (q) =>
+        q.eq("tenantId", args.tenantId).eq("userId", args.userId)
+      )
       .collect();
 
     const validAssignments = roleAssignments.filter((a) => {
@@ -423,7 +434,9 @@ export const getEffectivePermissions = query({
     // Get overrides
     const overrides = await ctx.db
       .query("permissionOverrides")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_tenant_user", (q) =>
+        q.eq("tenantId", args.tenantId).eq("userId", args.userId)
+      )
       .collect();
 
     const validOverrides = overrides.filter((o) => {
@@ -455,13 +468,9 @@ export const getEffectivePermissions = query({
  */
 export const getUsersWithRole = query({
   args: {
+    tenantId: v.string(),
     role: v.string(),
-    scope: v.optional(
-      v.object({
-        type: v.string(),
-        id: v.string(),
-      })
-    ),
+    scope: scopeValidator,
   },
   returns: v.array(
     v.object({
@@ -473,7 +482,9 @@ export const getUsersWithRole = query({
   handler: async (ctx, args) => {
     const assignments = await ctx.db
       .query("roleAssignments")
-      .withIndex("by_role", (q) => q.eq("role", args.role))
+      .withIndex("by_tenant_role", (q) =>
+        q.eq("tenantId", args.tenantId).eq("role", args.role)
+      )
       .collect();
 
     const validAssignments = assignments.filter((a) => {
@@ -515,6 +526,7 @@ const auditEntryShape = v.object({
  */
 export const getAuditLog = query({
   args: {
+    tenantId: v.string(),
     userId: v.optional(v.string()),
     action: v.optional(auditLogActionValidator),
     limit: v.optional(v.number()),
@@ -549,13 +561,35 @@ export const getAuditLog = query({
     if (args.userId !== undefined) {
       dbQuery = ctx.db
         .query("auditLog")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId as string));
+        .withIndex("by_tenant_user", (q) =>
+          q
+            .eq("tenantId", args.tenantId)
+            .eq("userId", args.userId as string)
+        );
     } else if (args.action !== undefined) {
       dbQuery = ctx.db
         .query("auditLog")
-        .withIndex("by_action", (q) => q.eq("action", args.action as "permission_check" | "role_assigned" | "role_revoked" | "permission_granted" | "permission_denied" | "attribute_set" | "attribute_removed"));
+        .withIndex("by_tenant_action", (q) =>
+          q
+            .eq("tenantId", args.tenantId)
+            .eq(
+              "action",
+              args.action as
+                | "permission_check"
+                | "role_assigned"
+                | "role_revoked"
+                | "permission_granted"
+                | "permission_denied"
+                | "attribute_set"
+                | "attribute_removed"
+            )
+        );
     } else {
-      dbQuery = ctx.db.query("auditLog").withIndex("by_timestamp");
+      dbQuery = ctx.db
+        .query("auditLog")
+        .withIndex("by_tenant_timestamp", (q) =>
+          q.eq("tenantId", args.tenantId)
+        );
     }
 
     const ordered = dbQuery.order("desc");
