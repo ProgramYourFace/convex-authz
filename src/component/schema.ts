@@ -184,6 +184,10 @@ export default defineSchema({
         })
       ),
       reason: v.optional(v.string()),
+      // v2: ReBAC relation details
+      relation: v.optional(v.string()),
+      subject: v.optional(v.string()),
+      object: v.optional(v.string()),
     }),
   })
     .index("by_tenant_user", ["tenantId", "userId"])
