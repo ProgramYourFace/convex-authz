@@ -51,6 +51,9 @@ export default defineSchema({
     objectId: v.string(),
     createdBy: v.optional(v.string()),
     createdAt: v.number(),
+    // v2: optional caveat (ABAC condition on an edge)
+    caveat: v.optional(v.string()),         // name of a registered caveat function
+    caveatContext: v.optional(v.any()),     // static context passed to caveat at eval time
   })
     .index("by_tenant_subject", ["tenantId", "subjectType", "subjectId"])
     .index("by_tenant_object", ["tenantId", "objectType", "objectId"])
@@ -84,6 +87,13 @@ export default defineSchema({
     expiresAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
+    // v2: policy evaluation result
+    policyResult: v.optional(v.union(
+      v.literal("allow"),
+      v.literal("deny"),
+      v.literal("deferred"),     // must re-evaluate at read time
+    )),
+    policyName: v.optional(v.string()),
   })
     .index("by_tenant_user", ["tenantId", "userId"])
     .index("by_tenant_user_scope", ["tenantId", "userId", "scopeKey"])
@@ -127,6 +137,8 @@ export default defineSchema({
     inheritedFrom: v.union(v.string(), v.null()),
     createdBy: v.optional(v.string()),
     createdAt: v.number(),
+    // v2: depth for traversal debugging
+    depth: v.optional(v.number()),
   })
     .index("by_tenant_subject", ["tenantId", "subjectKey"])
     .index("by_tenant_object", ["tenantId", "objectKey"])
@@ -153,7 +165,10 @@ export default defineSchema({
       v.literal("permission_granted"),
       v.literal("permission_denied"),
       v.literal("attribute_set"),
-      v.literal("attribute_removed")
+      v.literal("attribute_removed"),
+      v.literal("relation_added"),
+      v.literal("relation_removed"),
+      v.literal("policy_evaluated")
     ),
     userId: v.string(),
     actorId: v.optional(v.string()),
