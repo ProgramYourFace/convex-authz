@@ -770,6 +770,27 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       >;
     };
     unified: {
+      assignRoleUnified: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          assignedBy?: string;
+          enableAudit?: boolean;
+          expiresAt?: number;
+          metadata?: any;
+          policyClassifications?: Record<
+            string,
+            null | "allow" | "deny" | "deferred"
+          >;
+          role: string;
+          rolePermissions: Array<string>;
+          scope?: { id: string; type: string };
+          tenantId: string;
+          userId: string;
+        },
+        string,
+        Name
+      >;
       checkPermission: FunctionReference<
         "query",
         "internal",

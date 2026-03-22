@@ -208,3 +208,155 @@ describe("unified checkPermission", () => {
     expect(result.reason).toBe("Restricted");
   });
 });
+
+describe("assignRoleUnified", () => {
+  it("writes to both roleAssignments and effectivePermissions", async () => {
+    const t = convexTest(schema, modules);
+
+    const assignmentId = await t.mutation(api.unified.assignRoleUnified, {
+      tenantId: TENANT,
+      userId: "user_1",
+      role: "editor",
+      rolePermissions: ["documents:read", "documents:write"],
+      scope: undefined,
+    });
+
+    expect(typeof assignmentId).toBe("string");
+
+    // Verify source table has the row
+    await t.run(async (ctx) => {
+      const assignments = await ctx.db
+        .query("roleAssignments")
+        .withIndex("by_tenant_user_and_role", (q) =>
+          q.eq("tenantId", TENANT).eq("userId", "user_1").eq("role", "editor")
+        )
+        .collect();
+      expect(assignments.length).toBe(1);
+      expect(assignments[0].role).toBe("editor");
+    });
+
+    // Verify effectiveRoles table
+    await t.run(async (ctx) => {
+      const roles = await ctx.db
+        .query("effectiveRoles")
+        .withIndex("by_tenant_user_role_scope", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("userId", "user_1")
+            .eq("role", "editor")
+            .eq("scopeKey", "global")
+        )
+        .collect();
+      expect(roles.length).toBe(1);
+    });
+
+    // Verify effectivePermissions table
+    await t.run(async (ctx) => {
+      const perms = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user", (q) =>
+          q.eq("tenantId", TENANT).eq("userId", "user_1")
+        )
+        .collect();
+      expect(perms.length).toBe(2);
+      const permNames = perms.map((p) => p.permission).sort();
+      expect(permNames).toEqual(["documents:read", "documents:write"]);
+      expect(perms[0].sources).toContain("editor");
+      expect(perms[0].effect).toBe("allow");
+    });
+  });
+
+  it("returns existing ID for duplicate assignment", async () => {
+    const t = convexTest(schema, modules);
+
+    const id1 = await t.mutation(api.unified.assignRoleUnified, {
+      tenantId: TENANT,
+      userId: "user_1",
+      role: "editor",
+      rolePermissions: ["documents:read"],
+      scope: undefined,
+    });
+
+    const id2 = await t.mutation(api.unified.assignRoleUnified, {
+      tenantId: TENANT,
+      userId: "user_1",
+      role: "editor",
+      rolePermissions: ["documents:read"],
+      scope: undefined,
+    });
+
+    expect(id1).toBe(id2);
+
+    // Verify only one row in roleAssignments
+    await t.run(async (ctx) => {
+      const assignments = await ctx.db
+        .query("roleAssignments")
+        .withIndex("by_tenant_user_and_role", (q) =>
+          q.eq("tenantId", TENANT).eq("userId", "user_1").eq("role", "editor")
+        )
+        .collect();
+      expect(assignments.length).toBe(1);
+    });
+  });
+
+  it("skips permissions where policy is deny", async () => {
+    const t = convexTest(schema, modules);
+
+    await t.mutation(api.unified.assignRoleUnified, {
+      tenantId: TENANT,
+      userId: "user_1",
+      role: "editor",
+      rolePermissions: ["documents:read", "documents:delete"],
+      scope: undefined,
+      policyClassifications: {
+        "documents:read": null,
+        "documents:delete": "deny",
+      },
+    });
+
+    await t.run(async (ctx) => {
+      const perms = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user", (q) =>
+          q.eq("tenantId", TENANT).eq("userId", "user_1")
+        )
+        .collect();
+      const permNames = perms.map((p) => p.permission);
+      expect(permNames).toContain("documents:read");
+      expect(permNames).not.toContain("documents:delete");
+    });
+  });
+
+  it("marks deferred policy in effectivePermissions", async () => {
+    const t = convexTest(schema, modules);
+
+    await t.mutation(api.unified.assignRoleUnified, {
+      tenantId: TENANT,
+      userId: "user_1",
+      role: "admin",
+      rolePermissions: ["billing:manage"],
+      scope: undefined,
+      policyClassifications: {
+        "billing:manage": "deferred",
+      },
+    });
+
+    await t.run(async (ctx) => {
+      const perm = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user_permission_scope", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("userId", "user_1")
+            .eq("permission", "billing:manage")
+            .eq("scopeKey", "global")
+        )
+        .unique();
+      expect(perm).not.toBeNull();
+      expect(perm!.policyResult).toBe("deferred");
+      expect(perm!.policyName).toBe("billing:manage");
+      expect(perm!.effect).toBe("allow");
+      expect(perm!.sources).toEqual(["admin"]);
+    });
+  });
+});
