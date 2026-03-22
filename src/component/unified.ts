@@ -832,9 +832,12 @@ export const removeRelationUnified = mutation({
         tenantId: args.tenantId,
         timestamp: now,
         action: "relation_removed",
-        userId: `${args.subjectType}:${args.subjectId}`,
+        userId: args.subjectType === "user" ? args.subjectId : "system",
         details: {
           scope: undefined,
+          relation: args.relation,
+          subject: `${args.subjectType}:${args.subjectId}`,
+          object: `${args.objectType}:${args.objectId}`,
         },
       });
     }
