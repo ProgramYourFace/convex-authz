@@ -10,8 +10,11 @@ import {
   matchesPermissionPattern,
   parsePermission,
   buildPermission,
+  defineTraversalRules,
+  defineRelationPermissions,
+  defineCaveats,
 } from "./index.js";
-import type { PolicyContext } from "./index.js";
+import type { PolicyContext, PolicyDefinition } from "./index.js";
 import type { ComponentApi } from "../component/_generated/component.js";
 
 // ============================================================================
@@ -3045,5 +3048,84 @@ describe("IndexedAuthz (alias) constructor validation", () => {
     expect(
       () => new IndexedAuthz(component, { permissions, roles, tenantId: "my-tenant" })
     ).not.toThrow();
+  });
+});
+
+// ============================================================================
+// v2 constructor options and definition helpers
+// ============================================================================
+
+describe("v2 constructor options and definition helpers", () => {
+  const permissions = definePermissions({ documents: { read: true, write: true } });
+  const roles = defineRoles(permissions, { viewer: { documents: ["read"] } });
+
+  it("Authz accepts v2 constructor options", () => {
+    const component = {} as unknown as ComponentApi;
+    const traversalRules = defineTraversalRules({
+      user: [{ through: "member", via: "group", inherit: "viewer" }],
+    });
+    const relationPermissions = defineRelationPermissions({
+      owner: ["documents:read", "documents:write"],
+    });
+    const caveats = defineCaveats({
+      isOwner: ({ subject, object }) => subject.id === object.id,
+    });
+
+    expect(
+      () =>
+        new Authz(component, {
+          permissions,
+          roles,
+          tenantId: "my-tenant",
+          traversalRules,
+          relationPermissions,
+          caveats,
+        })
+    ).not.toThrow();
+  });
+
+  it("defineTraversalRules returns rules", () => {
+    const rules = {
+      user: [{ through: "member", via: "group", inherit: "viewer" }],
+    };
+    expect(defineTraversalRules(rules)).toBe(rules);
+  });
+
+  it("defineRelationPermissions returns map", () => {
+    const map = {
+      owner: ["documents:read", "documents:write"],
+      viewer: ["documents:read"],
+    };
+    expect(defineRelationPermissions(map)).toBe(map);
+  });
+
+  it("defineCaveats returns caveats", () => {
+    const caveats = {
+      isOwner: ({ subject, object }: { subject: { type: string; id: string }; object: { type: string; id: string }; relation: string; caveatContext: unknown }) =>
+        subject.id === object.id,
+    };
+    expect(defineCaveats(caveats)).toBe(caveats);
+  });
+
+  it("PolicyDefinition supports type field", () => {
+    const policies: PolicyDefinition = {
+      expensiveCheck: {
+        type: "deferred",
+        condition: async (ctx) => ctx.subject.roles.includes("admin"),
+        message: "Must be admin",
+      },
+      quickCheck: {
+        type: "static",
+        condition: (ctx) => ctx.subject.roles.length > 0,
+      },
+      defaultCheck: {
+        // no type field — defaults to "static"
+        condition: () => true,
+      },
+    };
+
+    expect(policies.expensiveCheck.type).toBe("deferred");
+    expect(policies.quickCheck.type).toBe("static");
+    expect(policies.defaultCheck.type).toBeUndefined();
   });
 });

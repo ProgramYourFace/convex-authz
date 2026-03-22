@@ -76,14 +76,45 @@ export type RoleDefinition<P extends PermissionDefinition> = Record<
 /**
  * Policy definition for ABAC
  * Condition may be sync or async (e.g. for DB or API checks).
+ * The optional `type` field classifies the policy as "static" (default) or "deferred".
  */
 export type PolicyDefinition = Record<
   string,
   {
+    type?: "static" | "deferred"; // default: "static"
     condition: (ctx: PolicyContext) => boolean | Promise<boolean>;
     message?: string;
   }
 >;
+
+/**
+ * Rules for traversing relations between entity types.
+ * Each key is a source entity type; its value is an array of traversal hops.
+ */
+export type TraversalRules = Record<
+  string,
+  Array<{
+    through: string;
+    via: string;
+    inherit: string;
+  }>
+>;
+
+/**
+ * Maps relation names to the permission strings they grant.
+ */
+export type RelationPermissionMap = Record<string, string[]>;
+
+/**
+ * A caveat function that adds extra conditions to a permission check.
+ * Returns `true` when the permission should be granted, `false` to deny.
+ */
+export type CaveatFunction = (context: {
+  subject: { type: string; id: string };
+  object: { type: string; id: string };
+  relation: string;
+  caveatContext: unknown;
+}) => boolean | Promise<boolean>;
 
 /**
  * Policy evaluation context
@@ -357,6 +388,10 @@ export class Authz<
       policies?: Policy;
       defaultActorId?: string;
       tenantId: string;
+      // v2:
+      traversalRules?: TraversalRules;
+      relationPermissions?: RelationPermissionMap;
+      caveats?: Record<string, CaveatFunction>;
     }
   ) {
     validateTenantId(options.tenantId);
@@ -1033,6 +1068,60 @@ export class Authz<
       tenantId: this.options.tenantId,
     });
   }
+}
+
+// ============================================================================
+// v2 Definition Helpers
+// ============================================================================
+
+/**
+ * Define traversal rules for ReBAC relation-graph walks.
+ * This is a type-safe identity helper — it returns the value unchanged.
+ *
+ * @example
+ * ```ts
+ * const traversalRules = defineTraversalRules({
+ *   user: [{ through: "member", via: "group", inherit: "viewer" }],
+ * });
+ * ```
+ */
+export function defineTraversalRules(rules: TraversalRules): TraversalRules {
+  return rules;
+}
+
+/**
+ * Define a map from relation names to the permission strings they grant.
+ * This is a type-safe identity helper — it returns the value unchanged.
+ *
+ * @example
+ * ```ts
+ * const relationPermissions = defineRelationPermissions({
+ *   owner: ["documents:read", "documents:write"],
+ *   viewer: ["documents:read"],
+ * });
+ * ```
+ */
+export function defineRelationPermissions(
+  map: RelationPermissionMap
+): RelationPermissionMap {
+  return map;
+}
+
+/**
+ * Define named caveat functions for fine-grained permission conditions.
+ * This is a type-safe identity helper — it returns the value unchanged.
+ *
+ * @example
+ * ```ts
+ * const caveats = defineCaveats({
+ *   isOwner: ({ subject, object }) => subject.id === object.id,
+ * });
+ * ```
+ */
+export function defineCaveats(
+  caveats: Record<string, CaveatFunction>
+): Record<string, CaveatFunction> {
+  return caveats;
 }
 
 /**
