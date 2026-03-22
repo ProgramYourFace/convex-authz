@@ -1107,3 +1107,433 @@ export const denyPermissionUnified = mutation({
     return overrideId;
   },
 });
+
+const MAX_BULK_ROLES = 100;
+
+/**
+ * Unified Bulk Role Assignment
+ *
+ * Assigns multiple roles to a user, writing to BOTH source tables (roleAssignments)
+ * AND effective tables (effectiveRoles, effectivePermissions) in a single transaction.
+ */
+export const assignRolesUnified = mutation({
+  args: {
+    tenantId: v.string(),
+    userId: v.string(),
+    roles: v.array(v.object({
+      role: v.string(),
+      scope: scopeValidator,
+      expiresAt: v.optional(v.number()),
+      metadata: v.optional(v.any()),
+    })),
+    rolePermissionsMap: v.record(v.string(), v.array(v.string())),
+    assignedBy: v.optional(v.string()),
+    enableAudit: v.optional(v.boolean()),
+    policyClassifications: v.optional(v.record(v.string(), v.union(
+      v.null(), v.literal("allow"), v.literal("deny"), v.literal("deferred"),
+    ))),
+  },
+  returns: v.object({ assigned: v.number(), assignmentIds: v.array(v.string()) }),
+  handler: async (ctx, args) => {
+    if (args.roles.length === 0) {
+      return { assigned: 0, assignmentIds: [] };
+    }
+    if (args.roles.length > MAX_BULK_ROLES) {
+      throw new Error(
+        `roles must not exceed ${MAX_BULK_ROLES} items (got ${args.roles.length})`,
+      );
+    }
+
+    const now = Date.now();
+    const assignmentIds: string[] = [];
+    let assigned = 0;
+
+    for (const item of args.roles) {
+      // 1. Compute scopeKey
+      const scopeKey = item.scope
+        ? `${item.scope.type}:${item.scope.id}`
+        : "global";
+
+      // 2. Check for duplicate in roleAssignments
+      const existing = await ctx.db
+        .query("roleAssignments")
+        .withIndex("by_tenant_user_and_role", (q) =>
+          q
+            .eq("tenantId", args.tenantId)
+            .eq("userId", args.userId)
+            .eq("role", item.role)
+        )
+        .collect();
+
+      let isDuplicate = false;
+      for (const row of existing) {
+        if (matchesScope(row.scope, item.scope) && !isExpired(row.expiresAt)) {
+          isDuplicate = true;
+          break;
+        }
+      }
+
+      if (isDuplicate) {
+        // Skip duplicates silently (idempotent, like assignRoleUnified)
+        continue;
+      }
+
+      // 3. Insert into roleAssignments (source of truth)
+      const assignmentId = await ctx.db.insert("roleAssignments", {
+        tenantId: args.tenantId,
+        userId: args.userId,
+        role: item.role,
+        scope: item.scope,
+        expiresAt: item.expiresAt,
+        assignedBy: args.assignedBy,
+        metadata: item.metadata,
+      });
+      assignmentIds.push(assignmentId as string);
+      assigned++;
+
+      // 4. Upsert into effectiveRoles
+      const existingEffectiveRole = await ctx.db
+        .query("effectiveRoles")
+        .withIndex("by_tenant_user_role_scope", (q) =>
+          q
+            .eq("tenantId", args.tenantId)
+            .eq("userId", args.userId)
+            .eq("role", item.role)
+            .eq("scopeKey", scopeKey)
+        )
+        .unique();
+
+      if (existingEffectiveRole) {
+        await ctx.db.patch(existingEffectiveRole._id, {
+          assignedBy: args.assignedBy,
+          expiresAt: item.expiresAt,
+          updatedAt: now,
+        });
+      } else {
+        await ctx.db.insert("effectiveRoles", {
+          tenantId: args.tenantId,
+          userId: args.userId,
+          role: item.role,
+          scopeKey,
+          scope: item.scope,
+          assignedBy: args.assignedBy,
+          expiresAt: item.expiresAt,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+
+      // 5. Process each permission the role grants (from rolePermissionsMap)
+      const permissions = args.rolePermissionsMap[item.role] ?? [];
+      for (const permission of permissions) {
+        const classification = args.policyClassifications?.[permission] ?? null;
+
+        // Skip permissions where policy evaluated to "deny"
+        if (classification === "deny") {
+          continue;
+        }
+
+        const existingPerm = await ctx.db
+          .query("effectivePermissions")
+          .withIndex("by_tenant_user_permission_scope", (q) =>
+            q
+              .eq("tenantId", args.tenantId)
+              .eq("userId", args.userId)
+              .eq("permission", permission)
+              .eq("scopeKey", scopeKey)
+          )
+          .unique();
+
+        if (existingPerm) {
+          // Add role to sources if not already present
+          const sources = existingPerm.sources.includes(item.role)
+            ? existingPerm.sources
+            : [...existingPerm.sources, item.role];
+          await ctx.db.patch(existingPerm._id, {
+            sources,
+            updatedAt: now,
+          });
+        } else {
+          await ctx.db.insert("effectivePermissions", {
+            tenantId: args.tenantId,
+            userId: args.userId,
+            permission,
+            scopeKey,
+            scope: item.scope,
+            effect: "allow",
+            sources: [item.role],
+            expiresAt: item.expiresAt,
+            createdAt: now,
+            updatedAt: now,
+            ...(classification === "deferred"
+              ? { policyResult: "deferred", policyName: permission }
+              : classification === "allow"
+                ? { policyResult: "allow" }
+                : {}),
+          });
+        }
+      }
+
+      // 6. Audit log entry per role if enableAudit
+      if (args.enableAudit) {
+        await ctx.db.insert("auditLog", {
+          tenantId: args.tenantId,
+          timestamp: now,
+          action: "role_assigned",
+          userId: args.userId,
+          actorId: args.assignedBy,
+          details: {
+            role: item.role,
+            scope: item.scope,
+          },
+        });
+      }
+    }
+
+    return { assigned, assignmentIds };
+  },
+});
+
+/**
+ * Unified Bulk Role Revocation
+ *
+ * Revokes multiple roles from a user, removing from BOTH source tables (roleAssignments)
+ * AND effective tables (effectiveRoles, effectivePermissions) in a single transaction.
+ */
+export const revokeRolesUnified = mutation({
+  args: {
+    tenantId: v.string(),
+    userId: v.string(),
+    roles: v.array(v.object({
+      role: v.string(),
+      scope: scopeValidator,
+    })),
+    rolePermissionsMap: v.record(v.string(), v.array(v.string())),
+    revokedBy: v.optional(v.string()),
+    enableAudit: v.optional(v.boolean()),
+  },
+  returns: v.object({ revoked: v.number() }),
+  handler: async (ctx, args) => {
+    if (args.roles.length === 0) {
+      return { revoked: 0 };
+    }
+    if (args.roles.length > MAX_BULK_ROLES) {
+      throw new Error(
+        `roles must not exceed ${MAX_BULK_ROLES} items (got ${args.roles.length})`,
+      );
+    }
+
+    const now = Date.now();
+    let revoked = 0;
+
+    for (const item of args.roles) {
+      // 1. Compute scopeKey
+      const scopeKey = item.scope
+        ? `${item.scope.type}:${item.scope.id}`
+        : "global";
+
+      // 2. Find the role assignment in roleAssignments
+      const assignments = await ctx.db
+        .query("roleAssignments")
+        .withIndex("by_tenant_user_and_role", (q) =>
+          q
+            .eq("tenantId", args.tenantId)
+            .eq("userId", args.userId)
+            .eq("role", item.role)
+        )
+        .collect();
+
+      const assignment = assignments.find(
+        (row) => matchesScope(row.scope, item.scope) && !isExpired(row.expiresAt)
+      );
+
+      if (!assignment) {
+        continue;
+      }
+
+      // 3. Delete from roleAssignments
+      await ctx.db.delete(assignment._id);
+      revoked++;
+
+      // 4. Delete from effectiveRoles
+      const effectiveRole = await ctx.db
+        .query("effectiveRoles")
+        .withIndex("by_tenant_user_role_scope", (q) =>
+          q
+            .eq("tenantId", args.tenantId)
+            .eq("userId", args.userId)
+            .eq("role", item.role)
+            .eq("scopeKey", scopeKey)
+        )
+        .unique();
+
+      if (effectiveRole) {
+        await ctx.db.delete(effectiveRole._id);
+      }
+
+      // 5. For each permission the role grants, update effectivePermissions
+      const permissions = args.rolePermissionsMap[item.role] ?? [];
+      for (const permission of permissions) {
+        const effectivePerm = await ctx.db
+          .query("effectivePermissions")
+          .withIndex("by_tenant_user_permission_scope", (q) =>
+            q
+              .eq("tenantId", args.tenantId)
+              .eq("userId", args.userId)
+              .eq("permission", permission)
+              .eq("scopeKey", scopeKey)
+          )
+          .unique();
+
+        if (!effectivePerm) continue;
+
+        const updatedSources = effectivePerm.sources.filter(
+          (s) => s !== item.role
+        );
+
+        if (updatedSources.length === 0 && !effectivePerm.directGrant && !effectivePerm.directDeny) {
+          // No more sources, no direct grant, no direct deny — delete the row
+          await ctx.db.delete(effectivePerm._id);
+        } else if (updatedSources.length !== effectivePerm.sources.length) {
+          // Role was in sources; patch with updated array
+          await ctx.db.patch(effectivePerm._id, {
+            sources: updatedSources,
+            updatedAt: now,
+          });
+        }
+      }
+
+      // 6. Audit log if enableAudit
+      if (args.enableAudit) {
+        await ctx.db.insert("auditLog", {
+          tenantId: args.tenantId,
+          timestamp: now,
+          action: "role_revoked",
+          userId: args.userId,
+          actorId: args.revokedBy,
+          details: {
+            role: item.role,
+            scope: item.scope,
+          },
+        });
+      }
+    }
+
+    return { revoked };
+  },
+});
+
+/**
+ * Unified Revoke All Roles
+ *
+ * Revokes all roles from a user (optionally scoped), removing from BOTH source tables
+ * (roleAssignments) AND effective tables (effectiveRoles, effectivePermissions) in a single transaction.
+ */
+export const revokeAllRolesUnified = mutation({
+  args: {
+    tenantId: v.string(),
+    userId: v.string(),
+    scope: scopeValidator,
+    rolePermissionsMap: v.record(v.string(), v.array(v.string())),
+    revokedBy: v.optional(v.string()),
+    enableAudit: v.optional(v.boolean()),
+  },
+  returns: v.number(), // count of roles revoked
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // 1. Find all roleAssignments for user
+    const assignments = await ctx.db
+      .query("roleAssignments")
+      .withIndex("by_tenant_user", (q) =>
+        q.eq("tenantId", args.tenantId).eq("userId", args.userId)
+      )
+      .collect();
+
+    let revokedCount = 0;
+
+    for (const assignment of assignments) {
+      // Filter by scope if provided
+      if (args.scope) {
+        if (!assignment.scope) continue;
+        if (
+          assignment.scope.type !== args.scope.type ||
+          assignment.scope.id !== args.scope.id
+        ) {
+          continue;
+        }
+      }
+
+      const scopeKey = assignment.scope
+        ? `${assignment.scope.type}:${assignment.scope.id}`
+        : "global";
+
+      // 2. Delete from roleAssignments
+      await ctx.db.delete(assignment._id);
+      revokedCount++;
+
+      // 3. Delete from effectiveRoles
+      const effectiveRole = await ctx.db
+        .query("effectiveRoles")
+        .withIndex("by_tenant_user_role_scope", (q) =>
+          q
+            .eq("tenantId", args.tenantId)
+            .eq("userId", args.userId)
+            .eq("role", assignment.role)
+            .eq("scopeKey", scopeKey)
+        )
+        .unique();
+
+      if (effectiveRole) {
+        await ctx.db.delete(effectiveRole._id);
+      }
+
+      // 4. For each permission the role grants, update effectivePermissions
+      const permissions = args.rolePermissionsMap[assignment.role] ?? [];
+      for (const permission of permissions) {
+        const effectivePerm = await ctx.db
+          .query("effectivePermissions")
+          .withIndex("by_tenant_user_permission_scope", (q) =>
+            q
+              .eq("tenantId", args.tenantId)
+              .eq("userId", args.userId)
+              .eq("permission", permission)
+              .eq("scopeKey", scopeKey)
+          )
+          .unique();
+
+        if (!effectivePerm) continue;
+
+        const updatedSources = effectivePerm.sources.filter(
+          (s) => s !== assignment.role
+        );
+
+        if (updatedSources.length === 0 && !effectivePerm.directGrant && !effectivePerm.directDeny) {
+          await ctx.db.delete(effectivePerm._id);
+        } else if (updatedSources.length !== effectivePerm.sources.length) {
+          await ctx.db.patch(effectivePerm._id, {
+            sources: updatedSources,
+            updatedAt: now,
+          });
+        }
+      }
+
+      // 5. Audit log if enableAudit
+      if (args.enableAudit) {
+        await ctx.db.insert("auditLog", {
+          tenantId: args.tenantId,
+          timestamp: now,
+          action: "role_revoked",
+          userId: args.userId,
+          actorId: args.revokedBy,
+          details: {
+            role: assignment.role,
+            scope: assignment.scope,
+          },
+        });
+      }
+    }
+
+    return revokedCount;
+  },
+});
