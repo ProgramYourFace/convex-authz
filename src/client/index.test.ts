@@ -1173,7 +1173,7 @@ describe("Authz class", () => {
       );
       expect(result).toBe("attr_id");
       expect(ctx.runMutation).toHaveBeenCalledWith(
-        component.mutations.setAttribute,
+        component.unified.setAttributeWithRecompute,
         expect.objectContaining({
           userId: "user_123",
           key: "department",
@@ -1194,7 +1194,7 @@ describe("Authz class", () => {
 
       await authz.setAttribute(ctx, "user_123", "key", "val", "actor_1");
       expect(ctx.runMutation).toHaveBeenCalledWith(
-        component.mutations.setAttribute,
+        component.unified.setAttributeWithRecompute,
         expect.objectContaining({ setBy: "actor_1", tenantId: "test-tenant" })
       );
     });
@@ -1214,7 +1214,7 @@ describe("Authz class", () => {
 
       await authz.setAttribute(ctx, "user_123", "key", "val");
       expect(ctx.runMutation).toHaveBeenCalledWith(
-        component.mutations.setAttribute,
+        component.unified.setAttributeWithRecompute,
         expect.objectContaining({ setBy: "default_actor", tenantId: "test-tenant" })
       );
     });
@@ -2004,7 +2004,7 @@ describe("input validation", () => {
       ).rejects.toThrow("scope must have non-empty type when provided");
     });
 
-    it("delegates relation arg validation to backend (no client-side validation)", async () => {
+    it("validates relation args client-side", async () => {
       const component = createMockComponent();
       const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = {
@@ -2012,14 +2012,14 @@ describe("input validation", () => {
         runMutation: vi.fn().mockResolvedValue("id"),
       };
 
-      // Authz does not validate relation args client-side; calls pass through to backend
-      await expect(
-        authz.hasRelation(ctx, { type: "", id: "alice" }, "member", { type: "team", id: "sales" })
-      ).resolves.toBe(false);
-
+      // addRelation and removeRelation validate relation args
       await expect(
         authz.addRelation(ctx, { type: "user", id: "alice" }, "", { type: "team", id: "sales" })
-      ).resolves.toBe("id");
+      ).rejects.toThrow();
+
+      await expect(
+        authz.removeRelation(ctx, { type: "", id: "alice" }, "member", { type: "team", id: "sales" })
+      ).rejects.toThrow();
     });
   });
 });
