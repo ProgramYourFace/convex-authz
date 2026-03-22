@@ -964,50 +964,59 @@ export const cleanupExpired = mutation({
     expiredRoles: v.number(),
   }),
   handler: async (ctx, args) => {
+    const CLEANUP_BATCH = 500;
     const now = Date.now();
     let expiredPermissions = 0;
     let expiredRoles = 0;
 
-    if (args.tenantId) {
-      const permissions = await ctx.db
-        .query("effectivePermissions")
-        .withIndex("by_tenant_user", (q) => q.eq("tenantId", args.tenantId!))
-        .collect();
+    // Clean up expired effective permissions in batches
+    while (true) {
+      const permissions = args.tenantId
+        ? await ctx.db
+            .query("effectivePermissions")
+            .withIndex("by_tenant_user", (q) =>
+              q.eq("tenantId", args.tenantId!),
+            )
+            .take(CLEANUP_BATCH)
+        : await ctx.db
+            .query("effectivePermissions")
+            .order("asc")
+            .take(CLEANUP_BATCH);
+      if (permissions.length === 0) break;
+      let deletedAny = false;
       for (const perm of permissions) {
         if (perm.expiresAt && perm.expiresAt < now) {
           await ctx.db.delete(perm._id);
           expiredPermissions++;
+          deletedAny = true;
         }
       }
+      if (permissions.length < CLEANUP_BATCH || !deletedAny) break;
+    }
 
-      const roles = await ctx.db
-        .query("effectiveRoles")
-        .withIndex("by_tenant_user", (q) => q.eq("tenantId", args.tenantId!))
-        .collect();
+    // Clean up expired effective roles in batches
+    while (true) {
+      const roles = args.tenantId
+        ? await ctx.db
+            .query("effectiveRoles")
+            .withIndex("by_tenant_user", (q) =>
+              q.eq("tenantId", args.tenantId!),
+            )
+            .take(CLEANUP_BATCH)
+        : await ctx.db
+            .query("effectiveRoles")
+            .order("asc")
+            .take(CLEANUP_BATCH);
+      if (roles.length === 0) break;
+      let deletedAny = false;
       for (const role of roles) {
         if (role.expiresAt && role.expiresAt < now) {
           await ctx.db.delete(role._id);
           expiredRoles++;
+          deletedAny = true;
         }
       }
-    } else {
-      const allPermissions = await ctx.db
-        .query("effectivePermissions")
-        .collect();
-      for (const perm of allPermissions) {
-        if (perm.expiresAt && perm.expiresAt < now) {
-          await ctx.db.delete(perm._id);
-          expiredPermissions++;
-        }
-      }
-
-      const allRoles = await ctx.db.query("effectiveRoles").collect();
-      for (const role of allRoles) {
-        if (role.expiresAt && role.expiresAt < now) {
-          await ctx.db.delete(role._id);
-          expiredRoles++;
-        }
-      }
+      if (roles.length < CLEANUP_BATCH || !deletedAny) break;
     }
 
     return { expiredPermissions, expiredRoles };
