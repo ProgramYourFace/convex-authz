@@ -158,6 +158,103 @@ export const updateDocument = mutation({
 
 ---
 
+## Unified Authz v2
+
+v2 consolidates everything into a single `Authz` class. If you previously used `IndexedAuthz`, just rename it — the constructor signature is identical.
+
+### What changed
+
+- **One class**: `Authz` replaces both the original `Authz` and `IndexedAuthz`. O(1) reads via pre-computed effective tables are now the default.
+- **ReBAC on `Authz`**: `hasRelation`, `addRelation`, and `removeRelation` are available directly on every `Authz` instance.
+- **ABAC policy types**: Policies are now classified as `"static"` (evaluated at write-time and stored in the effective-permissions table) or `"deferred"` (evaluated at read-time with live request context).
+- **`canWithContext()`**: Check deferred ABAC policies that need runtime context (e.g. IP address, time of day).
+- **`recomputeUser()`**: Rebuild a user's effective-permissions table on demand — useful after a schema change or post-deploy migration.
+- **`withTenant()`**: Get a scoped copy of the client bound to a different tenant for cross-tenant admin operations.
+
+### ReBAC example
+
+```typescript
+// Add a relationship
+await authz.addRelation(ctx, { type: "user", id: userId }, "member", { type: "team", id: teamId });
+
+// Check a relationship
+const isMember = await authz.hasRelation(ctx, { type: "user", id: userId }, "member", { type: "team", id: teamId });
+
+// Remove a relationship
+await authz.removeRelation(ctx, { type: "user", id: userId }, "member", { type: "team", id: teamId });
+```
+
+### Deferred ABAC example
+
+```typescript
+// In definePolicies, mark policies that need request context as "deferred"
+const policies = definePolicies(permissions, {
+  "documents:read": [
+    {
+      type: "static",
+      condition: async (ctx, userId) => {
+        const user = await ctx.db.get(userId);
+        return user?.active === true;
+      },
+    },
+    {
+      type: "deferred",
+      condition: async (ctx, userId, requestContext) => {
+        return requestContext?.ipAllowlisted === true;
+      },
+    },
+  ],
+});
+
+// Use canWithContext() when request context is available
+const allowed = await authz.canWithContext(ctx, userId, "documents:read", undefined, {
+  ipAllowlisted: true,
+});
+```
+
+### Post-deploy rebuild
+
+```typescript
+// Rebuild a single user's effective permissions after upgrading
+await authz.recomputeUser(ctx, userId);
+```
+
+### Cross-tenant operations
+
+```typescript
+const otherTenantAuthz = authz.withTenant("other-tenant-id");
+const allowed = await otherTenantAuthz.can(ctx, userId, "documents:read");
+```
+
+### Migration guide: `IndexedAuthz` → `Authz`
+
+```typescript
+// Before (v1)
+import { IndexedAuthz } from "@djpanda/convex-authz";
+const authz = new IndexedAuthz(components.authz, { permissions, roles, tenantId: "my-app" });
+
+// After (v2) — same constructor, just rename the class
+import { Authz } from "@djpanda/convex-authz";
+const authz = new Authz(components.authz, { permissions, roles, tenantId: "my-app" });
+```
+
+After upgrading, run `recomputeUser()` for each existing user to backfill the effective-permissions table:
+
+```typescript
+// one-time migration mutation
+export const backfillEffectivePermissions = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const users = await ctx.db.query("users").collect();
+    for (const user of users) {
+      await authz.recomputeUser(ctx, String(user._id));
+    }
+  },
+});
+```
+
+---
+
 ## React integration
 
 The package provides React hooks and a `PermissionGate` component so your UI can check permissions and roles reactively. Your app must expose Convex queries that wrap the Authz component (e.g. `checkPermission`, `getUserRoles`). The hooks call those queries via Convex’s `useQuery`, so permission and role changes stay up to date without polling.
