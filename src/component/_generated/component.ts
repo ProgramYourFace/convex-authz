@@ -115,7 +115,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       cleanupExpired: FunctionReference<
         "mutation",
         "internal",
-        { tenantId: string },
+        { tenantId?: string },
         { expiredPermissions: number; expiredRoles: number },
         Name
       >;
@@ -667,6 +667,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "query",
         "internal",
         {
+          maxBranching?: number;
           maxDepth?: number;
           objectId: string;
           objectType: string;
@@ -765,6 +766,20 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           tenantId: string;
         },
         boolean,
+        Name
+      >;
+    };
+    unified: {
+      checkPermission: FunctionReference<
+        "query",
+        "internal",
+        {
+          permission: string;
+          scope?: { id: string; type: string };
+          tenantId: string;
+          userId: string;
+        },
+        { allowed: boolean; policyName?: string; reason: string; tier: string },
         Name
       >;
     };
