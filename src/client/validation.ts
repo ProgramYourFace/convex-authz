@@ -11,8 +11,13 @@ const MAX_AUDIT_LIMIT = 1000;
 
 /** Maximum number of permissions in a single canAny / checkPermissions call. */
 export const MAX_BULK_PERMISSIONS = 100;
-/** Maximum number of roles in a single assignRoles / revokeRoles call. */
-export const MAX_BULK_ROLES = 100;
+/**
+ * Maximum number of roles in a single assignRoles / revokeRoles call.
+ * Capped at 20 to prevent Convex transaction limit overflow:
+ * 20 roles × ~100 permission lookups = ~2,000 db.query calls (safe, < 4,096 limit)
+ * (100 roles × ~100 lookups would exceed the 4,096 limit)
+ */
+export const MAX_BULK_ROLES = 20;
 
 export interface ScopeLike {
   type: string;

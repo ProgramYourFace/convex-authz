@@ -64,7 +64,7 @@ export const checkPermissionFast = query({
 });
 
 const MAX_BULK_PERMISSIONS = 100;
-const MAX_BULK_ROLES = 100;
+const MAX_BULK_ROLES = 20;
 
 /**
  * Check if user has any of the given permissions (canAny) - batch O(1) lookups.

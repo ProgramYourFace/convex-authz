@@ -1330,20 +1330,38 @@ export const runAuditRetentionCleanup = mutation({
 
     if (maxEntries !== undefined && maxEntries > 0) {
       if (args.tenantId) {
-        // Tenant-scoped: use index to count and delete oldest
-        const allForTenant = await ctx.db
+        // Tenant-scoped: find the newest maxEntries entries to keep,
+        // then delete everything older in batches
+        const keepEntries = await ctx.db
           .query("auditLog")
           .withIndex("by_tenant_timestamp", (q) =>
             q.eq("tenantId", args.tenantId!),
           )
-          .order("asc")
-          .collect();
-        const count = allForTenant.length;
-        if (count > maxEntries) {
-          const toDelete = count - maxEntries;
-          for (let i = 0; i < toDelete; i++) {
-            await ctx.db.delete(allForTenant[i]._id);
-            deletedByCount++;
+          .order("desc")
+          .take(maxEntries);
+        if (keepEntries.length === maxEntries) {
+          // There may be excess entries; delete anything not in the keep set
+          const keepIds = new Set(
+            keepEntries.map((e) => e._id.toString()),
+          );
+          while (true) {
+            const batch = await ctx.db
+              .query("auditLog")
+              .withIndex("by_tenant_timestamp", (q) =>
+                q.eq("tenantId", args.tenantId!),
+              )
+              .order("asc")
+              .take(BATCH_SIZE);
+            if (batch.length === 0) break;
+            let deletedAny = false;
+            for (const doc of batch) {
+              if (!keepIds.has(doc._id.toString())) {
+                await ctx.db.delete(doc._id);
+                deletedByCount++;
+                deletedAny = true;
+              }
+            }
+            if (batch.length < BATCH_SIZE || !deletedAny) break;
           }
         }
       } else {
