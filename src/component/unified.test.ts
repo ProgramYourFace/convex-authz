@@ -549,6 +549,156 @@ describe("grantPermissionUnified", () => {
   });
 });
 
+describe("setAttributeWithRecompute", () => {
+  it("writes attribute to userAttributes", async () => {
+    const t = convexTest(schema, modules);
+
+    const attrId = await t.mutation(api.unified.setAttributeWithRecompute, {
+      tenantId: TENANT,
+      userId: "user_1",
+      key: "department",
+      value: "engineering",
+    });
+
+    expect(typeof attrId).toBe("string");
+
+    await t.run(async (ctx) => {
+      const attr = await ctx.db
+        .query("userAttributes")
+        .withIndex("by_tenant_user_and_key", (q) =>
+          q.eq("tenantId", TENANT).eq("userId", "user_1").eq("key", "department")
+        )
+        .unique();
+      expect(attr).not.toBeNull();
+      expect(attr!.value).toBe("engineering");
+    });
+  });
+
+  it("updates existing attribute", async () => {
+    const t = convexTest(schema, modules);
+
+    // Set attribute first time
+    const id1 = await t.mutation(api.unified.setAttributeWithRecompute, {
+      tenantId: TENANT,
+      userId: "user_1",
+      key: "department",
+      value: "engineering",
+    });
+
+    // Set same attribute with new value
+    const id2 = await t.mutation(api.unified.setAttributeWithRecompute, {
+      tenantId: TENANT,
+      userId: "user_1",
+      key: "department",
+      value: "sales",
+    });
+
+    // Same row should be updated (same ID)
+    expect(id1).toBe(id2);
+
+    await t.run(async (ctx) => {
+      const attrs = await ctx.db
+        .query("userAttributes")
+        .withIndex("by_tenant_user_and_key", (q) =>
+          q.eq("tenantId", TENANT).eq("userId", "user_1").eq("key", "department")
+        )
+        .collect();
+      // Only one row should exist
+      expect(attrs.length).toBe(1);
+      expect(attrs[0].value).toBe("sales");
+    });
+  });
+
+  it("updates effectivePermissions based on policy re-evaluation", async () => {
+    const t = convexTest(schema, modules);
+
+    // First assign a role with a deferred policy
+    await t.mutation(api.unified.assignRoleUnified, {
+      tenantId: TENANT,
+      userId: "user_1",
+      role: "admin",
+      rolePermissions: ["billing:manage"],
+      scope: undefined,
+      policyClassifications: {
+        "billing:manage": "deferred",
+      },
+    });
+
+    // Verify it starts as deferred
+    await t.run(async (ctx) => {
+      const perm = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user_permission_scope", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("userId", "user_1")
+            .eq("permission", "billing:manage")
+            .eq("scopeKey", "global")
+        )
+        .unique();
+      expect(perm).not.toBeNull();
+      expect(perm!.policyResult).toBe("deferred");
+      expect(perm!.policyName).toBe("billing:manage");
+    });
+
+    // Now set an attribute and provide policy re-evaluation results
+    // Simulate: attribute change causes policy to evaluate to "deny"
+    await t.mutation(api.unified.setAttributeWithRecompute, {
+      tenantId: TENANT,
+      userId: "user_1",
+      key: "mfa_enabled",
+      value: false,
+      policyReEvaluations: {
+        "billing:manage": "deny",
+      },
+    });
+
+    // Verify effectivePermissions was updated
+    await t.run(async (ctx) => {
+      const perm = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user_permission_scope", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("userId", "user_1")
+            .eq("permission", "billing:manage")
+            .eq("scopeKey", "global")
+        )
+        .unique();
+      expect(perm).not.toBeNull();
+      expect(perm!.policyResult).toBe("deny");
+    });
+
+    // Set attribute again so policy now evaluates to "allow"
+    await t.mutation(api.unified.setAttributeWithRecompute, {
+      tenantId: TENANT,
+      userId: "user_1",
+      key: "mfa_enabled",
+      value: true,
+      policyReEvaluations: {
+        "billing:manage": "allow",
+      },
+    });
+
+    // Verify effectivePermissions was restored to allow
+    await t.run(async (ctx) => {
+      const perm = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user_permission_scope", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("userId", "user_1")
+            .eq("permission", "billing:manage")
+            .eq("scopeKey", "global")
+        )
+        .unique();
+      expect(perm).not.toBeNull();
+      expect(perm!.policyResult).toBe("allow");
+      expect(perm!.effect).toBe("allow");
+    });
+  });
+});
+
 describe("denyPermissionUnified", () => {
   it("overrides existing allow", async () => {
     const t = convexTest(schema, modules);

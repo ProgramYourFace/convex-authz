@@ -543,6 +543,126 @@ export const grantPermissionUnified = mutation({
 });
 
 /**
+ * Set Attribute With Recompute
+ *
+ * Writes a user attribute to userAttributes AND re-evaluates static policies
+ * for that user by accepting pre-evaluated policy results from the client layer.
+ *
+ * The key insight: ABAC policy functions live in client-side TypeScript code,
+ * NOT in the Convex component. The client pre-evaluates policies with the new
+ * attribute value and passes the results as policyReEvaluations.
+ */
+export const setAttributeWithRecompute = mutation({
+  args: {
+    tenantId: v.string(),
+    userId: v.string(),
+    key: v.string(),
+    value: v.any(),
+    setBy: v.optional(v.string()),
+    enableAudit: v.optional(v.boolean()),
+    // v2: pre-evaluated policy results from client
+    // Map of permission -> new policy result after attribute change
+    policyReEvaluations: v.optional(v.record(v.string(), v.union(
+      v.literal("allow"),
+      v.literal("deny"),
+    ))),
+  },
+  returns: v.string(), // attribute ID
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // 1. Upsert into userAttributes using "by_tenant_user_and_key" index
+    const existingAttr = await ctx.db
+      .query("userAttributes")
+      .withIndex("by_tenant_user_and_key", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("userId", args.userId)
+          .eq("key", args.key)
+      )
+      .unique();
+
+    let attributeId: string;
+
+    if (existingAttr) {
+      await ctx.db.patch(existingAttr._id, { value: args.value });
+      attributeId = existingAttr._id;
+    } else {
+      attributeId = await ctx.db.insert("userAttributes", {
+        tenantId: args.tenantId,
+        userId: args.userId,
+        key: args.key,
+        value: args.value,
+      });
+    }
+
+    // 2. Apply policyReEvaluations to effectivePermissions
+    if (args.policyReEvaluations) {
+      for (const [permission, newResult] of Object.entries(args.policyReEvaluations)) {
+        const effectivePerm = await ctx.db
+          .query("effectivePermissions")
+          .withIndex("by_tenant_user_permission_scope", (q) =>
+            q
+              .eq("tenantId", args.tenantId)
+              .eq("userId", args.userId)
+              .eq("permission", permission)
+              .eq("scopeKey", "global")
+          )
+          .unique();
+
+        if (!effectivePerm || !effectivePerm.policyName) {
+          // Only re-evaluate rows that have a policyName (policy-governed permissions)
+          continue;
+        }
+
+        if (newResult === "deny" && effectivePerm.effect === "allow") {
+          if (effectivePerm.directGrant) {
+            // Has a direct grant — update policyResult to deny but keep the row
+            await ctx.db.patch(effectivePerm._id, {
+              policyResult: "deny",
+              updatedAt: now,
+            });
+          } else {
+            // No direct grant — mark as denied via policyResult
+            await ctx.db.patch(effectivePerm._id, {
+              policyResult: "deny",
+              updatedAt: now,
+            });
+          }
+        } else if (newResult === "allow" && effectivePerm.policyResult === "deny") {
+          // Policy now allows — restore allow state
+          await ctx.db.patch(effectivePerm._id, {
+            policyResult: "allow",
+            effect: "allow",
+            updatedAt: now,
+          });
+        }
+      }
+    }
+
+    // 3. Audit log
+    if (args.enableAudit) {
+      await ctx.db.insert("auditLog", {
+        tenantId: args.tenantId,
+        timestamp: now,
+        action: "attribute_set",
+        userId: args.userId,
+        actorId: args.setBy,
+        details: {
+          attribute: {
+            key: args.key,
+            value: args.value,
+          },
+        },
+      });
+    }
+
+    // 4. Return the attribute ID
+    return attributeId;
+  },
+});
+
+/**
  * Unified Permission Deny
  *
  * Writes a direct permission denial to BOTH permissionOverrides (source of truth)
