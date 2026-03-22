@@ -861,6 +861,151 @@ export const removeRelationUnified = mutation({
   },
 });
 
+/**
+ * Recompute User
+ *
+ * Full recomputation of a user's effective tables from source tables.
+ * Designed for post-deploy rebuilds when role<->permission mappings change.
+ *
+ * Algorithm:
+ *   1. Delete all effectiveRoles for this user.
+ *   2. Delete all effectivePermissions for this user that are NOT directGrant or directDeny.
+ *   3. Read all current roleAssignments for this user.
+ *   4. For each non-expired role assignment, re-insert effectiveRoles and upsert effectivePermissions.
+ */
+export const recomputeUser = mutation({
+  args: {
+    tenantId: v.string(),
+    userId: v.string(),
+    rolePermissionsMap: v.record(v.string(), v.array(v.string())),
+    policyClassifications: v.optional(v.record(v.string(), v.union(
+      v.null(),
+      v.literal("allow"),
+      v.literal("deny"),
+      v.literal("deferred"),
+    ))),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // ── Step 1: Delete all effectiveRoles for this user ──────────────────
+    const existingEffectiveRoles = await ctx.db
+      .query("effectiveRoles")
+      .withIndex("by_tenant_user", (q) =>
+        q.eq("tenantId", args.tenantId).eq("userId", args.userId)
+      )
+      .collect();
+
+    for (const row of existingEffectiveRoles) {
+      await ctx.db.delete(row._id);
+    }
+
+    // ── Step 2: Delete non-direct effectivePermissions for this user ─────
+    const existingEffectivePerms = await ctx.db
+      .query("effectivePermissions")
+      .withIndex("by_tenant_user", (q) =>
+        q.eq("tenantId", args.tenantId).eq("userId", args.userId)
+      )
+      .collect();
+
+    for (const row of existingEffectivePerms) {
+      // Keep direct grants and direct denies — those come from permissionOverrides
+      if (row.directGrant === true || row.directDeny === true) {
+        continue;
+      }
+      await ctx.db.delete(row._id);
+    }
+
+    // ── Step 3: Read all current roleAssignments for this user ───────────
+    const roleAssignments = await ctx.db
+      .query("roleAssignments")
+      .withIndex("by_tenant_user", (q) =>
+        q.eq("tenantId", args.tenantId).eq("userId", args.userId)
+      )
+      .collect();
+
+    // ── Step 4: Rebuild effectiveRoles and effectivePermissions ──────────
+    for (const assignment of roleAssignments) {
+      // Skip expired assignments
+      if (assignment.expiresAt !== undefined && assignment.expiresAt < now) {
+        continue;
+      }
+
+      const scopeKey = assignment.scope
+        ? `${assignment.scope.type}:${assignment.scope.id}`
+        : "global";
+
+      // Insert into effectiveRoles
+      await ctx.db.insert("effectiveRoles", {
+        tenantId: args.tenantId,
+        userId: args.userId,
+        role: assignment.role,
+        scopeKey,
+        scope: assignment.scope,
+        assignedBy: assignment.assignedBy,
+        expiresAt: assignment.expiresAt,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      // Look up permissions for this role from rolePermissionsMap
+      const permissions = args.rolePermissionsMap[assignment.role] ?? [];
+
+      for (const permission of permissions) {
+        const classification = args.policyClassifications?.[permission] ?? null;
+
+        // Skip if policy evaluated to "deny"
+        if (classification === "deny") {
+          continue;
+        }
+
+        // Check if an effectivePermissions row already exists (could be a direct grant/deny kept above)
+        const existingPerm = await ctx.db
+          .query("effectivePermissions")
+          .withIndex("by_tenant_user_permission_scope", (q) =>
+            q
+              .eq("tenantId", args.tenantId)
+              .eq("userId", args.userId)
+              .eq("permission", permission)
+              .eq("scopeKey", scopeKey)
+          )
+          .unique();
+
+        if (existingPerm) {
+          // Add role to sources if not already present
+          const sources = existingPerm.sources.includes(assignment.role)
+            ? existingPerm.sources
+            : [...existingPerm.sources, assignment.role];
+          await ctx.db.patch(existingPerm._id, {
+            sources,
+            updatedAt: now,
+          });
+        } else {
+          await ctx.db.insert("effectivePermissions", {
+            tenantId: args.tenantId,
+            userId: args.userId,
+            permission,
+            scopeKey,
+            scope: assignment.scope,
+            effect: "allow",
+            sources: [assignment.role],
+            createdAt: now,
+            updatedAt: now,
+            ...(classification === "deferred"
+              ? { policyResult: "deferred", policyName: permission }
+              : classification === "allow"
+                ? { policyResult: "allow" }
+                : {}),
+          });
+        }
+      }
+    }
+
+    return null;
+  },
+});
+
 export const denyPermissionUnified = mutation({
   args: {
     tenantId: v.string(),
