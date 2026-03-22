@@ -25,31 +25,25 @@ Debug tests: `npm run test:debug` (enables Node inspector, no file parallelism).
 
 ## Architecture
 
-### Dual-Layer Design
+### Unified Architecture (v2)
 
-The core architectural pattern is **source tables + pre-computed indexed tables**:
+One `Authz` class provides O(1) reads, ABAC policy support, and ReBAC — all in one.
 
-- **Source tables** (`roleAssignments`, `userAttributes`, `permissionOverrides`, `relationships`, `auditLog`) store ground-truth authorization data.
-- **Indexed tables** (`effectivePermissions`, `effectiveRoles`, `effectiveRelationships`) store denormalized, pre-computed results for O(1) lookups.
+**Dual-layer design:** Source tables store ground truth; effective tables store pre-computed O(1) lookups. All writes go to BOTH layers via `unified.ts` mutations.
 
-On writes, the indexed layer computes all resulting permissions/roles/relationships and stores them. On reads, it does a direct index lookup on `[userId, permission, scopeKey]`.
+- **Source tables**: `roleAssignments`, `userAttributes`, `permissionOverrides`, `relationships`, `auditLog`
+- **Effective tables**: `effectivePermissions`, `effectiveRoles`, `effectiveRelationships`
 
-### Two Client Classes
+**Permission check (`can()`) tiered resolution:**
+1. O(1) exact lookup in `effectivePermissions` (covers RBAC + overrides)
+2. If `policyResult == "deferred"` → evaluate ABAC policy at read time
+3. Wildcard pattern fallback for `docs:*` style permissions
 
-Both expose the same API but use different component function paths:
+**ABAC policy classification:**
+- **Static** (`type: "static"`) — evaluated at write time, result stored in `effectivePermissions.policyResult`
+- **Deferred** (`type: "deferred"`) — evaluated at read time via `canWithContext()`
 
-| | **Authz** (standard) | **IndexedAuthz** (O(1)) |
-|---|---|---|
-| Reads | `component.queries.*` — evaluates on the fly from source tables | `component.indexed.*Fast` — direct index lookup on effective tables |
-| Writes | `component.mutations.*` — writes only to source tables | `component.indexed.*WithCompute` — writes + pre-computes effective tables |
-
-### Three Authorization Models
-
-| Model | Tables | Component file |
-|---|---|---|
-| **RBAC** — role → permissions mapping with inheritance/composition | `roleAssignments`, `effectiveRoles` | `mutations.ts`, `queries.ts` |
-| **ABAC** — attribute-based policies with sync/async conditions | `userAttributes` | `mutations.ts`, `queries.ts` + policy evaluation in `client/index.ts` |
-| **ReBAC** — relationship tuples with transitive traversal | `relationships`, `effectiveRelationships` | `rebac.ts` |
+**Three authorization models** (RBAC, ABAC, ReBAC) all available on the single `Authz` class. `IndexedAuthz` is a deprecated alias.
 
 ### Scope System
 
@@ -58,18 +52,19 @@ Scope (`{ type: string; id: string }`) enables resource-level permissions. A rol
 ### Key File Map
 
 - `src/component/schema.ts` — 8 tables with all indexes
-- `src/component/mutations.ts` — 16 mutations (source table writes + audit logging)
-- `src/component/queries.ts` — 10 queries (on-the-fly permission evaluation)
-- `src/component/indexed.ts` — 15 functions (O(1) reads + compute-on-write mutations)
-- `src/component/rebac.ts` — 8 functions (relationship tuples + traversal)
+- `src/component/unified.ts` — **v2 core**: tiered checkPermission query + dual-write mutations (assignRoleUnified, revokeRoleUnified, grantPermissionUnified, denyPermissionUnified, addRelationUnified, removeRelationUnified, setAttributeWithRecompute, recomputeUser)
+- `src/component/mutations.ts` — source-table mutations (offboardUser, deprovisionUser, cleanup, audit)
+- `src/component/queries.ts` — read queries (getUserRoles, hasRole, getUserAttributes, getAuditLog). `checkPermission`/`checkPermissions` are now internal.
+- `src/component/indexed.ts` — O(1) read queries (checkPermissionFast, hasRoleFast, hasRelationFast, getUserPermissionsFast, getUserRolesFast). Write mutations are now internal.
+- `src/component/rebac.ts` — relationship traversal (checkRelationWithTraversal, listAccessibleObjects, listUsersWithAccess)
 - `src/component/helpers.ts` — `matchesPermissionPattern`, scope matching, policy context
-- `src/client/index.ts` — `Authz`, `IndexedAuthz` classes + `definePermissions`, `defineRoles`, `definePolicies` helpers
+- `src/client/index.ts` — unified `Authz` class + `definePermissions`, `defineRoles`, `definePolicies`, `defineTraversalRules`, `defineRelationPermissions`, `defineCaveats` helpers. `IndexedAuthz` is a deprecated alias.
 - `src/client/validation.ts` — input validation for client methods
 - `src/react/index.ts` — `AuthzProvider`, `useCanUser`, `useUserRoles`, `PermissionGate`
 
 ### Package Exports
 
-- `.` → `dist/client/index.js` (Authz/IndexedAuthz classes, define* helpers)
+- `.` → `dist/client/index.js` (unified Authz class, define* helpers, deprecated IndexedAuthz alias)
 - `./react` → `dist/react/index.js` (React hooks/components)
 - `./convex.config` → `dist/component/convex.config.js` (component registration)
 
@@ -95,7 +90,9 @@ await t.mutation(api.mutations.assignRole, { userId, role, ... });
 const result = await t.query(api.queries.hasRole, { userId, role, ... });
 ```
 
-Each test gets a fresh database. Test files: `authz.test.ts`, `queries.test.ts`, `indexed.test.ts`, `rebac.test.ts`, `scenarios.test.ts`, `helpers.test.ts`, `client/index.test.ts`, `react/index.test.ts`.
+Each test gets a fresh database. Test files: `authz.test.ts`, `queries.test.ts`, `indexed.test.ts`, `rebac.test.ts`, `scenarios.test.ts`, `helpers.test.ts`, `unified.test.ts`, `unified-e2e.test.ts`, `tenant-isolation.test.ts`, `client/index.test.ts`, `react/index.test.ts`.
+
+After creating new `.ts` files in `src/component/`, run `npm run build:codegen` to regenerate `_generated/api.ts`.
 
 ## Convex Conventions (from .cursor/rules)
 
