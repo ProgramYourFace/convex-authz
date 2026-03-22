@@ -853,6 +853,21 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         string,
         Name
       >;
+      recomputeUser: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          policyClassifications?: Record<
+            string,
+            null | "allow" | "deny" | "deferred"
+          >;
+          rolePermissionsMap: Record<string, Array<string>>;
+          tenantId: string;
+          userId: string;
+        },
+        null,
+        Name
+      >;
       removeRelationUnified: FunctionReference<
         "mutation",
         "internal",

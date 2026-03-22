@@ -906,6 +906,193 @@ describe("removeRelationUnified", () => {
   });
 });
 
+describe("recomputeUser", () => {
+  it("recomputeUser rebuilds effectivePermissions from roleAssignments", async () => {
+    const t = convexTest(schema, modules);
+
+    // Insert a roleAssignment directly (bypassing the unified mutation)
+    await t.run(async (ctx) => {
+      await ctx.db.insert("roleAssignments", {
+        tenantId: TENANT,
+        userId: "user_1",
+        role: "editor",
+        scope: undefined,
+      });
+    });
+
+    // Call recomputeUser with the role->permissions map
+    await t.mutation(api.unified.recomputeUser, {
+      tenantId: TENANT,
+      userId: "user_1",
+      rolePermissionsMap: {
+        editor: ["documents:read", "documents:write"],
+      },
+    });
+
+    // Verify effectivePermissions is populated
+    await t.run(async (ctx) => {
+      const perms = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user", (q) =>
+          q.eq("tenantId", TENANT).eq("userId", "user_1")
+        )
+        .collect();
+      expect(perms.length).toBe(2);
+      const permNames = perms.map((p) => p.permission).sort();
+      expect(permNames).toEqual(["documents:read", "documents:write"]);
+      expect(perms[0].sources).toContain("editor");
+      expect(perms[0].effect).toBe("allow");
+    });
+
+    // Verify effectiveRoles is populated
+    await t.run(async (ctx) => {
+      const roles = await ctx.db
+        .query("effectiveRoles")
+        .withIndex("by_tenant_user", (q) =>
+          q.eq("tenantId", TENANT).eq("userId", "user_1")
+        )
+        .collect();
+      expect(roles.length).toBe(1);
+      expect(roles[0].role).toBe("editor");
+      expect(roles[0].scopeKey).toBe("global");
+    });
+  });
+
+  it("recomputeUser preserves directGrant entries", async () => {
+    const t = convexTest(schema, modules);
+
+    // Create a direct grant via grantPermissionUnified
+    await t.mutation(api.unified.grantPermissionUnified, {
+      tenantId: TENANT,
+      userId: "user_1",
+      permission: "billing:manage",
+      scope: undefined,
+      reason: "Special admin access",
+    });
+
+    // Insert a roleAssignment
+    await t.run(async (ctx) => {
+      await ctx.db.insert("roleAssignments", {
+        tenantId: TENANT,
+        userId: "user_1",
+        role: "viewer",
+        scope: undefined,
+      });
+    });
+
+    // Recompute — the direct grant should survive
+    await t.mutation(api.unified.recomputeUser, {
+      tenantId: TENANT,
+      userId: "user_1",
+      rolePermissionsMap: {
+        viewer: ["documents:read"],
+      },
+    });
+
+    // Verify the direct grant is still there
+    await t.run(async (ctx) => {
+      const perm = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user_permission_scope", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("userId", "user_1")
+            .eq("permission", "billing:manage")
+            .eq("scopeKey", "global")
+        )
+        .unique();
+      expect(perm).not.toBeNull();
+      expect(perm!.directGrant).toBe(true);
+      expect(perm!.effect).toBe("allow");
+      expect(perm!.reason).toBe("Special admin access");
+    });
+
+    // Verify role-derived permission was also written
+    await t.run(async (ctx) => {
+      const perm = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user_permission_scope", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("userId", "user_1")
+            .eq("permission", "documents:read")
+            .eq("scopeKey", "global")
+        )
+        .unique();
+      expect(perm).not.toBeNull();
+      expect(perm!.sources).toContain("viewer");
+    });
+  });
+
+  it("recomputeUser clears stale effective entries", async () => {
+    const t = convexTest(schema, modules);
+
+    // Manually insert a stale effectivePermission (not a direct grant)
+    await t.run(async (ctx) => {
+      await ctx.db.insert("effectivePermissions", {
+        tenantId: TENANT,
+        userId: "user_1",
+        permission: "stale:permission",
+        scopeKey: "global",
+        effect: "allow",
+        sources: ["old-role"],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    });
+
+    // Insert a roleAssignment for a different role
+    await t.run(async (ctx) => {
+      await ctx.db.insert("roleAssignments", {
+        tenantId: TENANT,
+        userId: "user_1",
+        role: "viewer",
+        scope: undefined,
+      });
+    });
+
+    // Recompute — stale entry should be gone
+    await t.mutation(api.unified.recomputeUser, {
+      tenantId: TENANT,
+      userId: "user_1",
+      rolePermissionsMap: {
+        viewer: ["documents:read"],
+      },
+    });
+
+    // Stale permission should be gone
+    await t.run(async (ctx) => {
+      const stalePerm = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user_permission_scope", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("userId", "user_1")
+            .eq("permission", "stale:permission")
+            .eq("scopeKey", "global")
+        )
+        .unique();
+      expect(stalePerm).toBeNull();
+    });
+
+    // New permission should be present
+    await t.run(async (ctx) => {
+      const newPerm = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user_permission_scope", (q) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("userId", "user_1")
+            .eq("permission", "documents:read")
+            .eq("scopeKey", "global")
+        )
+        .unique();
+      expect(newPerm).not.toBeNull();
+      expect(newPerm!.sources).toContain("viewer");
+    });
+  });
+});
+
 describe("denyPermissionUnified", () => {
   it("overrides existing allow", async () => {
     const t = convexTest(schema, modules);
