@@ -701,7 +701,7 @@ export class Authz<
     validateUserId(userId);
     validateRoleAssignItems(roles, this.options.roles);
     const assignedBy = actorId ?? this.options.defaultActorId;
-    const result = await ctx.runMutation(this.component.mutations.assignRoles, {
+    return ctx.runMutation(this.component.unified.assignRolesUnified, {
       userId,
       roles: roles.map((r) => ({
         role: r.role,
@@ -709,17 +709,11 @@ export class Authz<
         expiresAt: r.expiresAt,
         metadata: r.metadata,
       })),
+      rolePermissionsMap: this.buildRolePermissionsMap(),
       assignedBy,
       enableAudit: true,
       tenantId: this.options.tenantId,
     });
-    // Rebuild effective tables to reflect the new assignments
-    await ctx.runMutation(this.component.unified.recomputeUser, {
-      tenantId: this.options.tenantId,
-      userId,
-      rolePermissionsMap: this.buildRolePermissionsMap(),
-    });
-    return result;
   }
 
   /**
@@ -734,20 +728,14 @@ export class Authz<
   ): Promise<{ revoked: number }> {
     validateUserId(userId);
     validateRoles(roles, this.options.roles);
-    const result = await ctx.runMutation(this.component.mutations.revokeRoles, {
+    return ctx.runMutation(this.component.unified.revokeRolesUnified, {
       userId,
       roles: roles.map((r) => ({ role: r.role, scope: r.scope })),
+      rolePermissionsMap: this.buildRolePermissionsMap(),
       revokedBy: actorId ?? this.options.defaultActorId,
       enableAudit: true,
       tenantId: this.options.tenantId,
     });
-    // Rebuild effective tables to reflect the revocations
-    await ctx.runMutation(this.component.unified.recomputeUser, {
-      tenantId: this.options.tenantId,
-      userId,
-      rolePermissionsMap: this.buildRolePermissionsMap(),
-    });
-    return result;
   }
 
   /**
@@ -762,20 +750,14 @@ export class Authz<
   ): Promise<number> {
     validateUserId(userId);
     validateScope(scope);
-    const result = await ctx.runMutation(this.component.mutations.revokeAllRoles, {
+    return ctx.runMutation(this.component.unified.revokeAllRolesUnified, {
       userId,
       scope,
+      rolePermissionsMap: this.buildRolePermissionsMap(),
       revokedBy: actorId ?? this.options.defaultActorId,
       enableAudit: true,
       tenantId: this.options.tenantId,
     });
-    // Rebuild effective tables to reflect the revocations
-    await ctx.runMutation(this.component.unified.recomputeUser, {
-      tenantId: this.options.tenantId,
-      userId,
-      rolePermissionsMap: this.buildRolePermissionsMap(),
-    });
-    return result;
   }
 
   /**

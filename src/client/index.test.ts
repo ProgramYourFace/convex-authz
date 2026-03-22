@@ -570,6 +570,9 @@ describe("Authz class", () => {
         checkPermission: "unified.checkPermission",
         assignRoleUnified: "unified.assignRoleUnified",
         revokeRoleUnified: "unified.revokeRoleUnified",
+        assignRolesUnified: "unified.assignRolesUnified",
+        revokeRolesUnified: "unified.revokeRolesUnified",
+        revokeAllRolesUnified: "unified.revokeAllRolesUnified",
         grantPermissionUnified: "unified.grantPermissionUnified",
         denyPermissionUnified: "unified.denyPermissionUnified",
         addRelationUnified: "unified.addRelationUnified",
@@ -1045,7 +1048,7 @@ describe("Authz class", () => {
   });
 
   describe("assignRoles", () => {
-    it("should call runMutation with assignRoles", async () => {
+    it("should call runMutation with assignRolesUnified", async () => {
       const component = createMockComponent();
       const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
@@ -1063,13 +1066,14 @@ describe("Authz class", () => {
       expect(result.assigned).toBe(2);
       expect(result.assignmentIds).toEqual(["id1", "id2"]);
       expect(ctx.runMutation).toHaveBeenCalledWith(
-        component.mutations.assignRoles,
+        component.unified.assignRolesUnified,
         expect.objectContaining({
           userId: "user_123",
           roles: [
             { role: "admin", scope: undefined, expiresAt: undefined, metadata: undefined },
             { role: "viewer", scope: { type: "team", id: "t1" }, expiresAt: undefined, metadata: undefined },
           ],
+          rolePermissionsMap: expect.any(Object),
           tenantId: "test-tenant",
         })
       );
@@ -1077,7 +1081,7 @@ describe("Authz class", () => {
   });
 
   describe("revokeRoles", () => {
-    it("should call runMutation with revokeRoles", async () => {
+    it("should call runMutation with revokeRolesUnified", async () => {
       const component = createMockComponent();
       const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
@@ -1091,10 +1095,11 @@ describe("Authz class", () => {
       ]);
       expect(result.revoked).toBe(2);
       expect(ctx.runMutation).toHaveBeenCalledWith(
-        component.mutations.revokeRoles,
+        component.unified.revokeRolesUnified,
         expect.objectContaining({
           userId: "user_123",
           roles: [{ role: "admin", scope: undefined }, { role: "viewer", scope: undefined }],
+          rolePermissionsMap: expect.any(Object),
           tenantId: "test-tenant",
         })
       );
@@ -1102,7 +1107,7 @@ describe("Authz class", () => {
   });
 
   describe("revokeAllRoles", () => {
-    it("should call runMutation with revokeAllRoles", async () => {
+    it("should call runMutation with revokeAllRolesUnified", async () => {
       const component = createMockComponent();
       const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
@@ -1113,10 +1118,11 @@ describe("Authz class", () => {
       const result = await authz.revokeAllRoles(ctx, "user_123");
       expect(result).toBe(3);
       expect(ctx.runMutation).toHaveBeenCalledWith(
-        component.mutations.revokeAllRoles,
+        component.unified.revokeAllRolesUnified,
         expect.objectContaining({
           userId: "user_123",
           scope: undefined,
+          rolePermissionsMap: expect.any(Object),
           tenantId: "test-tenant",
         })
       );
@@ -1825,6 +1831,9 @@ describe("input validation", () => {
         checkPermission: "unified.checkPermission",
         assignRoleUnified: "unified.assignRoleUnified",
         revokeRoleUnified: "unified.revokeRoleUnified",
+        assignRolesUnified: "unified.assignRolesUnified",
+        revokeRolesUnified: "unified.revokeRolesUnified",
+        revokeAllRolesUnified: "unified.revokeAllRolesUnified",
         grantPermissionUnified: "unified.grantPermissionUnified",
         denyPermissionUnified: "unified.denyPermissionUnified",
         addRelationUnified: "unified.addRelationUnified",
@@ -2058,6 +2067,9 @@ describe("IndexedAuthz alias (via Authz)", () => {
         checkPermission: "unified.checkPermission",
         assignRoleUnified: "unified.assignRoleUnified",
         revokeRoleUnified: "unified.revokeRoleUnified",
+        assignRolesUnified: "unified.assignRolesUnified",
+        revokeRolesUnified: "unified.revokeRolesUnified",
+        revokeAllRolesUnified: "unified.revokeAllRolesUnified",
         grantPermissionUnified: "unified.grantPermissionUnified",
         denyPermissionUnified: "unified.denyPermissionUnified",
         addRelationUnified: "unified.addRelationUnified",
@@ -2482,7 +2494,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
   });
 
   describe("assignRoles", () => {
-    it("should call runMutation with assignRoles", async () => {
+    it("should call runMutation with assignRolesUnified", async () => {
       const component = createMockComponent();
       const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
@@ -2499,10 +2511,11 @@ describe("IndexedAuthz alias (via Authz)", () => {
       ]);
       expect(result.assigned).toBe(2);
       expect(ctx.runMutation).toHaveBeenCalledWith(
-        component.mutations.assignRoles,
+        component.unified.assignRolesUnified,
         expect.objectContaining({
           userId: "user_123",
           roles: expect.any(Array),
+          rolePermissionsMap: expect.any(Object),
           tenantId: "test-tenant",
         })
       );
@@ -2510,7 +2523,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
   });
 
   describe("revokeRoles", () => {
-    it("should call runMutation with revokeRoles", async () => {
+    it("should call runMutation with revokeRolesUnified", async () => {
       const component = createMockComponent();
       const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
@@ -2524,10 +2537,11 @@ describe("IndexedAuthz alias (via Authz)", () => {
       ]);
       expect(result.revoked).toBe(2);
       expect(ctx.runMutation).toHaveBeenCalledWith(
-        component.mutations.revokeRoles,
+        component.unified.revokeRolesUnified,
         expect.objectContaining({
           userId: "user_123",
           roles: expect.any(Array),
+          rolePermissionsMap: expect.any(Object),
           tenantId: "test-tenant",
         })
       );
@@ -2535,7 +2549,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
   });
 
   describe("revokeAllRoles", () => {
-    it("should call revokeAllRoles mutation", async () => {
+    it("should call revokeAllRolesUnified mutation", async () => {
       const component = createMockComponent();
       const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
@@ -2546,10 +2560,11 @@ describe("IndexedAuthz alias (via Authz)", () => {
       const result = await authz.revokeAllRoles(ctx, "user_123");
       expect(result).toBe(3);
       expect(ctx.runMutation).toHaveBeenCalledWith(
-        component.mutations.revokeAllRoles,
+        component.unified.revokeAllRolesUnified,
         expect.objectContaining({
           userId: "user_123",
           scope: undefined,
+          rolePermissionsMap: expect.any(Object),
           tenantId: "test-tenant",
         })
       );

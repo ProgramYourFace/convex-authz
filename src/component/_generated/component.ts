@@ -619,6 +619,29 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         string,
         Name
       >;
+      assignRolesUnified: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          assignedBy?: string;
+          enableAudit?: boolean;
+          policyClassifications?: Record<
+            string,
+            null | "allow" | "deny" | "deferred"
+          >;
+          rolePermissionsMap: Record<string, Array<string>>;
+          roles: Array<{
+            expiresAt?: number;
+            metadata?: any;
+            role: string;
+            scope?: { id: string; type: string };
+          }>;
+          tenantId: string;
+          userId: string;
+        },
+        { assigned: number; assignmentIds: Array<string> },
+        Name
+      >;
       assignRoleUnified: FunctionReference<
         "mutation",
         "internal",
@@ -712,6 +735,34 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           tenantId: string;
         },
         boolean,
+        Name
+      >;
+      revokeAllRolesUnified: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          enableAudit?: boolean;
+          revokedBy?: string;
+          rolePermissionsMap: Record<string, Array<string>>;
+          scope?: { id: string; type: string };
+          tenantId: string;
+          userId: string;
+        },
+        number,
+        Name
+      >;
+      revokeRolesUnified: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          enableAudit?: boolean;
+          revokedBy?: string;
+          rolePermissionsMap: Record<string, Array<string>>;
+          roles: Array<{ role: string; scope?: { id: string; type: string } }>;
+          tenantId: string;
+          userId: string;
+        },
+        { revoked: number },
         Name
       >;
       revokeRoleUnified: FunctionReference<
