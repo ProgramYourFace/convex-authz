@@ -164,7 +164,7 @@ describe("unified checkPermission", () => {
 
     expect(result.allowed).toBe(true);
     expect(result.tier).toBe("cached");
-    expect(result.reason).toBe("Allowed by wildcard pattern");
+    expect(result.reason).toBe("Allowed by pattern");
   });
 
   it("deny pattern takes precedence over allow pattern", async () => {
