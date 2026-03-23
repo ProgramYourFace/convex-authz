@@ -78,7 +78,7 @@ export default defineSchema({
     permission: v.string(),
     scopeKey: v.string(),
     scope: scopeValidator,
-    effect: v.string(),
+    effect: v.union(v.literal("allow"), v.literal("deny")),
     sources: v.array(v.string()),
     directGrant: v.optional(v.boolean()),
     directDeny: v.optional(v.boolean()),

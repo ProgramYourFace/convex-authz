@@ -131,6 +131,13 @@ export interface PolicyContext {
     [key: string]: unknown;
   };
   action: string;
+  environment?: {
+    timestamp: number;
+    ip?: string;
+  };
+  hasRole: (role: string) => boolean;
+  hasAttribute: (key: string) => boolean;
+  getAttribute: <T = unknown>(key: string, defaultValue?: T) => T | undefined;
 }
 
 /**
@@ -275,7 +282,11 @@ export function evaluatePolicyCondition(
   condition: (ctx: PolicyContext) => boolean | Promise<boolean>,
   ctx: PolicyContext
 ): Promise<boolean> {
-  return Promise.resolve(condition(ctx));
+  try {
+    return Promise.resolve(condition(ctx)).catch(() => false);
+  } catch {
+    return Promise.resolve(false);
+  }
 }
 
 /**
@@ -466,14 +477,21 @@ export class Authz<
       }),
     ]);
 
+    const roleNames = roles.map((r: { role: string }) => r.role);
+    const attrMap = Object.fromEntries(attrs.map((a: { key: string; value: unknown }) => [a.key, a.value]));
+
     const policyCtx: PolicyContext = {
       subject: {
         userId,
-        roles: roles.map((r: { role: string }) => r.role),
-        attributes: Object.fromEntries(attrs.map((a: { key: string; value: unknown }) => [a.key, a.value])),
+        roles: roleNames,
+        attributes: attrMap,
       },
       resource: scope ? { type: scope.type, id: scope.id, ...requestContext } : requestContext ? { type: "", id: "", ...requestContext } : undefined,
       action: permission,
+      environment: { timestamp: Date.now() },
+      hasRole: (role: string) => roleNames.includes(role),
+      hasAttribute: (key: string) => key in attrMap,
+      getAttribute: <T = unknown>(key: string, defaultValue?: T) => (attrMap[key] as T) ?? defaultValue,
     };
 
     return evaluatePolicyCondition(policy.condition, policyCtx);
@@ -648,12 +666,15 @@ export class Authz<
       role
     );
     // Build policy classifications for permissions being assigned
+    // Static policies (type: "static" or undefined) are classified as "deferred" because
+    // we cannot evaluate them at assignment time without user context (MutationCtx lacks runQuery).
+    // They will be properly evaluated at read time in can().
     const policyClassifications: Record<string, "deferred" | "allow" | "deny" | null> = {};
     if (this.options.policies) {
       for (const perm of rolePermissions) {
         const policy = (this.options.policies as Record<string, { type?: string }>)[perm];
         if (policy) {
-          policyClassifications[perm] = policy.type === "deferred" ? "deferred" : null;
+          policyClassifications[perm] = "deferred";
         }
       }
     }
@@ -712,6 +733,8 @@ export class Authz<
     validateRoleAssignItems(roles, this.options.roles);
     const assignedBy = actorId ?? this.options.defaultActorId;
     // Build policy classifications from all permissions across all roles being assigned
+    // All policies (static and deferred) are classified as "deferred" because
+    // we cannot evaluate static policies at assignment time without user context.
     const policyClassifications: Record<string, "deferred" | "allow" | "deny" | null> = {};
     if (this.options.policies) {
       const rolePermissionsMap = this.buildRolePermissionsMap();
@@ -720,7 +743,7 @@ export class Authz<
         for (const perm of perms) {
           const policy = (this.options.policies as Record<string, { type?: string }>)[perm];
           if (policy) {
-            policyClassifications[perm] = policy.type === "deferred" ? "deferred" : null;
+            policyClassifications[perm] = "deferred";
           }
         }
       }
@@ -891,10 +914,11 @@ export class Authz<
       tenantId: this.options.tenantId,
     });
     // Trigger policy re-evaluation after attribute removal (policies may depend on this attribute)
+    // All policies are classified as "deferred" so they are re-evaluated at read time.
     if (this.options.policies && Object.keys(this.options.policies).length > 0) {
       const policyClassifications: Record<string, "deferred" | "allow" | "deny" | null> = {};
-      for (const [name, policy] of Object.entries(this.options.policies as Record<string, { type?: string }>)) {
-        policyClassifications[name] = (policy.type === "deferred" ? "deferred" : null);
+      for (const [name] of Object.entries(this.options.policies as Record<string, { type?: string }>)) {
+        policyClassifications[name] = "deferred";
       }
       await ctx.runMutation(this.component.unified.recomputeUser, {
         tenantId: this.options.tenantId,
@@ -1041,10 +1065,11 @@ export class Authz<
   async recomputeUser(ctx: MutationCtx | ActionCtx, userId: string): Promise<void> {
     validateUserId(userId);
     // Build policy classifications from policies config
+    // All policies are classified as "deferred" so they are evaluated at read time in can().
     const policyClassifications: Record<string, "deferred" | "allow" | "deny" | null> = {};
     if (this.options.policies) {
-      for (const [name, policy] of Object.entries(this.options.policies as Record<string, { type?: string }>)) {
-        policyClassifications[name] = (policy.type === "deferred" ? "deferred" : null);
+      for (const [name] of Object.entries(this.options.policies as Record<string, { type?: string }>)) {
+        policyClassifications[name] = "deferred";
       }
     }
     await ctx.runMutation(this.component.unified.recomputeUser, {
