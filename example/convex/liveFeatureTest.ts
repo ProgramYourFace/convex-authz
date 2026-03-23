@@ -532,6 +532,425 @@ export const testExpiry = action({
   },
 });
 
+// ── Wildcard pattern tests ───────────────────────────────────────
+
+export const testWildcardPatterns = action({
+  args: {},
+  returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
+  handler: async (ctx) => {
+    const results: TestResult[] = [];
+    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "wildcard-user" });
+
+    try {
+      // 1. wildcard docs:* grants docs:read and docs:write
+      await authz.grantPermission(ctx, userId, "documents:*");
+      const canDocRead = await authz.can(ctx, userId, "documents:read");
+      const canDocWrite = await authz.can(ctx, userId, "documents:update");
+      const canSettingsRead = await authz.can(ctx, userId, "settings:view");
+      assert(canDocRead === true, "documents:* should grant documents:read");
+      assert(canDocWrite === true, "documents:* should grant documents:update");
+      assert(canSettingsRead === false, "documents:* should NOT grant settings:view");
+      results.push({ name: "wildcard docs:* grants docs:read and docs:update", passed: true, detail: `docRead=${canDocRead}, docUpdate=${canDocWrite}, settingsView=${canSettingsRead}` });
+
+      await authz.deprovisionUser(ctx, userId);
+
+      // 2. wildcard deny docs:* blocks docs:read even with role
+      await authz.assignRole(ctx, userId, "editor");
+      await authz.denyPermission(ctx, userId, "documents:*");
+      const canDocReadDenied = await authz.can(ctx, userId, "documents:read");
+      assert(canDocReadDenied === false, "deny documents:* should block documents:read even with editor role");
+      results.push({ name: "wildcard deny docs:* blocks docs:read even with role", passed: true, detail: `documents:read=${canDocReadDenied}` });
+
+      await authz.deprovisionUser(ctx, userId);
+
+      // 3. wildcard *:view grants settings:view and billing:view but not documents:update
+      await authz.grantPermission(ctx, userId, "*:view");
+      const canSettingsView3 = await authz.can(ctx, userId, "settings:view");
+      const canBillingView3 = await authz.can(ctx, userId, "billing:view");
+      const canDocUpdate3 = await authz.can(ctx, userId, "documents:update");
+      assert(canSettingsView3 === true, "*:view should grant settings:view");
+      assert(canBillingView3 === true, "*:view should grant billing:view");
+      assert(canDocUpdate3 === false, "*:view should NOT grant documents:update");
+      results.push({ name: "wildcard *:view grants settings:view and billing:view", passed: true, detail: `settingsView=${canSettingsView3}, billingView=${canBillingView3}, docUpdate=${canDocUpdate3}` });
+
+      await authz.deprovisionUser(ctx, userId);
+
+      // 4. full wildcard * grants everything
+      await authz.grantPermission(ctx, userId, "*");
+      const canAnything = await authz.can(ctx, userId, "documents:delete");
+      const canBilling = await authz.can(ctx, userId, "billing:manage");
+      assert(canAnything === true, "* should grant any permission");
+      assert(canBilling === true, "* should grant billing:manage");
+      results.push({ name: "full wildcard * grants everything", passed: true, detail: `documents:delete=${canAnything}, billing:manage=${canBilling}` });
+
+      await authz.deprovisionUser(ctx, userId);
+
+      // 5. full wildcard deny * blocks everything
+      await authz.assignRole(ctx, userId, "admin");
+      await authz.denyPermission(ctx, userId, "*");
+      const canAnythingDenied = await authz.can(ctx, userId, "documents:read");
+      const canBillingDenied = await authz.can(ctx, userId, "billing:manage");
+      assert(canAnythingDenied === false, "deny * should block everything");
+      assert(canBillingDenied === false, "deny * should block billing:manage");
+      results.push({ name: "full wildcard deny * blocks everything", passed: true, detail: `documents:read=${canAnythingDenied}, billing:manage=${canBillingDenied}` });
+    } catch (e: any) {
+      results.push({ name: "wildcardPatterns", passed: false, detail: e.message });
+    }
+
+    await authz.deprovisionUser(ctx, userId);
+    return results;
+  },
+});
+
+// ── Multi-role interaction tests ─────────────────────────────────
+
+export const testMultiRoleInteractions = action({
+  args: {},
+  returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
+  handler: async (ctx) => {
+    const results: TestResult[] = [];
+    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "multirole-user" });
+
+    try {
+      // 1. two roles sharing permission, revoke one, still allowed
+      await authz.assignRole(ctx, userId, "editor");
+      await authz.assignRole(ctx, userId, "viewer");
+      await authz.revokeRole(ctx, userId, "editor");
+      const canRead = await authz.can(ctx, userId, "documents:read");
+      assert(canRead === true, "documents:read should survive via viewer after editor revoked");
+      results.push({ name: "two roles sharing perm, revoke one, still allowed", passed: true, detail: `documents:read=${canRead}` });
+
+      await authz.deprovisionUser(ctx, userId);
+
+      // 2. three roles, revoke two, shared perm survives via third
+      await authz.assignRole(ctx, userId, "admin");
+      await authz.assignRole(ctx, userId, "editor");
+      await authz.assignRole(ctx, userId, "viewer");
+      await authz.revokeRole(ctx, userId, "admin");
+      await authz.revokeRole(ctx, userId, "editor");
+      const canReadStill = await authz.can(ctx, userId, "documents:read");
+      const canDeleteDenied = await authz.can(ctx, userId, "documents:delete");
+      assert(canReadStill === true, "documents:read should survive via viewer");
+      assert(canDeleteDenied === false, "documents:delete should be denied without admin");
+      results.push({ name: "three roles, revoke two, shared perm survives via third", passed: true, detail: `documents:read=${canReadStill}, documents:delete=${canDeleteDenied}` });
+
+      await authz.deprovisionUser(ctx, userId);
+
+      // 3. assign same role twice is idempotent
+      await authz.assignRole(ctx, userId, "editor");
+      await authz.assignRole(ctx, userId, "editor");
+      const userRoles = await authz.getUserRoles(ctx, userId);
+      assert(userRoles.length === 1, "should have exactly 1 role after double assign");
+      results.push({ name: "assign same role twice is idempotent", passed: true, detail: `roles count=${userRoles.length}` });
+
+      await authz.deprovisionUser(ctx, userId);
+
+      // 4. revoke non-existent role returns false
+      const revoked = await authz.revokeRole(ctx, userId, "admin");
+      assert(revoked === false, "revoking non-existent role should return false");
+      results.push({ name: "revoke non-existent role returns false", passed: true, detail: `revoked=${revoked}` });
+    } catch (e: any) {
+      results.push({ name: "multiRoleInteractions", passed: false, detail: e.message });
+    }
+
+    await authz.deprovisionUser(ctx, userId);
+    return results;
+  },
+});
+
+// ── Expiry edge case tests ───────────────────────────────────────
+
+export const testExpiryEdgeCases = action({
+  args: {},
+  returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
+  handler: async (ctx) => {
+    const results: TestResult[] = [];
+    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "expiry-edge-user" });
+
+    try {
+      // 1. extend expiry by reassigning with later date
+      await authz.assignRole(ctx, userId, "editor", undefined, Date.now() + 10000);
+      await authz.assignRole(ctx, userId, "editor", undefined, Date.now() + 60000);
+      const canRead = await authz.can(ctx, userId, "documents:read");
+      assert(canRead === true, "role with extended expiry should still be valid");
+      results.push({ name: "extend expiry by reassigning with later date", passed: true, detail: `documents:read=${canRead}` });
+
+      await authz.deprovisionUser(ctx, userId);
+
+      // 2. extend to no expiry by reassigning without expiresAt
+      await authz.assignRole(ctx, userId, "editor", undefined, Date.now() + 10000);
+      await authz.assignRole(ctx, userId, "editor");
+      const canReadNoExpiry = await authz.can(ctx, userId, "documents:read");
+      assert(canReadNoExpiry === true, "role reassigned without expiresAt should never expire");
+      results.push({ name: "extend to no expiry by reassigning without expiresAt", passed: true, detail: `documents:read=${canReadNoExpiry}` });
+
+      await authz.deprovisionUser(ctx, userId);
+
+      // 3. deny with future expiry still blocks
+      await authz.assignRole(ctx, userId, "editor");
+      await authz.denyPermission(ctx, userId, "documents:read", undefined, undefined, Date.now() + 60000);
+      const canReadDenyFuture = await authz.can(ctx, userId, "documents:read");
+      assert(canReadDenyFuture === false, "deny with future expiry should still block");
+      results.push({ name: "deny with future expiry still blocks", passed: true, detail: `documents:read=${canReadDenyFuture}` });
+    } catch (e: any) {
+      results.push({ name: "expiryEdgeCases", passed: false, detail: e.message });
+    }
+
+    await authz.deprovisionUser(ctx, userId);
+    return results;
+  },
+});
+
+// ── Offboard edge case tests ─────────────────────────────────────
+
+export const testOffboardEdgeCases = action({
+  args: {},
+  returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
+  handler: async (ctx) => {
+    const results: TestResult[] = [];
+
+    try {
+      // 1. offboard with removeOverrides=true removes direct grants
+      const userId1 = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "offboard-override-user" });
+      await authz.grantPermission(ctx, userId1, "documents:delete");
+      const canBefore = await authz.can(ctx, userId1, "documents:delete");
+      assert(canBefore === true, "direct grant should allow before offboard");
+      await authz.offboardUser(ctx, userId1, { removeOverrides: true });
+      const canAfter = await authz.can(ctx, userId1, "documents:delete");
+      assert(canAfter === false, "offboard removeOverrides=true should deny");
+      results.push({ name: "offboard removeOverrides=true removes direct grants", passed: true, detail: `before=${canBefore}, after=${canAfter}` });
+      await authz.deprovisionUser(ctx, userId1);
+
+      // 2. offboard with removeRelationships=true removes relations
+      const userId2 = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "offboard-rel-user" });
+      await authz.addRelation(ctx, { type: "user", id: userId2 }, "member", { type: "team", id: "team-offboard" });
+      const hasBefore = await authz.hasRelation(ctx, { type: "user", id: userId2 }, "member", { type: "team", id: "team-offboard" });
+      assert(hasBefore === true, "should have relation before offboard");
+      await authz.offboardUser(ctx, userId2, { removeRelationships: true });
+      const hasAfter = await authz.hasRelation(ctx, { type: "user", id: userId2 }, "member", { type: "team", id: "team-offboard" });
+      assert(hasAfter === false, "offboard removeRelationships=true should remove relation");
+      results.push({ name: "offboard removeRelationships=true removes relations", passed: true, detail: `before=${hasBefore}, after=${hasAfter}` });
+      await authz.deprovisionUser(ctx, userId2);
+
+      // 3. offboard preserves attributes when removeAttributes=false
+      const userId3 = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "offboard-attr-user" });
+      await authz.setAttribute(ctx, userId3, "department", "engineering");
+      await authz.assignRole(ctx, userId3, "editor");
+      await authz.offboardUser(ctx, userId3, { removeAttributes: false });
+      const attrs = await authz.getUserAttributes(ctx, userId3);
+      const dept = attrs.find((a: any) => a.key === "department");
+      assert(dept !== undefined, "attribute should be preserved");
+      assert(dept!.value === "engineering", "attribute value should be engineering");
+      results.push({ name: "offboard preserves attributes when removeAttributes=false", passed: true, detail: `dept=${dept!.value}` });
+      await authz.deprovisionUser(ctx, userId3);
+
+      // 4. deprovision user with zero data returns zero counts
+      const userId4 = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "offboard-empty-user" });
+      const depResult = await authz.deprovisionUser(ctx, userId4);
+      assert(depResult.rolesRevoked === 0, "rolesRevoked should be 0");
+      assert(depResult.overridesRemoved === 0, "overridesRemoved should be 0");
+      assert(depResult.attributesRemoved === 0, "attributesRemoved should be 0");
+      assert(depResult.relationshipsRemoved === 0, "relationshipsRemoved should be 0");
+      results.push({ name: "deprovision user with zero data returns zero counts", passed: true, detail: `roles=${depResult.rolesRevoked}, overrides=${depResult.overridesRemoved}, attrs=${depResult.attributesRemoved}, rels=${depResult.relationshipsRemoved}` });
+    } catch (e: any) {
+      results.push({ name: "offboardEdgeCases", passed: false, detail: e.message });
+    }
+
+    return results;
+  },
+});
+
+// ── Scope interaction tests ──────────────────────────────────────
+
+export const testScopeInteractions = action({
+  args: {},
+  returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
+  handler: async (ctx) => {
+    const results: TestResult[] = [];
+    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "scope-interaction-user" });
+    const orgA = await ctx.runMutation(internal.liveFeatureTest.createTestOrg, { slug: "scope-a" });
+    const orgB = await ctx.runMutation(internal.liveFeatureTest.createTestOrg, { slug: "scope-b" });
+    const scopeA = { type: "org", id: String(orgA) };
+    const scopeB = { type: "org", id: String(orgB) };
+
+    try {
+      // 1. same permission in different scopes are independent
+      await authz.grantPermission(ctx, userId, "documents:read", scopeA);
+      await authz.denyPermission(ctx, userId, "documents:read", scopeB);
+      const allowedA = await authz.can(ctx, userId, "documents:read", scopeA);
+      const deniedB = await authz.can(ctx, userId, "documents:read", scopeB);
+      assert(allowedA === true, "should be allowed in scope A");
+      assert(deniedB === false, "should be denied in scope B");
+      results.push({ name: "same permission in different scopes are independent", passed: true, detail: `A=${allowedA}, B=${deniedB}` });
+
+      await authz.deprovisionUser(ctx, userId);
+
+      // 2. revoke scoped role preserves global role
+      await authz.assignRole(ctx, userId, "admin");
+      await authz.assignRole(ctx, userId, "editor", scopeA);
+      await authz.revokeRole(ctx, userId, "editor", scopeA);
+      const canGlobalAdmin = await authz.can(ctx, userId, "documents:delete");
+      assert(canGlobalAdmin === true, "global admin perms should survive scoped revoke");
+      results.push({ name: "revoke scoped role preserves global role", passed: true, detail: `documents:delete=${canGlobalAdmin}` });
+
+      await authz.deprovisionUser(ctx, userId);
+
+      // 3. revokeAllRoles with scope only revokes in that scope
+      await authz.assignRole(ctx, userId, "admin");
+      await authz.assignRole(ctx, userId, "editor", scopeA);
+      await authz.revokeAllRoles(ctx, userId, scopeA);
+      const globalRoles = await authz.getUserRoles(ctx, userId);
+      const scopedRoles = await authz.getUserRoles(ctx, userId, scopeA);
+      assert(globalRoles.length > 0, "global roles should survive scoped revokeAll");
+      assert(scopedRoles.length === 0, "scoped roles should be revoked");
+      results.push({ name: "revokeAllRoles with scope only revokes in that scope", passed: true, detail: `globalRoles=${globalRoles.length}, scopedRoles=${scopedRoles.length}` });
+    } catch (e: any) {
+      results.push({ name: "scopeInteractions", passed: false, detail: e.message });
+    }
+
+    await authz.deprovisionUser(ctx, userId);
+    return results;
+  },
+});
+
+// ── Audit log tests ──────────────────────────────────────────────
+
+export const testAuditLog = action({
+  args: {},
+  returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
+  handler: async (ctx) => {
+    const results: TestResult[] = [];
+    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "audit-user" });
+
+    try {
+      // 1. assignRole creates audit entry
+      await authz.assignRole(ctx, userId, "editor");
+      const logAfterAssign = await authz.getAuditLog(ctx, { userId, limit: 10 }) as Array<any>;
+      const assignEntry = logAfterAssign.find((e: any) => e.action === "role_assigned");
+      assert(assignEntry !== undefined, "should have role_assigned audit entry");
+      results.push({ name: "assignRole creates audit entry", passed: true, detail: `action=${assignEntry?.action}` });
+
+      // 2. grantPermission creates audit entry
+      await authz.grantPermission(ctx, userId, "billing:manage");
+      const logAfterGrant = await authz.getAuditLog(ctx, { userId, limit: 10 }) as Array<any>;
+      const grantEntry = logAfterGrant.find((e: any) => e.action === "permission_granted");
+      assert(grantEntry !== undefined, "should have permission_granted audit entry");
+      results.push({ name: "grantPermission creates audit entry", passed: true, detail: `action=${grantEntry?.action}` });
+
+      // 3. revokeRole creates audit entry
+      await authz.revokeRole(ctx, userId, "editor");
+      const logAfterRevoke = await authz.getAuditLog(ctx, { userId, limit: 10 }) as Array<any>;
+      const revokeEntry = logAfterRevoke.find((e: any) => e.action === "role_revoked");
+      assert(revokeEntry !== undefined, "should have role_revoked audit entry");
+      results.push({ name: "revokeRole creates audit entry", passed: true, detail: `action=${revokeEntry?.action}` });
+    } catch (e: any) {
+      results.push({ name: "auditLog", passed: false, detail: e.message });
+    }
+
+    await authz.deprovisionUser(ctx, userId);
+    return results;
+  },
+});
+
+// ── Require method tests ─────────────────────────────────────────
+
+export const testRequireMethod = action({
+  args: {},
+  returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
+  handler: async (ctx) => {
+    const results: TestResult[] = [];
+    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "require-user" });
+
+    try {
+      // 1. require passes for allowed permission
+      await authz.assignRole(ctx, userId, "editor");
+      let requirePassed = false;
+      try {
+        await authz.require(ctx, userId, "documents:read");
+        requirePassed = true;
+      } catch (_e) {
+        requirePassed = false;
+      }
+      assert(requirePassed === true, "require should not throw for allowed permission");
+      results.push({ name: "require passes for allowed permission", passed: true, detail: `threw=${!requirePassed}` });
+
+      await authz.deprovisionUser(ctx, userId);
+
+      // 2. require throws for denied permission
+      let requireThrew = false;
+      try {
+        await authz.require(ctx, userId, "documents:read");
+        requireThrew = false;
+      } catch (_e) {
+        requireThrew = true;
+      }
+      assert(requireThrew === true, "require should throw for denied permission");
+      results.push({ name: "require throws for denied permission", passed: true, detail: `threw=${requireThrew}` });
+    } catch (e: any) {
+      results.push({ name: "requireMethod", passed: false, detail: e.message });
+    }
+
+    await authz.deprovisionUser(ctx, userId);
+    return results;
+  },
+});
+
+// ── canAny tests ─────────────────────────────────────────────────
+
+export const testCanAny = action({
+  args: {},
+  returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
+  handler: async (ctx) => {
+    const results: TestResult[] = [];
+    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "canany-user" });
+
+    try {
+      // 1. canAny returns true if any permission matches
+      await authz.assignRole(ctx, userId, "viewer");
+      const anyTrue = await authz.canAny(ctx, userId, ["documents:read", "documents:delete"]);
+      assert(anyTrue === true, "canAny should return true when at least one perm matches");
+      results.push({ name: "canAny returns true if any permission matches", passed: true, detail: `canAny=${anyTrue}` });
+
+      // 2. canAny returns false if no permission matches
+      const anyFalse = await authz.canAny(ctx, userId, ["documents:delete", "billing:manage"]);
+      assert(anyFalse === false, "canAny should return false when no perm matches");
+      results.push({ name: "canAny returns false if no permission matches", passed: true, detail: `canAny=${anyFalse}` });
+    } catch (e: any) {
+      results.push({ name: "canAny", passed: false, detail: e.message });
+    }
+
+    await authz.deprovisionUser(ctx, userId);
+    return results;
+  },
+});
+
+// ── getUserPermissions tests ─────────────────────────────────────
+
+export const testGetUserPermissions = action({
+  args: {},
+  returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
+  handler: async (ctx) => {
+    const results: TestResult[] = [];
+    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "perms-user" });
+
+    try {
+      // 1. getUserPermissions returns all effective permissions
+      await authz.assignRole(ctx, userId, "editor");
+      const perms = await authz.getUserPermissions(ctx, userId) as Array<any>;
+      const permNames = perms.map((p: any) => p.permission || p.name || p);
+      const expected = ["documents:create", "documents:read", "documents:update", "settings:view"];
+      const hasAll = expected.every((e) => permNames.some((p: string) => p === e || p.includes(e)));
+      assert(hasAll === true, `getUserPermissions should include editor perms, got: ${JSON.stringify(permNames)}`);
+      results.push({ name: "getUserPermissions returns all effective permissions", passed: true, detail: `perms=${JSON.stringify(permNames)}` });
+    } catch (e: any) {
+      results.push({ name: "getUserPermissions", passed: false, detail: e.message });
+    }
+
+    await authz.deprovisionUser(ctx, userId);
+    return results;
+  },
+});
+
 // ── Main runner ──────────────────────────────────────────────────
 
 export const runAll = action({
@@ -553,6 +972,15 @@ export const runAll = action({
       { name: "Recompute User", fn: internal.liveFeatureTest.testRecomputeUser },
       { name: "Offboard/Deprovision", fn: internal.liveFeatureTest.testOffboardDeprovision },
       { name: "Expiry", fn: internal.liveFeatureTest.testExpiry },
+      { name: "Wildcard Patterns", fn: internal.liveFeatureTest.testWildcardPatterns },
+      { name: "Multi-Role Interactions", fn: internal.liveFeatureTest.testMultiRoleInteractions },
+      { name: "Expiry Edge Cases", fn: internal.liveFeatureTest.testExpiryEdgeCases },
+      { name: "Offboard Edge Cases", fn: internal.liveFeatureTest.testOffboardEdgeCases },
+      { name: "Scope Interactions", fn: internal.liveFeatureTest.testScopeInteractions },
+      { name: "Audit Log", fn: internal.liveFeatureTest.testAuditLog },
+      { name: "Require Method", fn: internal.liveFeatureTest.testRequireMethod },
+      { name: "canAny", fn: internal.liveFeatureTest.testCanAny },
+      { name: "getUserPermissions", fn: internal.liveFeatureTest.testGetUserPermissions },
     ];
 
     for (const suite of suites) {
