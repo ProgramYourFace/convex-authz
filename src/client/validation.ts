@@ -1,5 +1,5 @@
 /**
- * Input validation for Authz and IndexedAuthz public APIs.
+ * Input validation for the Authz public API.
  * All validators throw Error with clear messages for invalid arguments.
  */
 
