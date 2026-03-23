@@ -224,7 +224,46 @@ export const assignRoleUnified = mutation({
         const shouldExtend = args.expiresAt === undefined ||
           (row.expiresAt !== undefined && args.expiresAt > row.expiresAt);
         if (shouldExtend && args.expiresAt !== row.expiresAt) {
-          await ctx.db.patch(row._id, { expiresAt: args.expiresAt });
+          const newExpiry = args.expiresAt;
+          // 1. Update source table
+          await ctx.db.patch(row._id, { expiresAt: newExpiry });
+          // 2. Update effectiveRoles
+          const scopeKey = args.scope
+            ? `${args.scope.type}:${args.scope.id}`
+            : "global";
+          const effRole = await ctx.db
+            .query("effectiveRoles")
+            .withIndex("by_tenant_user_role_scope", (q) =>
+              q.eq("tenantId", args.tenantId)
+                .eq("userId", args.userId)
+                .eq("role", args.role)
+                .eq("scopeKey", scopeKey)
+            )
+            .unique();
+          if (effRole) {
+            await ctx.db.patch(effRole._id, { expiresAt: newExpiry, updatedAt: Date.now() });
+          }
+          // 3. Update effectivePermissions for this role's permissions
+          for (const permission of args.rolePermissions) {
+            const effPerm = await ctx.db
+              .query("effectivePermissions")
+              .withIndex("by_tenant_user_permission_scope", (q) =>
+                q.eq("tenantId", args.tenantId)
+                  .eq("userId", args.userId)
+                  .eq("permission", permission)
+                  .eq("scopeKey", scopeKey)
+              )
+              .unique();
+            if (effPerm && effPerm.sources.includes(args.role)) {
+              // Recompute merged expiresAt considering all sources
+              // Since we can't cheaply check all other sources' expiry,
+              // just set to the new (extended) value
+              const mergedExpiry = effPerm.expiresAt === undefined ? undefined
+                : newExpiry === undefined ? undefined
+                : Math.max(effPerm.expiresAt, newExpiry);
+              await ctx.db.patch(effPerm._id, { expiresAt: mergedExpiry, updatedAt: Date.now() });
+            }
+          }
         }
         return row._id;
       }
@@ -550,6 +589,8 @@ export const grantPermissionUnified = mutation({
         directGrant: true,
         directDeny: undefined,
         effect: "allow",
+        policyResult: undefined,  // explicit grant overrides any policy result
+        policyName: undefined,
         reason: args.reason,
         expiresAt: args.expiresAt,
         updatedAt: now,
@@ -1267,13 +1308,18 @@ export const assignRolesUnified = mutation({
       let isDuplicate = false;
       for (const row of existing) {
         if (matchesScope(row.scope, item.scope) && !isExpired(row.expiresAt)) {
+          // Extend expiry if new value is later or removes expiry
+          const shouldExtend = item.expiresAt === undefined ||
+            (row.expiresAt !== undefined && item.expiresAt > row.expiresAt);
+          if (shouldExtend && item.expiresAt !== row.expiresAt) {
+            await ctx.db.patch(row._id, { expiresAt: item.expiresAt });
+          }
           isDuplicate = true;
           break;
         }
       }
 
       if (isDuplicate) {
-        // Skip duplicates silently (idempotent, like assignRoleUnified)
         continue;
       }
 
