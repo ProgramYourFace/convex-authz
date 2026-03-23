@@ -1499,3 +1499,133 @@ describe("Category 10: Bulk unified mutations", () => {
     expect(result.tier).toBe("deferred");
   });
 });
+
+// ============================================================================
+// Category 11: Offboarding / Deprovisioning
+// ============================================================================
+
+describe("Category 11: Offboarding and deprovisioning", () => {
+  test("11.1 offboardUser clears role-based permissions but preserves direct grants when configured", async () => {
+    const t = convexTest(schema, import.meta.glob("./**/*.ts"));
+
+    // Assign role
+    await t.mutation(api.unified.assignRoleUnified, {
+      tenantId: TENANT,
+      userId: "alice",
+      role: "editor",
+      rolePermissions: ["docs:read", "docs:write"],
+    });
+
+    // Direct grant
+    await t.mutation(api.unified.grantPermissionUnified, {
+      tenantId: TENANT,
+      userId: "alice",
+      permission: "billing:view",
+    });
+
+    // Add relation
+    await t.mutation(api.unified.addRelationUnified, {
+      tenantId: TENANT,
+      subjectType: "user",
+      subjectId: "alice",
+      relation: "member",
+      objectType: "team",
+      objectId: "team1",
+    });
+
+    // Offboard (removes roles but not overrides by default)
+    await t.mutation(api.mutations.offboardUser, {
+      tenantId: TENANT,
+      userId: "alice",
+      removeAttributes: false,
+      removeOverrides: false,
+      removeRelationships: true,
+      enableAudit: true,
+    });
+
+    // Role-based permissions should be gone from source table
+    const roles = await t.run(async (ctx) => {
+      return ctx.db
+        .query("roleAssignments")
+        .withIndex("by_tenant_user", (q) => q.eq("tenantId", TENANT).eq("userId", "alice"))
+        .collect();
+    });
+    expect(roles).toHaveLength(0);
+
+    // Relation should be gone
+    const rels = await t.run(async (ctx) => {
+      return ctx.db
+        .query("relationships")
+        .withIndex("by_tenant_subject", (q) => q.eq("tenantId", TENANT).eq("subjectType", "user").eq("subjectId", "alice"))
+        .collect();
+    });
+    expect(rels).toHaveLength(0);
+  });
+
+  test("11.2 deprovisionUser removes everything", async () => {
+    const t = convexTest(schema, import.meta.glob("./**/*.ts"));
+
+    // Set up: role + direct grant + attribute + relation
+    await t.mutation(api.unified.assignRoleUnified, {
+      tenantId: TENANT,
+      userId: "alice",
+      role: "admin",
+      rolePermissions: ["docs:delete"],
+    });
+
+    await t.mutation(api.unified.grantPermissionUnified, {
+      tenantId: TENANT,
+      userId: "alice",
+      permission: "billing:view",
+    });
+
+    await t.mutation(api.unified.setAttributeWithRecompute, {
+      tenantId: TENANT,
+      userId: "alice",
+      key: "department",
+      value: "engineering",
+    });
+
+    await t.mutation(api.unified.addRelationUnified, {
+      tenantId: TENANT,
+      subjectType: "user",
+      subjectId: "alice",
+      relation: "member",
+      objectType: "team",
+      objectId: "team1",
+    });
+
+    // Deprovision — wipes everything
+    await t.mutation(api.mutations.deprovisionUser, {
+      tenantId: TENANT,
+      userId: "alice",
+      enableAudit: true,
+    });
+
+    // All source tables should be empty for this user
+    const checkTables = await t.run(async (ctx) => {
+      const roles = await ctx.db.query("roleAssignments")
+        .withIndex("by_tenant_user", (q) => q.eq("tenantId", TENANT).eq("userId", "alice"))
+        .collect();
+      const overrides = await ctx.db.query("permissionOverrides")
+        .withIndex("by_tenant_user", (q) => q.eq("tenantId", TENANT).eq("userId", "alice"))
+        .collect();
+      const attrs = await ctx.db.query("userAttributes")
+        .withIndex("by_tenant_user", (q) => q.eq("tenantId", TENANT).eq("userId", "alice"))
+        .collect();
+      const effPerms = await ctx.db.query("effectivePermissions")
+        .withIndex("by_tenant_user", (q) => q.eq("tenantId", TENANT).eq("userId", "alice"))
+        .collect();
+      const effRoles = await ctx.db.query("effectiveRoles")
+        .withIndex("by_tenant_user", (q) => q.eq("tenantId", TENANT).eq("userId", "alice"))
+        .collect();
+      return { roles, overrides, attrs, effPerms, effRoles };
+    });
+
+    expect(checkTables.roles).toHaveLength(0);
+    expect(checkTables.overrides).toHaveLength(0);
+    expect(checkTables.attrs).toHaveLength(0);
+    expect(checkTables.effPerms).toHaveLength(0);
+    expect(checkTables.effRoles).toHaveLength(0);
+  });
+});

@@ -1052,11 +1052,19 @@ export const recomputeUser = mutation({
           const mergedExpiresAt = existingExpiry === undefined || newExpiry === undefined
             ? undefined
             : Math.max(existingExpiry, newExpiry);
-          await ctx.db.patch(existingPerm._id, {
+          const patchData: Record<string, unknown> = {
             sources,
             expiresAt: mergedExpiresAt,
             updatedAt: now,
-          });
+          };
+          // Propagate policyClassifications to existing rows (e.g., directGrant rows preserved in step 2)
+          if (classification === "deferred" && existingPerm.policyResult !== "deferred") {
+            patchData.policyResult = "deferred";
+            patchData.policyName = permission;
+          } else if (classification === "allow" && !existingPerm.policyResult) {
+            patchData.policyResult = "allow";
+          }
+          await ctx.db.patch(existingPerm._id, patchData);
         } else {
           await ctx.db.insert("effectivePermissions", {
             tenantId: args.tenantId,
