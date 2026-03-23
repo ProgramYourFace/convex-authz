@@ -4,7 +4,7 @@ import { scopeValidator } from "./validators";
 
 export default defineSchema({
   roleAssignments: defineTable({
-    tenantId: v.string(),
+    tenantId: v.optional(v.string()),
     userId: v.string(),
     role: v.string(),
     scope: scopeValidator,
@@ -17,7 +17,7 @@ export default defineSchema({
     .index("by_tenant_user_and_role", ["tenantId", "userId", "role"]),
 
   userAttributes: defineTable({
-    tenantId: v.string(),
+    tenantId: v.optional(v.string()),
     userId: v.string(),
     key: v.string(),
     value: v.any(),
@@ -26,7 +26,7 @@ export default defineSchema({
     .index("by_tenant_user_and_key", ["tenantId", "userId", "key"]),
 
   permissionOverrides: defineTable({
-    tenantId: v.string(),
+    tenantId: v.optional(v.string()),
     userId: v.string(),
     permission: v.string(),
     effect: v.union(v.literal("allow"), v.literal("deny")),
@@ -43,7 +43,7 @@ export default defineSchema({
     ]),
 
   relationships: defineTable({
-    tenantId: v.string(),
+    tenantId: v.optional(v.string()),
     subjectType: v.string(),
     subjectId: v.string(),
     relation: v.string(),
@@ -73,7 +73,7 @@ export default defineSchema({
     ]),
 
   effectivePermissions: defineTable({
-    tenantId: v.string(),
+    tenantId: v.optional(v.string()),
     userId: v.string(),
     permission: v.string(),
     scopeKey: v.string(),
@@ -105,7 +105,7 @@ export default defineSchema({
     ]),
 
   effectiveRoles: defineTable({
-    tenantId: v.string(),
+    tenantId: v.optional(v.string()),
     userId: v.string(),
     role: v.string(),
     scopeKey: v.string(),
@@ -125,7 +125,7 @@ export default defineSchema({
     ]),
 
   effectiveRelationships: defineTable({
-    tenantId: v.string(),
+    tenantId: v.optional(v.string()),
     subjectKey: v.string(),
     subjectType: v.string(),
     subjectId: v.string(),
@@ -156,7 +156,7 @@ export default defineSchema({
     .index("by_tenant_inherited_from", ["tenantId", "inheritedFrom"]),
 
   auditLog: defineTable({
-    tenantId: v.string(),
+    tenantId: v.optional(v.string()),
     timestamp: v.number(),
     action: v.union(
       v.literal("permission_check"),
