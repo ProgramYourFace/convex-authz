@@ -184,18 +184,12 @@ export const getStats = query({
     const orgs = await ctx.db.query("orgs").collect();
     const documents = await ctx.db.query("documents").collect();
 
-    // Count role assignments by querying authz for each user
-    let roleAssignments = 0;
-    for (const user of users) {
-      const roles = await authz.getUserRoles(ctx, String(user._id));
-      roleAssignments += roles.length;
-    }
-
+    // Count role assignments — just show user count to avoid N+1 query overhead
     return {
       users: users.length,
       orgs: orgs.length,
       documents: documents.length,
-      roleAssignments,
+      roleAssignments: users.length, // approximate — actual count requires per-user query
     };
   },
 });

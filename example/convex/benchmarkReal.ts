@@ -457,25 +457,57 @@ export const cleanup = mutation({
   returns: v.number(),
   handler: async (ctx) => {
     let deleted = 0;
-    const users = await ctx.db.query("users").collect();
+    // Batched cleanup — delete up to 100 benchmark users per call
+    const users = await ctx.db
+      .query("users")
+      .withIndex("by_email")
+      .take(200);
     for (const user of users) {
       if (user.email.includes("@benchmark.com")) {
-        // Remove org memberships
         const memberships = await ctx.db
           .query("org_members")
           .withIndex("by_user", (q) => q.eq("userId", user._id))
-          .collect();
+          .take(50);
         for (const m of memberships) await ctx.db.delete(m._id);
         await ctx.db.delete(user._id);
         deleted++;
+        if (deleted >= 100) break; // batch limit
       }
     }
-    // Remove benchmark org
+    return deleted;
+  },
+});
+
+export const cleanupOrg = mutation({
+  args: {},
+  returns: v.boolean(),
+  handler: async (ctx) => {
     const org = await ctx.db
       .query("orgs")
       .withIndex("by_slug", (q) => q.eq("slug", "benchmark"))
       .first();
-    if (org) await ctx.db.delete(org._id);
-    return deleted;
+    if (org) {
+      await ctx.db.delete(org._id);
+      return true;
+    }
+    return false;
+  },
+});
+
+export const cleanupAll = action({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    let totalDeleted = 0;
+    // Keep calling cleanup until no more benchmark users
+    while (true) {
+      const deleted = await ctx.runMutation(api.benchmarkReal.cleanup, {});
+      totalDeleted += deleted;
+      if (deleted === 0) break;
+      console.log(`Deleted ${deleted} users (total: ${totalDeleted})`);
+    }
+    await ctx.runMutation(api.benchmarkReal.cleanupOrg, {});
+    console.log(`Cleanup complete: ${totalDeleted} users removed`);
+    return totalDeleted;
   },
 });
