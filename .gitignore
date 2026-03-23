@@ -14,3 +14,4 @@ node_modules
 *.tgz
 *.tsbuildinfo
 .claude/settings.local.json
+coverage/
