@@ -1312,7 +1312,41 @@ export const assignRolesUnified = mutation({
           const shouldExtend = item.expiresAt === undefined ||
             (row.expiresAt !== undefined && item.expiresAt > row.expiresAt);
           if (shouldExtend && item.expiresAt !== row.expiresAt) {
-            await ctx.db.patch(row._id, { expiresAt: item.expiresAt });
+            const newExpiry = item.expiresAt;
+            // Update source table
+            await ctx.db.patch(row._id, { expiresAt: newExpiry });
+            // Update effectiveRoles
+            const effRole = await ctx.db
+              .query("effectiveRoles")
+              .withIndex("by_tenant_user_role_scope", (q) =>
+                q.eq("tenantId", args.tenantId)
+                  .eq("userId", args.userId)
+                  .eq("role", item.role)
+                  .eq("scopeKey", scopeKey)
+              )
+              .unique();
+            if (effRole) {
+              await ctx.db.patch(effRole._id, { expiresAt: newExpiry, updatedAt: now });
+            }
+            // Update effectivePermissions for this role's permissions
+            const permissions = args.rolePermissionsMap[item.role] ?? [];
+            for (const permission of permissions) {
+              const effPerm = await ctx.db
+                .query("effectivePermissions")
+                .withIndex("by_tenant_user_permission_scope", (q) =>
+                  q.eq("tenantId", args.tenantId)
+                    .eq("userId", args.userId)
+                    .eq("permission", permission)
+                    .eq("scopeKey", scopeKey)
+                )
+                .unique();
+              if (effPerm && effPerm.sources.includes(item.role)) {
+                const mergedExpiry = effPerm.expiresAt === undefined ? undefined
+                  : newExpiry === undefined ? undefined
+                  : Math.max(effPerm.expiresAt, newExpiry);
+                await ctx.db.patch(effPerm._id, { expiresAt: mergedExpiry, updatedAt: now });
+              }
+            }
           }
           isDuplicate = true;
           break;
