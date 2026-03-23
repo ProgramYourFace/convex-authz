@@ -1386,7 +1386,7 @@ describe("Category 4: Scope interactions", () => {
     expect(p2.allowed).toBe(true);
   });
 
-  test("4.5 global deny does not affect scoped allow", async () => {
+  test("4.5 global deny overrides scoped allow", async () => {
     const t = convexTest(schema, modules);
 
     // Scoped allow
@@ -1405,16 +1405,16 @@ describe("Category 4: Scope interactions", () => {
       permission: "docs:read",
     });
 
-    // Scoped check should still be allowed (separate scopeKey)
+    // Scoped check should be denied (global deny overrides scoped allow)
     const scoped = await t.query(api.unified.checkPermission, {
       tenantId: TENANT,
       userId: "alice",
       permission: "docs:read",
       scope: PROJECT1,
     });
-    expect(scoped.allowed).toBe(true);
+    expect(scoped.allowed).toBe(false);
 
-    // Global should be denied
+    // Global should also be denied
     const global = await t.query(api.unified.checkPermission, {
       tenantId: TENANT,
       userId: "alice",

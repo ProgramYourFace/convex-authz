@@ -55,6 +55,25 @@ export const checkPermission = query({
       };
     }
 
+    // If checking a scoped permission, also check global denies
+    if (scopeKey !== "global") {
+      const globalRows = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user_scope", (q) =>
+          q.eq("tenantId", args.tenantId)
+            .eq("userId", args.userId)
+            .eq("scopeKey", "global")
+        )
+        .collect();
+
+      for (const row of globalRows) {
+        if (isExpired(row.expiresAt)) continue;
+        if (row.effect === "deny" && matchesPermissionPattern(args.permission, row.permission)) {
+          return { allowed: false, reason: "Denied by global pattern", tier: "cached" };
+        }
+      }
+    }
+
     // Fast path: exact allow with no wildcards to worry about
     // We still need to check for wildcard deny patterns that could override.
     // Lazy-load the full scan only when needed.
@@ -696,7 +715,7 @@ export const setAttributeWithRecompute = mutation({
             .eq("tenantId", args.tenantId)
             .eq("userId", args.userId)
         )
-        .collect();
+        .take(4000);
 
       for (const [permission, newResult] of Object.entries(args.policyReEvaluations)) {
         const matchingPerms = allEffectivePerms.filter(
@@ -1001,7 +1020,7 @@ export const recomputeUser = mutation({
       .withIndex("by_tenant_user", (q) =>
         q.eq("tenantId", args.tenantId).eq("userId", args.userId)
       )
-      .collect();
+      .take(4000);
 
     for (const row of existingEffectiveRoles) {
       await ctx.db.delete(row._id);
@@ -1013,7 +1032,7 @@ export const recomputeUser = mutation({
       .withIndex("by_tenant_user", (q) =>
         q.eq("tenantId", args.tenantId).eq("userId", args.userId)
       )
-      .collect();
+      .take(4000);
 
     for (const row of existingEffectivePerms) {
       // Keep direct grants and direct denies — those come from permissionOverrides
@@ -1638,7 +1657,7 @@ export const revokeAllRolesUnified = mutation({
       .withIndex("by_tenant_user", (q) =>
         q.eq("tenantId", args.tenantId).eq("userId", args.userId)
       )
-      .collect();
+      .take(4000);
 
     let revokedCount = 0;
 
