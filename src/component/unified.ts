@@ -15,6 +15,20 @@ import { mutation, query } from "./_generated/server.js";
 import { scopeValidator } from "./validators.js";
 import { isExpired, matchesPermissionPattern, matchesScope } from "./helpers.js";
 
+/**
+ * Exact scope equality check for duplicate detection.
+ * Unlike matchesScope (which is asymmetric — global matches everything),
+ * this returns true only when both scopes are identical.
+ */
+function scopeEquals(
+  a: { type: string; id: string } | undefined,
+  b: { type: string; id: string } | undefined,
+): boolean {
+  if (a === undefined && b === undefined) return true;
+  if (a === undefined || b === undefined) return false;
+  return a.type === b.type && a.id === b.id;
+}
+
 export const checkPermission = query({
   args: {
     tenantId: v.string(),
@@ -238,7 +252,7 @@ export const assignRoleUnified = mutation({
       .collect();
 
     for (const row of existing) {
-      if (matchesScope(row.scope, args.scope) && !isExpired(row.expiresAt)) {
+      if (scopeEquals(row.scope, args.scope) && !isExpired(row.expiresAt)) {
         // Extend expiry if new value is later or removes expiry
         const shouldExtend = args.expiresAt === undefined ||
           (row.expiresAt !== undefined && args.expiresAt > row.expiresAt);
@@ -450,7 +464,7 @@ export const revokeRoleUnified = mutation({
       .collect();
 
     const assignment = assignments.find(
-      (row) => matchesScope(row.scope, args.scope) && !isExpired(row.expiresAt)
+      (row) => scopeEquals(row.scope, args.scope)
     );
 
     if (!assignment) {
@@ -604,6 +618,14 @@ export const grantPermissionUnified = mutation({
       .unique();
 
     if (existingPerm) {
+      // Compute merged expiry: if existing row has sources with role-based grants,
+      // the expiry should be the later of existing vs new (and undefined = no expiry wins)
+      const mergedExpiresAt = existingPerm.sources.length > 0
+        ? (existingPerm.expiresAt === undefined || args.expiresAt === undefined
+            ? undefined
+            : Math.max(existingPerm.expiresAt, args.expiresAt))
+        : args.expiresAt;
+
       await ctx.db.patch(existingPerm._id, {
         directGrant: true,
         directDeny: undefined,
@@ -611,7 +633,7 @@ export const grantPermissionUnified = mutation({
         policyResult: undefined,  // explicit grant overrides any policy result
         policyName: undefined,
         reason: args.reason,
-        expiresAt: args.expiresAt,
+        expiresAt: mergedExpiresAt,
         updatedAt: now,
       });
     } else {
@@ -719,7 +741,7 @@ export const setAttributeWithRecompute = mutation({
 
       for (const [permission, newResult] of Object.entries(args.policyReEvaluations)) {
         const matchingPerms = allEffectivePerms.filter(
-          (p) => p.permission === permission && p.policyResult !== undefined
+          (p) => p.permission === permission
         );
 
         for (const effectivePerm of matchingPerms) {
@@ -1052,7 +1074,7 @@ export const recomputeUser = mutation({
       .withIndex("by_tenant_user", (q) =>
         q.eq("tenantId", args.tenantId).eq("userId", args.userId)
       )
-      .collect();
+      .take(4000);
 
     // ── Step 4: Rebuild effectiveRoles and effectivePermissions ──────────
     for (const assignment of roleAssignments) {
@@ -1222,12 +1244,20 @@ export const denyPermissionUnified = mutation({
       .unique();
 
     if (existingPerm) {
+      // Compute merged expiry: if existing row has sources with role-based grants,
+      // the expiry should be the later of existing vs new (and undefined = no expiry wins)
+      const mergedExpiresAt = existingPerm.sources.length > 0
+        ? (existingPerm.expiresAt === undefined || args.expiresAt === undefined
+            ? undefined
+            : Math.max(existingPerm.expiresAt, args.expiresAt))
+        : args.expiresAt;
+
       await ctx.db.patch(existingPerm._id, {
         directDeny: true,
         directGrant: undefined,
         effect: "deny",
         reason: args.reason,
-        expiresAt: args.expiresAt,
+        expiresAt: mergedExpiresAt,
         updatedAt: now,
       });
     } else {
@@ -1326,7 +1356,7 @@ export const assignRolesUnified = mutation({
 
       let isDuplicate = false;
       for (const row of existing) {
-        if (matchesScope(row.scope, item.scope) && !isExpired(row.expiresAt)) {
+        if (scopeEquals(row.scope, item.scope) && !isExpired(row.expiresAt)) {
           // Extend expiry if new value is later or removes expiry
           const shouldExtend = item.expiresAt === undefined ||
             (row.expiresAt !== undefined && item.expiresAt > row.expiresAt);
@@ -1553,7 +1583,7 @@ export const revokeRolesUnified = mutation({
         .collect();
 
       const assignment = assignments.find(
-        (row) => matchesScope(row.scope, item.scope) && !isExpired(row.expiresAt)
+        (row) => scopeEquals(row.scope, item.scope)
       );
 
       if (!assignment) {
