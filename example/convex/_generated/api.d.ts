@@ -9,6 +9,7 @@
  */
 
 import type * as app from "../app.js";
+import type * as benchmarkReal from "../benchmarkReal.js";
 import type * as constants from "../constants.js";
 import type * as example from "../example.js";
 import type * as http from "../http.js";
@@ -22,6 +23,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   app: typeof app;
+  benchmarkReal: typeof benchmarkReal;
   constants: typeof constants;
   example: typeof example;
   http: typeof http;
