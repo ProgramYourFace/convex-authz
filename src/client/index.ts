@@ -883,13 +883,27 @@ export class Authz<
   ): Promise<boolean> {
     validateUserId(userId);
     validateAttributeKey(key);
-    return await ctx.runMutation(this.component.mutations.removeAttribute, {
+    const result = await ctx.runMutation(this.component.mutations.removeAttribute, {
       userId,
       key,
       removedBy: actorId ?? this.options.defaultActorId,
       enableAudit: true,
       tenantId: this.options.tenantId,
     });
+    // Trigger policy re-evaluation after attribute removal (policies may depend on this attribute)
+    if (this.options.policies && Object.keys(this.options.policies).length > 0) {
+      const policyClassifications: Record<string, "deferred" | "allow" | "deny" | null> = {};
+      for (const [name, policy] of Object.entries(this.options.policies as Record<string, { type?: string }>)) {
+        policyClassifications[name] = (policy.type === "deferred" ? "deferred" : null);
+      }
+      await ctx.runMutation(this.component.unified.recomputeUser, {
+        tenantId: this.options.tenantId,
+        userId,
+        rolePermissionsMap: this.buildRolePermissionsMap(),
+        policyClassifications,
+      });
+    }
+    return result;
   }
 
   /**
