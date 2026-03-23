@@ -518,6 +518,12 @@ async function offboardUserImpl(
 
   for (const p of effectivePerms) {
     if (scopeKey !== null && p.scopeKey !== scopeKey) continue;
+    // Preserve direct grant/deny rows when removeOverrides=false
+    if (!removeOverridesFlag && (p.directGrant || p.directDeny)) {
+      // Clear role-based sources but keep the row so can() still finds it
+      await ctx.db.patch(p._id, { sources: [], updatedAt: Date.now() });
+      continue;
+    }
     await ctx.db.delete(p._id);
     effectivePermissionsRemoved++;
   }

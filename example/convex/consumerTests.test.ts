@@ -1113,12 +1113,7 @@ describe("Consumer Integration Tests (Authz class -> real DB)", () => {
     // Roles were removed
     expect(result.rolesRevoked).toBe(1);
 
-    // Re-granting the same permission works because the override source is still there
-    // (grantPermission is idempotent — it finds the existing source row and upserts)
-    await t.mutation(api.consumerTests.grantPermission, {
-      userId,
-      permission: "billing:view",
-    });
+    // Direct grant survives offboard — effective table row preserved with empty sources
     expect(
       await t.query(api.consumerTests.can, {
         userId,
