@@ -844,12 +844,14 @@ describe("Authz class", () => {
   });
 
   describe("canAny", () => {
-    it("should call runQuery with checkPermissionsFast and return boolean", async () => {
+    it("should call can() for each permission and return true if any allowed", async () => {
       const component = createMockComponent();
       const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
-        runQuery: vi.fn().mockResolvedValue(true),
+        runQuery: vi.fn()
+          .mockResolvedValueOnce({ allowed: false, reason: "Denied", tier: "none" })
+          .mockResolvedValueOnce({ allowed: true, reason: "Allowed", tier: "cached" }),
       };
 
       const result = await authz.canAny(ctx, "user_123", [
@@ -858,13 +860,36 @@ describe("Authz class", () => {
       ]);
       expect(result).toBe(true);
       expect(ctx.runQuery).toHaveBeenCalledWith(
-        component.indexed.checkPermissionsFast,
+        component.unified.checkPermission,
         expect.objectContaining({
           userId: "user_123",
-          permissions: ["documents:delete", "documents:read"],
+          permission: "documents:delete",
           tenantId: "test-tenant",
         })
       );
+      expect(ctx.runQuery).toHaveBeenCalledWith(
+        component.unified.checkPermission,
+        expect.objectContaining({
+          userId: "user_123",
+          permission: "documents:read",
+          tenantId: "test-tenant",
+        })
+      );
+    });
+
+    it("should return false if no permission is allowed", async () => {
+      const component = createMockComponent();
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
+
+      const ctx = {
+        runQuery: vi.fn().mockResolvedValue({ allowed: false, reason: "Denied", tier: "none" }),
+      };
+
+      const result = await authz.canAny(ctx, "user_123", [
+        "documents:delete",
+        "documents:read",
+      ]);
+      expect(result).toBe(false);
     });
 
     it("should reject empty permissions array", async () => {
@@ -2469,12 +2494,13 @@ describe("IndexedAuthz alias (via Authz)", () => {
   });
 
   describe("canAny", () => {
-    it("should call runQuery with checkPermissionsFast", async () => {
+    it("should call can() for each permission and return true if any allowed", async () => {
       const component = createMockComponent();
       const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
-        runQuery: vi.fn().mockResolvedValue(true),
+        runQuery: vi.fn()
+          .mockResolvedValueOnce({ allowed: true, reason: "Allowed", tier: "cached" }),
       };
 
       const result = await authz.canAny(ctx, "user_123", [
@@ -2482,11 +2508,13 @@ describe("IndexedAuthz alias (via Authz)", () => {
         "documents:delete",
       ]);
       expect(result).toBe(true);
+      // Should short-circuit after first allowed permission
+      expect(ctx.runQuery).toHaveBeenCalledTimes(1);
       expect(ctx.runQuery).toHaveBeenCalledWith(
-        component.indexed.checkPermissionsFast,
+        component.unified.checkPermission,
         expect.objectContaining({
           userId: "user_123",
-          permissions: ["documents:read", "documents:delete"],
+          permission: "documents:read",
           tenantId: "test-tenant",
         })
       );
