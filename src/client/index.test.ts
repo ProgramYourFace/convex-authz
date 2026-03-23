@@ -202,6 +202,9 @@ describe("client helpers", () => {
     const baseCtx: PolicyContext = {
       subject: { userId: "u1", roles: [], attributes: {} },
       action: "test",
+      hasRole: () => false,
+      hasAttribute: () => false,
+      getAttribute: () => undefined,
     };
 
     it("should return resolved value for sync condition", async () => {
