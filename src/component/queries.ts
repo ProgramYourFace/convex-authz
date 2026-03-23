@@ -39,7 +39,7 @@ export const getUserRoles = query({
       .withIndex("by_tenant_user", (q) =>
         q.eq("tenantId", args.tenantId).eq("userId", args.userId)
       )
-      .collect();
+      .take(1000);
 
     // Filter out expired assignments and optionally filter by scope
     const validAssignments = assignments.filter((a) => {
@@ -78,7 +78,7 @@ export const hasRole = query({
           .eq("userId", args.userId)
           .eq("role", args.role)
       )
-      .collect();
+      .take(100);
 
     // Check for valid assignment with matching scope
     return assignments.some((a) => {
@@ -109,7 +109,7 @@ export const getUserAttributes = query({
       .withIndex("by_tenant_user", (q) =>
         q.eq("tenantId", args.tenantId).eq("userId", args.userId)
       )
-      .collect();
+      .take(1000);
 
     return attributes.map((a) => ({
       _id: a._id as string,
@@ -180,14 +180,14 @@ export const getPermissionOverrides = query({
             .eq("userId", args.userId)
             .eq("permission", args.permission as string)
         )
-        .collect();
+        .take(1000);
     } else {
       overrides = await ctx.db
         .query("permissionOverrides")
         .withIndex("by_tenant_user", (q) =>
           q.eq("tenantId", args.tenantId).eq("userId", args.userId)
         )
-        .collect();
+        .take(1000);
     }
 
     // Filter out expired overrides
@@ -233,7 +233,7 @@ export const checkPermission = internalQuery({
       .withIndex("by_tenant_user", (q) =>
         q.eq("tenantId", args.tenantId).eq("userId", args.userId)
       )
-      .collect();
+      .take(1000);
 
     const validOverrides = overrides.filter((o) => !isExpired(o.expiresAt));
 
@@ -273,7 +273,7 @@ export const checkPermission = internalQuery({
       .withIndex("by_tenant_user", (q) =>
         q.eq("tenantId", args.tenantId).eq("userId", args.userId)
       )
-      .collect();
+      .take(1000);
 
     const validAssignments = roleAssignments.filter((a) => {
       if (isExpired(a.expiresAt)) return false;
@@ -336,7 +336,7 @@ export const checkPermissions = internalQuery({
       .withIndex("by_tenant_user", (q) =>
         q.eq("tenantId", args.tenantId).eq("userId", args.userId)
       )
-      .collect();
+      .take(1000);
     const validOverrides = overrides.filter((o) => !isExpired(o.expiresAt));
 
     const roleAssignments = await ctx.db
@@ -344,7 +344,7 @@ export const checkPermissions = internalQuery({
       .withIndex("by_tenant_user", (q) =>
         q.eq("tenantId", args.tenantId).eq("userId", args.userId)
       )
-      .collect();
+      .take(1000);
     const validAssignments = roleAssignments.filter((a) => {
       if (isExpired(a.expiresAt)) return false;
       return matchesScope(a.scope, args.scope);
@@ -411,7 +411,7 @@ export const getEffectivePermissions = internalQuery({
       .withIndex("by_tenant_user", (q) =>
         q.eq("tenantId", args.tenantId).eq("userId", args.userId)
       )
-      .collect();
+      .take(1000);
 
     const validAssignments = roleAssignments.filter((a) => {
       if (isExpired(a.expiresAt)) return false;
@@ -437,7 +437,7 @@ export const getEffectivePermissions = internalQuery({
       .withIndex("by_tenant_user", (q) =>
         q.eq("tenantId", args.tenantId).eq("userId", args.userId)
       )
-      .collect();
+      .take(1000);
 
     const validOverrides = overrides.filter((o) => {
       if (isExpired(o.expiresAt)) return false;
@@ -485,7 +485,7 @@ export const getUsersWithRole = query({
       .withIndex("by_tenant_role", (q) =>
         q.eq("tenantId", args.tenantId).eq("role", args.role)
       )
-      .collect();
+      .take(8000);
 
     const validAssignments = assignments.filter((a) => {
       if (isExpired(a.expiresAt)) return false;

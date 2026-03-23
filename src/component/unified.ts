@@ -249,7 +249,7 @@ export const assignRoleUnified = mutation({
           .eq("userId", args.userId)
           .eq("role", args.role)
       )
-      .collect();
+      .take(100);
 
     for (const row of existing) {
       if (scopeEquals(row.scope, args.scope) && !isExpired(row.expiresAt)) {
@@ -461,7 +461,7 @@ export const revokeRoleUnified = mutation({
           .eq("userId", args.userId)
           .eq("role", args.role)
       )
-      .collect();
+      .take(100);
 
     const assignment = assignments.find(
       (row) => scopeEquals(row.scope, args.scope)
@@ -576,7 +576,7 @@ export const grantPermissionUnified = mutation({
           .eq("userId", args.userId)
           .eq("permission", args.permission)
       )
-      .collect();
+      .take(100);
 
     const existingOverride = existingOverrides.find((row) =>
       matchesScope(row.scope, args.scope)
@@ -981,7 +981,7 @@ export const removeRelationUnified = mutation({
           .eq("tenantId", args.tenantId)
           .eq("inheritedFrom", existing._id)
       )
-      .collect();
+      .take(1000);
 
     for (const row of inherited) {
       await ctx.db.delete(row._id);
@@ -1202,7 +1202,7 @@ export const denyPermissionUnified = mutation({
           .eq("userId", args.userId)
           .eq("permission", args.permission)
       )
-      .collect();
+      .take(100);
 
     const existingOverride = existingOverrides.find((row) =>
       matchesScope(row.scope, args.scope)
@@ -1352,7 +1352,7 @@ export const assignRolesUnified = mutation({
             .eq("userId", args.userId)
             .eq("role", item.role)
         )
-        .collect();
+        .take(100);
 
       let isDuplicate = false;
       for (const row of existing) {
@@ -1580,7 +1580,7 @@ export const revokeRolesUnified = mutation({
             .eq("userId", args.userId)
             .eq("role", item.role)
         )
-        .collect();
+        .take(100);
 
       const assignment = assignments.find(
         (row) => scopeEquals(row.scope, item.scope)

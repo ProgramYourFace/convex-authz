@@ -160,7 +160,7 @@ export const getSubjectRelations = query({
           .eq("subjectType", args.subjectType)
           .eq("subjectId", args.subjectId),
       )
-      .collect();
+      .take(1000);
 
     if (args.objectType) {
       relations = relations.filter((r) => r.objectType === args.objectType);
@@ -202,7 +202,7 @@ export const getObjectRelations = query({
           .eq("objectType", args.objectType)
           .eq("objectId", args.objectId),
       )
-      .collect();
+      .take(1000);
 
     if (args.relation) {
       relations = relations.filter((r) => r.relation === args.relation);
@@ -449,7 +449,7 @@ export const listAccessibleObjects = query({
           .eq("subjectType", args.subjectType)
           .eq("subjectId", args.subjectId),
       )
-      .collect();
+      .take(1000);
 
     const directObjects = directRelations.filter(
       (r) => r.relation === args.relation && r.objectType === args.objectType,
@@ -494,7 +494,7 @@ export const listUsersWithAccess = query({
           .eq("objectType", args.objectType)
           .eq("objectId", args.objectId),
       )
-      .collect();
+      .take(1000);
 
     const directUsers = directRelations.filter(
       (r) => r.relation === args.relation && r.subjectType === "user",
