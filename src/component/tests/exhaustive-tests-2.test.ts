@@ -10,11 +10,11 @@
  */
 
 import { convexTest } from "convex-test";
-import schema from "./schema.js";
-import { api } from "./_generated/api.js";
+import schema from "../schema.js";
+import { api } from "../_generated/api.js";
 import { describe, test, expect } from "vitest";
 
-const modules = import.meta.glob("./**/*.ts");
+const modules = import.meta.glob("../**/*.ts");
 const TENANT = "test-tenant";
 
 // ============================================================================

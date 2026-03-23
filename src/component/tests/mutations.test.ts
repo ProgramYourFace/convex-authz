@@ -4,10 +4,10 @@
 
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
-import schema from "./schema.js";
-import { api } from "./_generated/api.js";
+import schema from "../schema.js";
+import { api } from "../_generated/api.js";
 
-const modules = import.meta.glob("./**/*.ts");
+const modules = import.meta.glob("../**/*.ts");
 
 const TENANT = "test-tenant";
 

@@ -1,9 +1,9 @@
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
-import schema from "./schema.js";
-import { api } from "./_generated/api.js";
+import schema from "../schema.js";
+import { api } from "../_generated/api.js";
 
-const modules = import.meta.glob("./**/*.ts");
+const modules = import.meta.glob("../**/*.ts");
 
 const TENANT_A = "tenant-acme";
 const TENANT_B = "tenant-globex";
