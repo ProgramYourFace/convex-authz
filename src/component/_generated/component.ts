@@ -730,6 +730,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           objectId: string;
           objectType: string;
           relation: string;
+          removedBy?: string;
           subjectId: string;
           subjectType: string;
           tenantId: string;

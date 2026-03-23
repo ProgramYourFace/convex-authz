@@ -978,6 +978,7 @@ export class Authz<
     subject: { type: string; id: string },
     relation: string,
     object: { type: string; id: string },
+    actorId?: string,
   ): Promise<boolean> {
     validateRelationArgs(subject.type, subject.id, relation, object.type, object.id);
     return ctx.runMutation(this.component.unified.removeRelationUnified, {
@@ -986,6 +987,8 @@ export class Authz<
       relation,
       objectType: object.type,
       objectId: object.id,
+      removedBy: actorId ?? this.options.defaultActorId,
+      enableAudit: true,
       tenantId: this.options.tenantId,
     });
   }
@@ -1141,6 +1144,12 @@ export function defineCaveats(
  * Will be removed in v2.1.
  */
 export const IndexedAuthz = Authz;
+/** @deprecated Use `Authz` instead. */
+export type IndexedAuthz<
+  P extends PermissionDefinition = PermissionDefinition,
+  R extends RoleDefinition<P> = RoleDefinition<P>,
+  Policy extends PolicyDefinition = Record<string, never>,
+> = Authz<P, R, Policy>;
 
 // ============================================================================
 // Re-exports

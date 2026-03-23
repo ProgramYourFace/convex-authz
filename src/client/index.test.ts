@@ -1775,6 +1775,8 @@ describe("Authz class", () => {
           relation: "member",
           objectType: "team",
           objectId: "sales",
+          removedBy: undefined,
+          enableAudit: true,
           tenantId: "test-tenant",
         }
       );
@@ -2876,6 +2878,8 @@ describe("IndexedAuthz alias (via Authz)", () => {
           relation: "member",
           objectType: "team",
           objectId: "sales",
+          removedBy: undefined,
+          enableAudit: true,
           tenantId: "test-tenant",
         }
       );
