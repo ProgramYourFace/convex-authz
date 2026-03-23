@@ -97,7 +97,7 @@ export const checkPermissionsFast = query({
       .withIndex("by_tenant_user_scope", (q) =>
         q.eq("tenantId", args.tenantId).eq("userId", args.userId).eq("scopeKey", scopeKey)
       )
-      .collect();
+      .take(1000);
 
     const allowedPerms: string[] = [];
     const deniedPerms: string[] = [];
@@ -756,7 +756,7 @@ export const addRelationWithCompute = internalMutation({
               .eq("subjectKey", objectKey)
               .eq("relation", inherited.fromRelation)
           )
-          .collect();
+          .take(1000);
 
         const matchingParents = parentRelations.filter(
           (r) => r.objectType === inherited.fromObjectType
@@ -838,7 +838,7 @@ export const removeRelationWithCompute = internalMutation({
       .withIndex("by_tenant_inherited_from", (q) =>
         q.eq("tenantId", args.tenantId).eq("inheritedFrom", existing._id as string)
       )
-      .collect();
+      .take(1000);
 
     for (const rel of inherited) {
       await ctx.db.delete(rel._id);
@@ -880,14 +880,14 @@ export const getUserPermissionsFast = query({
         .withIndex("by_tenant_user_scope", (q) =>
           q.eq("tenantId", args.tenantId).eq("userId", args.userId).eq("scopeKey", args.scopeKey as string)
         )
-        .collect();
+        .take(1000);
     } else {
       permissions = await ctx.db
         .query("effectivePermissions")
         .withIndex("by_tenant_user", (q) =>
           q.eq("tenantId", args.tenantId).eq("userId", args.userId)
         )
-        .collect();
+        .take(1000);
     }
 
     const now = Date.now();
@@ -927,14 +927,14 @@ export const getUserRolesFast = query({
         .withIndex("by_tenant_user_scope", (q) =>
           q.eq("tenantId", args.tenantId).eq("userId", args.userId).eq("scopeKey", args.scopeKey as string)
         )
-        .collect();
+        .take(1000);
     } else {
       roles = await ctx.db
         .query("effectiveRoles")
         .withIndex("by_tenant_user", (q) =>
           q.eq("tenantId", args.tenantId).eq("userId", args.userId)
         )
-        .collect();
+        .take(1000);
     }
 
     const now = Date.now();

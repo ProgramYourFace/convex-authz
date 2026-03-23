@@ -31,7 +31,7 @@ export const assignRole = mutation({
           .eq("userId", args.userId)
           .eq("role", args.role),
       )
-      .collect();
+      .take(100);
 
     // Check for duplicate (same role + same scope)
     const duplicate = existingAssignments.find((a) => {
@@ -102,7 +102,7 @@ export const revokeRole = mutation({
           .eq("userId", args.userId)
           .eq("role", args.role),
       )
-      .collect();
+      .take(100);
 
     // Find matching assignment (same scope)
     const toRevoke = assignments.find((a) => {
@@ -154,7 +154,7 @@ export const revokeAllRoles = mutation({
       .withIndex("by_tenant_user", (q) =>
         q.eq("tenantId", args.tenantId).eq("userId", args.userId),
       )
-      .collect();
+      .take(4000);
 
     let revokedCount = 0;
 
@@ -237,7 +237,7 @@ export const assignRoles = mutation({
             .eq("userId", args.userId)
             .eq("role", item.role),
         )
-        .collect();
+        .take(100);
 
       const duplicate = existingAssignments.find((a) => {
         if (isExpired(a.expiresAt)) return false;
@@ -321,7 +321,7 @@ export const revokeRoles = mutation({
             .eq("userId", args.userId)
             .eq("role", item.role),
         )
-        .collect();
+        .take(100);
 
       const toRevoke = assignments.find((a) => {
         if (!a.scope && !item.scope) return true;
@@ -397,7 +397,7 @@ async function offboardUserImpl(
     .withIndex("by_tenant_user", (q) =>
       q.eq("tenantId", args.tenantId).eq("userId", args.userId),
     )
-    .collect();
+    .take(4000);
 
   for (const a of assignments) {
     if (args.scope) {
@@ -426,7 +426,7 @@ async function offboardUserImpl(
       .withIndex("by_tenant_user", (q) =>
         q.eq("tenantId", args.tenantId).eq("userId", args.userId),
       )
-      .collect();
+      .take(4000);
 
     for (const o of overrides) {
       if (args.scope) {
@@ -446,7 +446,7 @@ async function offboardUserImpl(
       .withIndex("by_tenant_user", (q) =>
         q.eq("tenantId", args.tenantId).eq("userId", args.userId),
       )
-      .collect();
+      .take(4000);
 
     for (const a of attributes) {
       await ctx.db.delete(a._id);
@@ -474,7 +474,7 @@ async function offboardUserImpl(
           .eq("subjectType", "user")
           .eq("subjectId", args.userId),
       )
-      .collect();
+      .take(4000);
 
     for (const r of relationships) {
       await ctx.db.delete(r._id);
@@ -487,7 +487,7 @@ async function offboardUserImpl(
       .withIndex("by_tenant_subject", (q) =>
         q.eq("tenantId", args.tenantId).eq("subjectKey", userSubjectKey),
       )
-      .collect();
+      .take(4000);
 
     for (const er of effectiveRels) {
       await ctx.db.delete(er._id);
@@ -501,7 +501,7 @@ async function offboardUserImpl(
     .withIndex("by_tenant_user", (q) =>
       q.eq("tenantId", args.tenantId).eq("userId", args.userId),
     )
-    .collect();
+    .take(4000);
 
   for (const r of effectiveRoles) {
     if (scopeKey !== null && r.scopeKey !== scopeKey) continue;
@@ -514,7 +514,7 @@ async function offboardUserImpl(
     .withIndex("by_tenant_user", (q) =>
       q.eq("tenantId", args.tenantId).eq("userId", args.userId),
     )
-    .collect();
+    .take(4000);
 
   for (const p of effectivePerms) {
     if (scopeKey !== null && p.scopeKey !== scopeKey) continue;
@@ -744,7 +744,7 @@ export const removeAllAttributes = mutation({
       .withIndex("by_tenant_user", (q) =>
         q.eq("tenantId", args.tenantId).eq("userId", args.userId),
       )
-      .collect();
+      .take(4000);
 
     for (const attribute of attributes) {
       await ctx.db.delete(attribute._id);
@@ -795,7 +795,7 @@ export const grantPermission = mutation({
           .eq("userId", args.userId)
           .eq("permission", args.permission),
       )
-      .collect();
+      .take(100);
 
     const duplicate = existing.find((o) => {
       if (isExpired(o.expiresAt)) return false;
@@ -889,7 +889,7 @@ export const denyPermission = mutation({
           .eq("userId", args.userId)
           .eq("permission", args.permission),
       )
-      .collect();
+      .take(100);
 
     const duplicate = existing.find((o) => {
       if (isExpired(o.expiresAt)) return false;
@@ -980,7 +980,7 @@ export const removePermissionOverride = mutation({
           .eq("userId", args.userId)
           .eq("permission", args.permission),
       )
-      .collect();
+      .take(100);
 
     const toRemove = existing.find((o) => {
       if (!o.scope && !args.scope) return true;
