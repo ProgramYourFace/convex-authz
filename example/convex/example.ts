@@ -131,11 +131,9 @@ export const getUserRoles = query({
   args: { targetUserId: v.string() },
   returns: v.array(
     v.object({
-      _id: v.string(),
       role: v.string(),
       scope: v.optional(v.object({ type: v.string(), id: v.string() })),
-      metadata: v.optional(v.any()),
-      expiresAt: v.optional(v.number()),
+      scopeKey: v.string(),
     })
   ),
   handler: async (ctx, args) => {

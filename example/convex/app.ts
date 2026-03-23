@@ -107,11 +107,9 @@ export const getUserWithRoles = query({
       }),
       roles: v.array(
         v.object({
-          _id: v.string(),
           role: v.string(),
           scope: v.optional(v.object({ type: v.string(), id: v.string() })),
-          expiresAt: v.optional(v.number()),
-          metadata: v.optional(v.any()),
+          scopeKey: v.string(),
         })
       ),
       orgs: v.array(
@@ -242,11 +240,9 @@ export const getRoles = query({
   },
   returns: v.array(
     v.object({
-      _id: v.string(),
       role: v.string(),
       scope: v.optional(v.object({ type: v.string(), id: v.string() })),
-      expiresAt: v.optional(v.number()),
-      metadata: v.optional(v.any()),
+      scopeKey: v.string(),
     })
   ),
   handler: async (ctx, args) => {

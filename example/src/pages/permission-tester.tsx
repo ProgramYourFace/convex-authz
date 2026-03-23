@@ -242,7 +242,7 @@ export function PermissionTesterPage() {
                   <Badge variant="outline">No roles</Badge>
                 ) : (
                   userWithRoles.roles.map((role) => (
-                    <Badge key={role._id} variant="secondary">
+                    <Badge key={`${role.role}:${role.scopeKey}`} variant="secondary">
                       {role.role}
                       {role.scope && (
                         <span className="opacity-70 ml-1">
