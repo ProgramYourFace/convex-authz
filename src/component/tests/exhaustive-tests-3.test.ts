@@ -400,10 +400,10 @@ describe("Category 12: Bulk operations", () => {
     expect(result.revoked).toBe(0);
   });
 
-  test("12.7 assignRolesUnified with >100 roles -> throws", async () => {
+  test("12.7 assignRolesUnified with >20 roles -> throws", async () => {
     const t = convexTest(schema, modules);
 
-    const tooManyRoles = Array.from({ length: 101 }, (_, i) => ({
+    const tooManyRoles = Array.from({ length: 21 }, (_, i) => ({
       role: `role-${i}`,
     }));
 
@@ -414,13 +414,13 @@ describe("Category 12: Bulk operations", () => {
         roles: tooManyRoles,
         rolePermissionsMap: {},
       })
-    ).rejects.toThrow(/must not exceed 100/);
+    ).rejects.toThrow(/must not exceed 20/);
   });
 
-  test("12.8 revokeRolesUnified with >100 roles -> throws", async () => {
+  test("12.8 revokeRolesUnified with >20 roles -> throws", async () => {
     const t = convexTest(schema, modules);
 
-    const tooManyRoles = Array.from({ length: 101 }, (_, i) => ({
+    const tooManyRoles = Array.from({ length: 21 }, (_, i) => ({
       role: `role-${i}`,
     }));
 
@@ -431,7 +431,7 @@ describe("Category 12: Bulk operations", () => {
         roles: tooManyRoles,
         rolePermissionsMap: {},
       })
-    ).rejects.toThrow(/must not exceed 100/);
+    ).rejects.toThrow(/must not exceed 20/);
   });
 
   test("12.9 assignRolesUnified duplicate role in batch -> one entry", async () => {

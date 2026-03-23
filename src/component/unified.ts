@@ -1248,7 +1248,7 @@ export const denyPermissionUnified = mutation({
   },
 });
 
-const MAX_BULK_ROLES = 100;
+const MAX_BULK_ROLES = 20;
 
 /**
  * Unified Bulk Role Assignment
