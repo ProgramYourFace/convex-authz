@@ -508,7 +508,10 @@ const auditLogActionValidator = v.union(
   v.literal("permission_granted"),
   v.literal("permission_denied"),
   v.literal("attribute_set"),
-  v.literal("attribute_removed")
+  v.literal("attribute_removed"),
+  v.literal("relation_added"),
+  v.literal("relation_removed"),
+  v.literal("policy_evaluated")
 );
 
 const auditEntryShape = v.object({
@@ -582,6 +585,9 @@ export const getAuditLog = query({
                 | "permission_denied"
                 | "attribute_set"
                 | "attribute_removed"
+                | "relation_added"
+                | "relation_removed"
+                | "policy_evaluated"
             )
         );
     } else {

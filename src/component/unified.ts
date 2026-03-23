@@ -78,7 +78,7 @@ export const checkPermission = query({
             .eq("userId", args.userId)
             .eq("scopeKey", "global")
         )
-        .collect();
+        .take(4000);
 
       for (const row of globalRows) {
         if (isExpired(row.expiresAt)) continue;
@@ -102,7 +102,7 @@ export const checkPermission = query({
             .eq("userId", args.userId)
             .eq("scopeKey", scopeKey)
         )
-        .collect();
+        .take(4000);
 
       // Check deny patterns first — a wildcard deny overrides exact allow
       for (const row of rows) {
@@ -154,7 +154,7 @@ export const checkPermission = query({
           .eq("userId", args.userId)
           .eq("scopeKey", scopeKey)
       )
-      .collect();
+      .take(4000);
 
     // Deny patterns first
     for (const row of rows) {
@@ -198,7 +198,7 @@ export const checkPermission = query({
       }
     }
 
-    // ── Step 4: No permission found ─────────────────────────────────
+    // ── No permission found ──────────────────────────────────────────
     return {
       allowed: false,
       reason: "No permission granted",
@@ -253,7 +253,9 @@ export const assignRoleUnified = mutation({
 
     for (const row of existing) {
       if (scopeEquals(row.scope, args.scope) && !isExpired(row.expiresAt)) {
-        // Extend expiry if new value is later or removes expiry
+        // Extend expiry: only update if new value is later or removes expiry entirely.
+        // Passing a shorter expiresAt is a no-op (prevents accidental expiry reduction).
+        // To shorten expiry, revoke and re-assign.
         const shouldExtend = args.expiresAt === undefined ||
           (row.expiresAt !== undefined && args.expiresAt > row.expiresAt);
         if (shouldExtend && args.expiresAt !== row.expiresAt) {
@@ -579,7 +581,7 @@ export const grantPermissionUnified = mutation({
       .take(100);
 
     const existingOverride = existingOverrides.find((row) =>
-      matchesScope(row.scope, args.scope)
+      scopeEquals(row.scope, args.scope)
     );
 
     let overrideId: string;
@@ -1205,7 +1207,7 @@ export const denyPermissionUnified = mutation({
       .take(100);
 
     const existingOverride = existingOverrides.find((row) =>
-      matchesScope(row.scope, args.scope)
+      scopeEquals(row.scope, args.scope)
     );
 
     let overrideId: string;
@@ -1297,6 +1299,8 @@ export const denyPermissionUnified = mutation({
   },
 });
 
+// Must match MAX_BULK_ROLES in client/validation.ts — duplicated here
+// because component code cannot import from client.
 const MAX_BULK_ROLES = 20;
 
 /**
@@ -1357,7 +1361,9 @@ export const assignRolesUnified = mutation({
       let isDuplicate = false;
       for (const row of existing) {
         if (scopeEquals(row.scope, item.scope) && !isExpired(row.expiresAt)) {
-          // Extend expiry if new value is later or removes expiry
+          // Extend expiry: only update if new value is later or removes expiry entirely.
+          // Passing a shorter expiresAt is a no-op (prevents accidental expiry reduction).
+          // To shorten expiry, revoke and re-assign.
           const shouldExtend = item.expiresAt === undefined ||
             (row.expiresAt !== undefined && item.expiresAt > row.expiresAt);
           if (shouldExtend && item.expiresAt !== row.expiresAt) {
