@@ -9,8 +9,8 @@
  *   npx vitest bench src/component/benchmark.test.ts
  */
 import { convexTest } from "convex-test";
-import schema from "./schema.js";
-import { api } from "./_generated/api.js";
+import schema from "../schema.js";
+import { api } from "../_generated/api.js";
 import { describe, test, expect } from "vitest";
 
 const TENANT = "bench-tenant";
@@ -47,7 +47,7 @@ describe("Performance Benchmarks", () => {
    * Dev branch (v2):     unified.checkPermission — O(1) effectivePermissions lookup
    */
   test("checkPermission latency", async () => {
-    const t = convexTest(schema, import.meta.glob("./**/*.ts"));
+    const t = convexTest(schema, import.meta.glob("../**/*.ts"));
 
     // Setup: assign roles with many permissions to make the scan path slower
     const roles = ["admin", "editor", "viewer", "moderator", "analyst"];
@@ -170,7 +170,7 @@ describe("Performance Benchmarks", () => {
    * Dev branch (v2):     unified.assignRoleUnified — writes to roleAssignments + effectiveRoles + effectivePermissions
    */
   test("assignRole latency", async () => {
-    const t = convexTest(schema, import.meta.glob("./**/*.ts"));
+    const t = convexTest(schema, import.meta.glob("../**/*.ts"));
 
     const times: number[] = [];
     for (let i = 0; i < ITERATIONS; i++) {
@@ -208,7 +208,7 @@ describe("Performance Benchmarks", () => {
    * Benchmark: hasRole check
    */
   test("hasRole latency", async () => {
-    const t = convexTest(schema, import.meta.glob("./**/*.ts"));
+    const t = convexTest(schema, import.meta.glob("../**/*.ts"));
 
     // Setup
     try {
@@ -256,7 +256,7 @@ describe("Performance Benchmarks", () => {
    * Tests how performance scales with data volume
    */
   test("checkPermission with 100 users x 3 roles", { timeout: 60000 }, async () => {
-    const t = convexTest(schema, import.meta.glob("./**/*.ts"));
+    const t = convexTest(schema, import.meta.glob("../**/*.ts"));
 
     // Setup: 100 users with 3 roles each
     const perms = ["docs:read", "docs:write", "docs:delete", "settings:view"];

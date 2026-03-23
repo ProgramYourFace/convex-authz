@@ -8,10 +8,10 @@
 
 import { convexTest } from "convex-test";
 import { describe, test, expect } from "vitest";
-import schema from "./schema.js";
-import { api } from "./_generated/api.js";
+import schema from "../schema.js";
+import { api } from "../_generated/api.js";
 
-const modules = import.meta.glob("./**/*.ts");
+const modules = import.meta.glob("../**/*.ts");
 const TENANT = "test-tenant";
 
 describe("Unified Authz end-to-end integration", () => {

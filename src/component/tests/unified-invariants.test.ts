@@ -8,10 +8,10 @@
 
 import { convexTest } from "convex-test";
 import { describe, test, expect } from "vitest";
-import schema from "./schema.js";
-import { api } from "./_generated/api.js";
+import schema from "../schema.js";
+import { api } from "../_generated/api.js";
 
-const modules = import.meta.glob("./**/*.ts");
+const modules = import.meta.glob("../**/*.ts");
 const TENANT = "test-tenant";
 
 // ============================================================================
@@ -1337,7 +1337,7 @@ describe("Category 9: Edge cases", () => {
 
 describe("Category 10: Bulk unified mutations", () => {
   test("10.1 assignRolesUnified populates effective tables for all roles", async () => {
-    const t = convexTest(schema, import.meta.glob("./**/*.ts"));
+    const t = convexTest(schema, import.meta.glob("../**/*.ts"));
 
     await t.mutation(api.unified.assignRolesUnified, {
       tenantId: TENANT,
@@ -1372,7 +1372,7 @@ describe("Category 10: Bulk unified mutations", () => {
   });
 
   test("10.2 revokeRolesUnified removes permissions atomically", async () => {
-    const t = convexTest(schema, import.meta.glob("./**/*.ts"));
+    const t = convexTest(schema, import.meta.glob("../**/*.ts"));
 
     // Assign 3 roles
     await t.mutation(api.unified.assignRolesUnified, {
@@ -1425,7 +1425,7 @@ describe("Category 10: Bulk unified mutations", () => {
   });
 
   test("10.3 revokeAllRolesUnified clears all role-based permissions but preserves direct grants", async () => {
-    const t = convexTest(schema, import.meta.glob("./**/*.ts"));
+    const t = convexTest(schema, import.meta.glob("../**/*.ts"));
 
     // Assign roles
     await t.mutation(api.unified.assignRolesUnified, {
@@ -1472,7 +1472,7 @@ describe("Category 10: Bulk unified mutations", () => {
   });
 
   test("10.4 assignRolesUnified propagates policyClassifications to existing rows", async () => {
-    const t = convexTest(schema, import.meta.glob("./**/*.ts"));
+    const t = convexTest(schema, import.meta.glob("../**/*.ts"));
 
     // First role creates the permission row with no policy
     await t.mutation(api.unified.assignRoleUnified, {
@@ -1506,7 +1506,7 @@ describe("Category 10: Bulk unified mutations", () => {
 
 describe("Category 11: Offboarding and deprovisioning", () => {
   test("11.1 offboardUser clears role-based permissions but preserves direct grants when configured", async () => {
-    const t = convexTest(schema, import.meta.glob("./**/*.ts"));
+    const t = convexTest(schema, import.meta.glob("../**/*.ts"));
 
     // Assign role
     await t.mutation(api.unified.assignRoleUnified, {
@@ -1563,7 +1563,7 @@ describe("Category 11: Offboarding and deprovisioning", () => {
   });
 
   test("11.2 deprovisionUser removes everything", async () => {
-    const t = convexTest(schema, import.meta.glob("./**/*.ts"));
+    const t = convexTest(schema, import.meta.glob("../**/*.ts"));
 
     // Set up: role + direct grant + attribute + relation
     await t.mutation(api.unified.assignRoleUnified, {

@@ -11,7 +11,7 @@ import {
   getRoleLevel,
   compareRoles,
   createPolicyContext,
-} from "./helpers.js";
+} from "../helpers.js";
 
 describe("helpers", () => {
   describe("isExpired", () => {
