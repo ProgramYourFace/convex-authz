@@ -556,13 +556,12 @@ export class Authz<
     validateUserId(userId);
     validatePermissions(permissions);
     validateScope(scope);
-    return await ctx.runQuery(this.component.indexed.checkPermissionsFast, {
-      tenantId: this.options.tenantId,
-      userId,
-      permissions,
-      objectType: scope?.type,
-      objectId: scope?.id,
-    });
+    for (const perm of permissions) {
+      if (await this.can(ctx, userId, perm, scope)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -997,10 +996,18 @@ export class Authz<
    */
   async recomputeUser(ctx: MutationCtx | ActionCtx, userId: string): Promise<void> {
     validateUserId(userId);
+    // Build policy classifications from policies config
+    const policyClassifications: Record<string, "deferred" | "allow" | "deny" | null> = {};
+    if (this.options.policies) {
+      for (const [name, policy] of Object.entries(this.options.policies as Record<string, { type?: string }>)) {
+        policyClassifications[name] = (policy.type === "deferred" ? "deferred" : null);
+      }
+    }
     await ctx.runMutation(this.component.unified.recomputeUser, {
       tenantId: this.options.tenantId,
       userId,
       rolePermissionsMap: this.buildRolePermissionsMap(),
+      policyClassifications: Object.keys(policyClassifications).length > 0 ? policyClassifications : undefined,
     });
   }
 

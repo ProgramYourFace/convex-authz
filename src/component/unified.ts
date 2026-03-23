@@ -300,6 +300,13 @@ export const assignRoleUnified = mutation({
         } else if (classification === "allow" && !existingPerm.policyResult) {
           patchData.policyResult = "allow";
         }
+        // Compute merged expiresAt: no-expiry (undefined) wins over any expiry
+        const existingExpiry = existingPerm.expiresAt;
+        const newExpiry = args.expiresAt;
+        const mergedExpiresAt = existingExpiry === undefined || newExpiry === undefined
+          ? undefined
+          : Math.max(existingExpiry, newExpiry);
+        patchData.expiresAt = mergedExpiresAt;
         await ctx.db.patch(existingPerm._id, patchData);
       } else {
         await ctx.db.insert("effectivePermissions", {
@@ -634,18 +641,18 @@ export const setAttributeWithRecompute = mutation({
 
     // 2. Apply policyReEvaluations to effectivePermissions
     if (args.policyReEvaluations) {
-      for (const [permission, newResult] of Object.entries(args.policyReEvaluations)) {
-        // Find ALL effectivePermissions for this user+permission across all scopes
-        const effectivePerms = await ctx.db
-          .query("effectivePermissions")
-          .withIndex("by_tenant_user", (q) =>
-            q
-              .eq("tenantId", args.tenantId)
-              .eq("userId", args.userId)
-          )
-          .collect();
+      // Hoist query outside the loop to avoid N×full-scan
+      const allEffectivePerms = await ctx.db
+        .query("effectivePermissions")
+        .withIndex("by_tenant_user", (q) =>
+          q
+            .eq("tenantId", args.tenantId)
+            .eq("userId", args.userId)
+        )
+        .collect();
 
-        const matchingPerms = effectivePerms.filter(
+      for (const [permission, newResult] of Object.entries(args.policyReEvaluations)) {
+        const matchingPerms = allEffectivePerms.filter(
           (p) => p.permission === permission && p.policyName
         );
 
@@ -732,6 +739,28 @@ export const addRelationUnified = mutation({
       .unique();
 
     if (existing) {
+      // Repair: ensure effectiveRelationships is also populated
+      const subjectKey = `${args.subjectType}:${args.subjectId}`;
+      const objectKey = `${args.objectType}:${args.objectId}`;
+      const existingEffective = await ctx.db
+        .query("effectiveRelationships")
+        .withIndex("by_tenant_subject_relation_object", (q) =>
+          q.eq("tenantId", args.tenantId)
+            .eq("subjectKey", subjectKey)
+            .eq("relation", args.relation)
+            .eq("objectKey", objectKey)
+        )
+        .unique();
+      if (!existingEffective) {
+        await ctx.db.insert("effectiveRelationships", {
+          tenantId: args.tenantId,
+          subjectKey, subjectType: args.subjectType, subjectId: args.subjectId,
+          relation: args.relation,
+          objectKey, objectType: args.objectType, objectId: args.objectId,
+          isDirect: true, inheritedFrom: null,
+          createdBy: args.createdBy, createdAt: Date.now(), depth: 0,
+        });
+      }
       return existing._id;
     }
 
@@ -780,7 +809,6 @@ export const addRelationUnified = mutation({
         userId: args.subjectType === "user" ? args.subjectId : args.createdBy ?? "system",
         actorId: args.createdBy,
         details: {
-          scope: undefined,
           relation: args.relation,
           subject: `${args.subjectType}:${args.subjectId}`,
           object: `${args.objectType}:${args.objectId}`,
@@ -876,7 +904,6 @@ export const removeRelationUnified = mutation({
         action: "relation_removed",
         userId: args.subjectType === "user" ? args.subjectId : "system",
         details: {
-          scope: undefined,
           relation: args.relation,
           subject: `${args.subjectType}:${args.subjectId}`,
           object: `${args.objectType}:${args.objectId}`,
@@ -1005,8 +1032,15 @@ export const recomputeUser = mutation({
           const sources = existingPerm.sources.includes(assignment.role)
             ? existingPerm.sources
             : [...existingPerm.sources, assignment.role];
+          // Compute merged expiresAt: no-expiry (undefined) wins over any expiry
+          const existingExpiry = existingPerm.expiresAt;
+          const newExpiry = assignment.expiresAt;
+          const mergedExpiresAt = existingExpiry === undefined || newExpiry === undefined
+            ? undefined
+            : Math.max(existingExpiry, newExpiry);
           await ctx.db.patch(existingPerm._id, {
             sources,
+            expiresAt: mergedExpiresAt,
             updatedAt: now,
           });
         } else {
@@ -1108,6 +1142,7 @@ export const denyPermissionUnified = mutation({
     if (existingPerm) {
       await ctx.db.patch(existingPerm._id, {
         directDeny: true,
+        directGrant: undefined,
         effect: "deny",
         reason: args.reason,
         expiresAt: args.expiresAt,
@@ -1298,6 +1333,13 @@ export const assignRolesUnified = mutation({
           } else if (classification === "allow" && !existingPerm.policyResult) {
             patchData.policyResult = "allow";
           }
+          // Compute merged expiresAt: no-expiry (undefined) wins over any expiry
+          const existingExpiry = existingPerm.expiresAt;
+          const newExpiry = item.expiresAt;
+          const mergedExpiresAt = existingExpiry === undefined || newExpiry === undefined
+            ? undefined
+            : Math.max(existingExpiry, newExpiry);
+          patchData.expiresAt = mergedExpiresAt;
           await ctx.db.patch(existingPerm._id, patchData);
         } else {
           await ctx.db.insert("effectivePermissions", {
