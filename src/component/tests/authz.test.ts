@@ -11,7 +11,7 @@ describe("authz component", () => {
     it("should assign a role to a user", async () => {
       const t = convexTest(schema, modules);
 
-      const assignmentId = await t.mutation(api.mutations.assignRole, {
+      const assignmentId = await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -24,7 +24,7 @@ describe("authz component", () => {
     it("should get user roles", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -42,7 +42,7 @@ describe("authz component", () => {
     it("should check if user has role", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
@@ -68,13 +68,13 @@ describe("authz component", () => {
     it("should revoke a role", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
       });
 
-      const revoked = await t.mutation(api.mutations.revokeRole, {
+      const revoked = await t.mutation(internal.mutations.revokeRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
@@ -94,7 +94,7 @@ describe("authz component", () => {
     it("should support scoped roles", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
@@ -123,14 +123,14 @@ describe("authz component", () => {
     it("should prevent duplicate role assignments", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
 
       await expect(
-        t.mutation(api.mutations.assignRole, {
+        t.mutation(internal.mutations.assignRole, {
           tenantId: TENANT,
           userId: "user_123",
           role: "admin",
@@ -143,7 +143,7 @@ describe("authz component", () => {
     it("should check permission based on role", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -166,7 +166,7 @@ describe("authz component", () => {
     it("should deny permission when user has no matching role", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
@@ -188,7 +188,7 @@ describe("authz component", () => {
     it("should support wildcard permissions", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "superadmin",
@@ -211,7 +211,7 @@ describe("authz component", () => {
     it("should grant explicit permission", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -233,14 +233,14 @@ describe("authz component", () => {
       const t = convexTest(schema, modules);
 
       // First give admin role
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
 
       // Then deny specific permission
-      await t.mutation(api.mutations.denyPermission, {
+      await t.mutation(internal.mutations.denyPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -265,7 +265,7 @@ describe("authz component", () => {
     it("should set and get user attributes", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.setAttribute, {
+      await t.mutation(internal.mutations.setAttribute, {
         tenantId: TENANT,
         userId: "user_123",
         key: "department",
@@ -284,14 +284,14 @@ describe("authz component", () => {
     it("should get all user attributes", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.setAttribute, {
+      await t.mutation(internal.mutations.setAttribute, {
         tenantId: TENANT,
         userId: "user_123",
         key: "department",
         value: "engineering",
       });
 
-      await t.mutation(api.mutations.setAttribute, {
+      await t.mutation(internal.mutations.setAttribute, {
         tenantId: TENANT,
         userId: "user_123",
         key: "level",
@@ -309,7 +309,7 @@ describe("authz component", () => {
     it("should remove user attribute", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.setAttribute, {
+      await t.mutation(internal.mutations.setAttribute, {
         tenantId: TENANT,
         userId: "user_123",
         key: "department",
@@ -338,7 +338,7 @@ describe("authz component", () => {
     it("should compute effective permissions from roles", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
@@ -361,13 +361,13 @@ describe("authz component", () => {
     it("should track denied permissions", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
 
-      await t.mutation(api.mutations.denyPermission, {
+      await t.mutation(internal.mutations.denyPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -390,7 +390,7 @@ describe("authz component", () => {
     it("should log role assignment with audit enabled", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",

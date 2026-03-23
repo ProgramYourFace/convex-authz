@@ -11,7 +11,7 @@
  */
 
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, query } from "./_generated/server";
 
 // ============================================================================
 // Relationship Tuple Storage
@@ -22,7 +22,7 @@ import { mutation, query } from "./_generated/server";
  * Format: (subject, relation, object)
  * Example: (user:123, member, team:456)
  */
-export const addRelation = mutation({
+export const addRelation = internalMutation({
   args: {
     tenantId: v.string(),
     subjectType: v.string(), // e.g., "user", "team"
@@ -70,7 +70,7 @@ export const addRelation = mutation({
 /**
  * Remove a relationship tuple
  */
-export const removeRelation = mutation({
+export const removeRelation = internalMutation({
   args: {
     tenantId: v.string(),
     subjectType: v.string(),

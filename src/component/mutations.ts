@@ -1,5 +1,5 @@
 import { v, ConvexError } from "convex/values";
-import { mutation } from "./_generated/server";
+import { internalMutation, mutation } from "./_generated/server";
 import { isExpired } from "./helpers";
 import { scopeValidator } from "./validators";
 
@@ -9,7 +9,7 @@ const BATCH_SIZE = 500;
 /**
  * Assign a role to a user
  */
-export const assignRole = mutation({
+export const assignRole = internalMutation({
   args: {
     tenantId: v.string(),
     userId: v.string(),
@@ -83,7 +83,7 @@ export const assignRole = mutation({
 /**
  * Revoke a role from a user
  */
-export const revokeRole = mutation({
+export const revokeRole = internalMutation({
   args: {
     tenantId: v.string(),
     userId: v.string(),
@@ -139,7 +139,7 @@ export const revokeRole = mutation({
 /**
  * Revoke all roles from a user
  */
-export const revokeAllRoles = mutation({
+export const revokeAllRoles = internalMutation({
   args: {
     tenantId: v.string(),
     userId: v.string(),
@@ -196,7 +196,7 @@ export const revokeAllRoles = mutation({
 /**
  * Assign multiple roles to a user in a single transaction.
  */
-export const assignRoles = mutation({
+export const assignRoles = internalMutation({
   args: {
     tenantId: v.string(),
     userId: v.string(),
@@ -284,7 +284,7 @@ export const assignRoles = mutation({
 /**
  * Revoke multiple roles from a user in a single transaction.
  */
-export const revokeRoles = mutation({
+export const revokeRoles = internalMutation({
   args: {
     tenantId: v.string(),
     userId: v.string(),
@@ -609,7 +609,7 @@ export const deprovisionUser = mutation({
 /**
  * Set a user attribute
  */
-export const setAttribute = mutation({
+export const setAttribute = internalMutation({
   args: {
     tenantId: v.string(),
     userId: v.string(),
@@ -736,7 +736,7 @@ export const removeAttribute = mutation({
 /**
  * Remove all user attributes
  */
-export const removeAllAttributes = mutation({
+export const removeAllAttributes = internalMutation({
   args: {
     tenantId: v.string(),
     userId: v.string(),
@@ -779,7 +779,7 @@ export const removeAllAttributes = mutation({
 /**
  * Grant a permission override
  */
-export const grantPermission = mutation({
+export const grantPermission = internalMutation({
   args: {
     tenantId: v.string(),
     userId: v.string(),
@@ -873,7 +873,7 @@ export const grantPermission = mutation({
 /**
  * Deny a permission (create deny override)
  */
-export const denyPermission = mutation({
+export const denyPermission = internalMutation({
   args: {
     tenantId: v.string(),
     userId: v.string(),
@@ -967,7 +967,7 @@ export const denyPermission = mutation({
 /**
  * Remove a permission override
  */
-export const removePermissionOverride = mutation({
+export const removePermissionOverride = internalMutation({
   args: {
     tenantId: v.string(),
     userId: v.string(),
@@ -1026,7 +1026,7 @@ export const removePermissionOverride = mutation({
 /**
  * Log a permission check to the audit log
  */
-export const logPermissionCheck = mutation({
+export const logPermissionCheck = internalMutation({
   args: {
     tenantId: v.string(),
     userId: v.string(),

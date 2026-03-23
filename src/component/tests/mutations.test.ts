@@ -5,7 +5,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 import schema from "../schema.js";
-import { api } from "../_generated/api.js";
+import { api, internal } from "../_generated/api.js";
 
 const modules = import.meta.glob("../**/*.ts");
 
@@ -16,7 +16,7 @@ describe("mutations - additional coverage", () => {
     it("should return false when revoking non-existent role", async () => {
       const t = convexTest(schema, modules);
 
-      const result = await t.mutation(api.mutations.revokeRole, {
+      const result = await t.mutation(internal.mutations.revokeRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "nonexistent",
@@ -28,14 +28,14 @@ describe("mutations - additional coverage", () => {
     it("should revoke scoped role", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         scope: { type: "team", id: "team_1" },
       });
 
-      const result = await t.mutation(api.mutations.revokeRole, {
+      const result = await t.mutation(internal.mutations.revokeRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -48,14 +48,14 @@ describe("mutations - additional coverage", () => {
     it("should not revoke when scope doesn't match", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         scope: { type: "team", id: "team_1" },
       });
 
-      const result = await t.mutation(api.mutations.revokeRole, {
+      const result = await t.mutation(internal.mutations.revokeRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -68,13 +68,13 @@ describe("mutations - additional coverage", () => {
     it("should log audit entry when enabled", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
 
-      await t.mutation(api.mutations.revokeRole, {
+      await t.mutation(internal.mutations.revokeRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -97,7 +97,7 @@ describe("mutations - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       // Assign a scoped role
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -105,7 +105,7 @@ describe("mutations - additional coverage", () => {
       });
 
       // Try to revoke global (unscoped) role - shouldn't match
-      const result = await t.mutation(api.mutations.revokeRole, {
+      const result = await t.mutation(internal.mutations.revokeRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -124,19 +124,19 @@ describe("mutations - additional coverage", () => {
     it("should revoke all roles for a user", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
       });
 
-      const count = await t.mutation(api.mutations.revokeAllRoles, {
+      const count = await t.mutation(internal.mutations.revokeAllRoles, {
         tenantId: TENANT,
         userId: "user_123",
       });
@@ -153,28 +153,28 @@ describe("mutations - additional coverage", () => {
     it("should revoke only matching scope", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         scope: { type: "team", id: "team_1" },
       });
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
         scope: { type: "team", id: "team_2" },
       });
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
       });
 
       // Revoke only team_1 scope
-      const count = await t.mutation(api.mutations.revokeAllRoles, {
+      const count = await t.mutation(internal.mutations.revokeAllRoles, {
         tenantId: TENANT,
         userId: "user_123",
         scope: { type: "team", id: "team_1" },
@@ -193,14 +193,14 @@ describe("mutations - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       // Global (no scope)
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
       });
 
       // Scoped
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -208,7 +208,7 @@ describe("mutations - additional coverage", () => {
       });
 
       // Try revoking with scope filter - global one should be skipped
-      const count = await t.mutation(api.mutations.revokeAllRoles, {
+      const count = await t.mutation(internal.mutations.revokeAllRoles, {
         tenantId: TENANT,
         userId: "user_123",
         scope: { type: "team", id: "team_1" },
@@ -220,21 +220,21 @@ describe("mutations - additional coverage", () => {
     it("should skip assignments with different scope when scope filter is set", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         scope: { type: "team", id: "team_1" },
       });
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
         scope: { type: "team", id: "team_2" },
       });
 
-      const count = await t.mutation(api.mutations.revokeAllRoles, {
+      const count = await t.mutation(internal.mutations.revokeAllRoles, {
         tenantId: TENANT,
         userId: "user_123",
         scope: { type: "team", id: "team_1" },
@@ -246,19 +246,19 @@ describe("mutations - additional coverage", () => {
     it("should log audit entries when enabled", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
       });
 
-      await t.mutation(api.mutations.revokeAllRoles, {
+      await t.mutation(internal.mutations.revokeAllRoles, {
         tenantId: TENANT,
         userId: "user_123",
         revokedBy: "system",
@@ -280,7 +280,7 @@ describe("mutations - additional coverage", () => {
     it("should assign multiple roles in one transaction", async () => {
       const t = convexTest(schema, modules);
 
-      const result = await t.mutation(api.mutations.assignRoles, {
+      const result = await t.mutation(internal.mutations.assignRoles, {
         tenantId: TENANT,
         userId: "user_123",
         roles: [
@@ -303,14 +303,14 @@ describe("mutations - additional coverage", () => {
     it("should throw on duplicate role+scope", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
 
       await expect(
-        t.mutation(api.mutations.assignRoles, {
+        t.mutation(internal.mutations.assignRoles, {
           tenantId: TENANT,
           userId: "user_123",
           roles: [{ role: "admin" }, { role: "editor" }],
@@ -327,7 +327,7 @@ describe("mutations - additional coverage", () => {
       }));
 
       await expect(
-        t.mutation(api.mutations.assignRoles, {
+        t.mutation(internal.mutations.assignRoles, {
           tenantId: TENANT,
           userId: "user_123",
           roles,
@@ -340,18 +340,18 @@ describe("mutations - additional coverage", () => {
     it("should revoke multiple roles in one transaction", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
       });
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
       });
 
-      const result = await t.mutation(api.mutations.revokeRoles, {
+      const result = await t.mutation(internal.mutations.revokeRoles, {
         tenantId: TENANT,
         userId: "user_123",
         roles: [{ role: "admin" }, { role: "editor" }],
@@ -370,20 +370,20 @@ describe("mutations - additional coverage", () => {
     it("should only revoke matching scope", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         scope: { type: "team", id: "team_1" },
       });
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         scope: { type: "team", id: "team_2" },
       });
 
-      const result = await t.mutation(api.mutations.revokeRoles, {
+      const result = await t.mutation(internal.mutations.revokeRoles, {
         tenantId: TENANT,
         userId: "user_123",
         roles: [{ role: "admin", scope: { type: "team", id: "team_1" } }],
@@ -404,17 +404,17 @@ describe("mutations - additional coverage", () => {
     it("should remove all roles, overrides, and attributes for user", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_off",
         role: "admin",
       });
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_off",
         permission: "documents:read",
       });
-      await t.mutation(api.mutations.setAttribute, {
+      await t.mutation(internal.mutations.setAttribute, {
         tenantId: TENANT,
         userId: "user_off",
         key: "dept",
@@ -455,12 +455,12 @@ describe("mutations - additional coverage", () => {
     it("should remove ReBAC relationships on full offboard (no scope)", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_rel",
         role: "viewer",
       });
-      await t.mutation(api.rebac.addRelation, {
+      await t.mutation(internal.rebac.addRelation, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "user_rel",
@@ -488,7 +488,7 @@ describe("mutations - additional coverage", () => {
     it("should not remove relationships when scope is provided", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.rebac.addRelation, {
+      await t.mutation(internal.rebac.addRelation, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "user_scoped_rel",
@@ -496,7 +496,7 @@ describe("mutations - additional coverage", () => {
         objectType: "team",
         objectId: "team_1",
       });
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_scoped_rel",
         role: "admin",
@@ -523,13 +523,13 @@ describe("mutations - additional coverage", () => {
     it("should respect scope when provided", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_off2",
         role: "admin",
         scope: { type: "team", id: "team_1" },
       });
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_off2",
         role: "viewer",
@@ -556,12 +556,12 @@ describe("mutations - additional coverage", () => {
     it("should skip attributes and overrides when options false", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_off3",
         role: "admin",
       });
-      await t.mutation(api.mutations.setAttribute, {
+      await t.mutation(internal.mutations.setAttribute, {
         tenantId: TENANT,
         userId: "user_off3",
         key: "keep",
@@ -594,23 +594,23 @@ describe("mutations - additional coverage", () => {
     it("should wipe all roles, overrides, attributes, and relationships in one call", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_dep",
         role: "admin",
       });
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_dep",
         permission: "documents:read",
       });
-      await t.mutation(api.mutations.setAttribute, {
+      await t.mutation(internal.mutations.setAttribute, {
         tenantId: TENANT,
         userId: "user_dep",
         key: "dept",
         value: "eng",
       });
-      await t.mutation(api.rebac.addRelation, {
+      await t.mutation(internal.rebac.addRelation, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "user_dep",
@@ -655,14 +655,14 @@ describe("mutations - additional coverage", () => {
     it("should update existing attribute", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.setAttribute, {
+      await t.mutation(internal.mutations.setAttribute, {
         tenantId: TENANT,
         userId: "user_123",
         key: "department",
         value: "engineering",
       });
 
-      const result = await t.mutation(api.mutations.setAttribute, {
+      const result = await t.mutation(internal.mutations.setAttribute, {
         tenantId: TENANT,
         userId: "user_123",
         key: "department",
@@ -682,14 +682,14 @@ describe("mutations - additional coverage", () => {
     it("should log audit when updating existing attribute", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.setAttribute, {
+      await t.mutation(internal.mutations.setAttribute, {
         tenantId: TENANT,
         userId: "user_123",
         key: "department",
         value: "engineering",
       });
 
-      await t.mutation(api.mutations.setAttribute, {
+      await t.mutation(internal.mutations.setAttribute, {
         tenantId: TENANT,
         userId: "user_123",
         key: "department",
@@ -710,7 +710,7 @@ describe("mutations - additional coverage", () => {
     it("should log audit when creating new attribute", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.setAttribute, {
+      await t.mutation(internal.mutations.setAttribute, {
         tenantId: TENANT,
         userId: "user_123",
         key: "department",
@@ -745,7 +745,7 @@ describe("mutations - additional coverage", () => {
     it("should log audit when removing attribute", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.setAttribute, {
+      await t.mutation(internal.mutations.setAttribute, {
         tenantId: TENANT,
         userId: "user_123",
         key: "department",
@@ -774,21 +774,21 @@ describe("mutations - additional coverage", () => {
     it("should remove all attributes for a user", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.setAttribute, {
+      await t.mutation(internal.mutations.setAttribute, {
         tenantId: TENANT,
         userId: "user_123",
         key: "department",
         value: "engineering",
       });
 
-      await t.mutation(api.mutations.setAttribute, {
+      await t.mutation(internal.mutations.setAttribute, {
         tenantId: TENANT,
         userId: "user_123",
         key: "level",
         value: 5,
       });
 
-      const count = await t.mutation(api.mutations.removeAllAttributes, {
+      const count = await t.mutation(internal.mutations.removeAllAttributes, {
         tenantId: TENANT,
         userId: "user_123",
       });
@@ -805,21 +805,21 @@ describe("mutations - additional coverage", () => {
     it("should log audit entries when enabled", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.setAttribute, {
+      await t.mutation(internal.mutations.setAttribute, {
         tenantId: TENANT,
         userId: "user_123",
         key: "department",
         value: "engineering",
       });
 
-      await t.mutation(api.mutations.setAttribute, {
+      await t.mutation(internal.mutations.setAttribute, {
         tenantId: TENANT,
         userId: "user_123",
         key: "level",
         value: 5,
       });
 
-      await t.mutation(api.mutations.removeAllAttributes, {
+      await t.mutation(internal.mutations.removeAllAttributes, {
         tenantId: TENANT,
         userId: "user_123",
         removedBy: "system",
@@ -839,7 +839,7 @@ describe("mutations - additional coverage", () => {
     it("should return 0 when no attributes exist", async () => {
       const t = convexTest(schema, modules);
 
-      const count = await t.mutation(api.mutations.removeAllAttributes, {
+      const count = await t.mutation(internal.mutations.removeAllAttributes, {
         tenantId: TENANT,
         userId: "user_123",
       });
@@ -852,7 +852,7 @@ describe("mutations - additional coverage", () => {
     it("should update existing override", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -860,7 +860,7 @@ describe("mutations - additional coverage", () => {
       });
 
       // Grant again should update existing
-      const result = await t.mutation(api.mutations.grantPermission, {
+      const result = await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -882,13 +882,13 @@ describe("mutations - additional coverage", () => {
     it("should log audit when updating existing override", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
 
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -908,7 +908,7 @@ describe("mutations - additional coverage", () => {
     it("should log audit when creating new override", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -928,7 +928,7 @@ describe("mutations - additional coverage", () => {
     it("should handle scoped overrides", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -948,7 +948,7 @@ describe("mutations - additional coverage", () => {
     it("should accept wildcard pattern (documents:*)", async () => {
       const t = convexTest(schema, modules);
 
-      const id = await t.mutation(api.mutations.grantPermission, {
+      const id = await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:*",
@@ -966,7 +966,7 @@ describe("mutations - additional coverage", () => {
     it("should accept full wildcard pattern (*)", async () => {
       const t = convexTest(schema, modules);
 
-      const id = await t.mutation(api.mutations.grantPermission, {
+      const id = await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "*",
@@ -985,7 +985,7 @@ describe("mutations - additional coverage", () => {
     it("should update existing override to deny", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.denyPermission, {
+      await t.mutation(internal.mutations.denyPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -993,7 +993,7 @@ describe("mutations - additional coverage", () => {
       });
 
       // Deny again should update existing
-      const result = await t.mutation(api.mutations.denyPermission, {
+      const result = await t.mutation(internal.mutations.denyPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -1015,13 +1015,13 @@ describe("mutations - additional coverage", () => {
     it("should log audit when updating existing deny override", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.denyPermission, {
+      await t.mutation(internal.mutations.denyPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
       });
 
-      await t.mutation(api.mutations.denyPermission, {
+      await t.mutation(internal.mutations.denyPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -1041,7 +1041,7 @@ describe("mutations - additional coverage", () => {
     it("should log audit when creating new deny override", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.denyPermission, {
+      await t.mutation(internal.mutations.denyPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -1061,7 +1061,7 @@ describe("mutations - additional coverage", () => {
     it("should accept wildcard pattern (documents:*)", async () => {
       const t = convexTest(schema, modules);
 
-      const id = await t.mutation(api.mutations.denyPermission, {
+      const id = await t.mutation(internal.mutations.denyPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:*",
@@ -1083,13 +1083,13 @@ describe("mutations - additional coverage", () => {
     it("should remove an allow override", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
 
-      const result = await t.mutation(api.mutations.removePermissionOverride, {
+      const result = await t.mutation(internal.mutations.removePermissionOverride, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -1107,13 +1107,13 @@ describe("mutations - additional coverage", () => {
     it("should remove a deny override", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.denyPermission, {
+      await t.mutation(internal.mutations.denyPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
       });
 
-      const result = await t.mutation(api.mutations.removePermissionOverride, {
+      const result = await t.mutation(internal.mutations.removePermissionOverride, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -1125,7 +1125,7 @@ describe("mutations - additional coverage", () => {
     it("should return false when no override exists", async () => {
       const t = convexTest(schema, modules);
 
-      const result = await t.mutation(api.mutations.removePermissionOverride, {
+      const result = await t.mutation(internal.mutations.removePermissionOverride, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -1137,14 +1137,14 @@ describe("mutations - additional coverage", () => {
     it("should remove scoped override", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         scope: { type: "team", id: "team_1" },
       });
 
-      const result = await t.mutation(api.mutations.removePermissionOverride, {
+      const result = await t.mutation(internal.mutations.removePermissionOverride, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -1157,13 +1157,13 @@ describe("mutations - additional coverage", () => {
     it("should log audit when removing an allow override", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
 
-      await t.mutation(api.mutations.removePermissionOverride, {
+      await t.mutation(internal.mutations.removePermissionOverride, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -1184,13 +1184,13 @@ describe("mutations - additional coverage", () => {
     it("should log audit when removing a deny override", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.denyPermission, {
+      await t.mutation(internal.mutations.denyPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
       });
 
-      await t.mutation(api.mutations.removePermissionOverride, {
+      await t.mutation(internal.mutations.removePermissionOverride, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -1213,7 +1213,7 @@ describe("mutations - additional coverage", () => {
     it("should log a permission check to audit log", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.logPermissionCheck, {
+      await t.mutation(internal.mutations.logPermissionCheck, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -1235,7 +1235,7 @@ describe("mutations - additional coverage", () => {
     it("should log with scope", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.logPermissionCheck, {
+      await t.mutation(internal.mutations.logPermissionCheck, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -1261,14 +1261,14 @@ describe("mutations - additional coverage", () => {
 
       const pastTime = Date.now() - 10000;
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         expiresAt: pastTime,
       });
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
@@ -1284,14 +1284,14 @@ describe("mutations - additional coverage", () => {
 
       const pastTime = Date.now() - 10000;
 
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         expiresAt: pastTime,
       });
 
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:write",
@@ -1317,18 +1317,18 @@ describe("mutations - additional coverage", () => {
       const t = convexTest(schema, modules);
       const pastTime = Date.now() - 10000;
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_1",
         role: "admin",
         expiresAt: pastTime,
       });
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_2",
         role: "editor",
       });
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_1",
         permission: "documents:read",
@@ -1363,7 +1363,7 @@ describe("mutations - additional coverage", () => {
 
     it("should not delete when maxAgeDays is 0", async () => {
       const t = convexTest(schema, modules);
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_1",
         role: "admin",
@@ -1378,7 +1378,7 @@ describe("mutations - additional coverage", () => {
 
     it("should not delete when maxEntries is 0", async () => {
       const t = convexTest(schema, modules);
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_1",
         role: "admin",
@@ -1394,19 +1394,19 @@ describe("mutations - additional coverage", () => {
     it("should cap entries when maxEntries is set", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_1",
         role: "admin",
         enableAudit: true,
       });
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_1",
         role: "editor",
         enableAudit: true,
       });
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_1",
         permission: "documents:read",
@@ -1436,7 +1436,7 @@ describe("mutations - additional coverage", () => {
 
       const pastTime = Date.now() - 10000;
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -1444,7 +1444,7 @@ describe("mutations - additional coverage", () => {
       });
 
       // Should not throw since the previous assignment is expired
-      const result = await t.mutation(api.mutations.assignRole, {
+      const result = await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -1458,7 +1458,7 @@ describe("mutations - additional coverage", () => {
     it("should detect duplicate scoped assignment with exact same scope", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -1467,7 +1467,7 @@ describe("mutations - additional coverage", () => {
 
       // Attempting duplicate scoped assignment should throw
       await expect(
-        t.mutation(api.mutations.assignRole, {
+        t.mutation(internal.mutations.assignRole, {
           tenantId: TENANT,
           userId: "user_123",
           role: "admin",
@@ -1479,7 +1479,7 @@ describe("mutations - additional coverage", () => {
     it("should allow assigning same role with different scope", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -1487,7 +1487,7 @@ describe("mutations - additional coverage", () => {
       });
 
       // Different scope should be ok
-      const result = await t.mutation(api.mutations.assignRole, {
+      const result = await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -1500,7 +1500,7 @@ describe("mutations - additional coverage", () => {
     it("should allow assigning global role when scoped exists", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -1508,7 +1508,7 @@ describe("mutations - additional coverage", () => {
       });
 
       // Global role should be a separate assignment
-      const result = await t.mutation(api.mutations.assignRole, {
+      const result = await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -1522,7 +1522,7 @@ describe("mutations - additional coverage", () => {
     it("should update existing scoped override", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -1531,7 +1531,7 @@ describe("mutations - additional coverage", () => {
       });
 
       // Same permission, same scope - should update
-      const result = await t.mutation(api.mutations.grantPermission, {
+      const result = await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -1545,7 +1545,7 @@ describe("mutations - additional coverage", () => {
     it("should create new override for different scope", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -1553,7 +1553,7 @@ describe("mutations - additional coverage", () => {
       });
 
       // Different scope - new override
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -1574,7 +1574,7 @@ describe("mutations - additional coverage", () => {
     it("should update existing scoped deny override", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.denyPermission, {
+      await t.mutation(internal.mutations.denyPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -1583,7 +1583,7 @@ describe("mutations - additional coverage", () => {
       });
 
       // Same permission, same scope - should update
-      const result = await t.mutation(api.mutations.denyPermission, {
+      const result = await t.mutation(internal.mutations.denyPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -1597,14 +1597,14 @@ describe("mutations - additional coverage", () => {
     it("should create new deny override for different scope", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.denyPermission, {
+      await t.mutation(internal.mutations.denyPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
         scope: { type: "team", id: "team_1" },
       });
 
-      await t.mutation(api.mutations.denyPermission, {
+      await t.mutation(internal.mutations.denyPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -1626,14 +1626,14 @@ describe("mutations - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       // Unscoped override
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
 
       // Scoped override - should create new, not update
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -1653,7 +1653,7 @@ describe("mutations - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       // Scoped override
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -1661,7 +1661,7 @@ describe("mutations - additional coverage", () => {
       });
 
       // Unscoped override - should create new, not update
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -1681,13 +1681,13 @@ describe("mutations - additional coverage", () => {
     it("should not find duplicate when existing has no scope but request has scope", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.denyPermission, {
+      await t.mutation(internal.mutations.denyPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
       });
 
-      await t.mutation(api.mutations.denyPermission, {
+      await t.mutation(internal.mutations.denyPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -1706,14 +1706,14 @@ describe("mutations - additional coverage", () => {
     it("should not find duplicate when existing has scope but request has no scope", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.denyPermission, {
+      await t.mutation(internal.mutations.denyPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
         scope: { type: "team", id: "team_1" },
       });
 
-      await t.mutation(api.mutations.denyPermission, {
+      await t.mutation(internal.mutations.denyPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -1735,7 +1735,7 @@ describe("mutations - additional coverage", () => {
 
       const pastTime = Date.now() - 10000;
 
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -1743,7 +1743,7 @@ describe("mutations - additional coverage", () => {
       });
 
       // Should not find the expired override as duplicate, so creates new
-      const result = await t.mutation(api.mutations.grantPermission, {
+      const result = await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -1760,7 +1760,7 @@ describe("mutations - additional coverage", () => {
 
       const pastTime = Date.now() - 10000;
 
-      await t.mutation(api.mutations.denyPermission, {
+      await t.mutation(internal.mutations.denyPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -1768,7 +1768,7 @@ describe("mutations - additional coverage", () => {
       });
 
       // Should not find the expired override as duplicate
-      const result = await t.mutation(api.mutations.denyPermission, {
+      const result = await t.mutation(internal.mutations.denyPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -1783,7 +1783,7 @@ describe("mutations - additional coverage", () => {
     it("should not find override when existing is scoped but request is not", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -1791,7 +1791,7 @@ describe("mutations - additional coverage", () => {
       });
 
       // Try removing without scope - should not match
-      const result = await t.mutation(api.mutations.removePermissionOverride, {
+      const result = await t.mutation(internal.mutations.removePermissionOverride, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -1803,14 +1803,14 @@ describe("mutations - additional coverage", () => {
     it("should not find override when existing is unscoped but request is scoped", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
 
       // Try removing with scope - should not match
-      const result = await t.mutation(api.mutations.removePermissionOverride, {
+      const result = await t.mutation(internal.mutations.removePermissionOverride, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -1823,14 +1823,14 @@ describe("mutations - additional coverage", () => {
     it("should not find override when scopes differ", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(api.mutations.grantPermission, {
+      await t.mutation(internal.mutations.grantPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         scope: { type: "team", id: "team_1" },
       });
 
-      const result = await t.mutation(api.mutations.removePermissionOverride, {
+      const result = await t.mutation(internal.mutations.removePermissionOverride, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
