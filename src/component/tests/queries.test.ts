@@ -5,7 +5,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 import schema from "../schema.js";
-import { api } from "../_generated/api.js";
+import { api, internal } from "../_generated/api.js";
 
 const modules = import.meta.glob("../**/*.ts");
 
@@ -159,7 +159,7 @@ describe("queries - additional coverage", () => {
         expiresAt: pastTime,
       });
 
-      const result = await t.query(api.queries.checkPermission, {
+      const result = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -181,7 +181,7 @@ describe("queries - additional coverage", () => {
         expiresAt: pastTime,
       });
 
-      const result = await t.query(api.queries.checkPermission, {
+      const result = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -203,7 +203,7 @@ describe("queries - additional coverage", () => {
         scope: { type: "team", id: "team_1" },
       });
 
-      const result = await t.query(api.queries.checkPermission, {
+      const result = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -225,7 +225,7 @@ describe("queries - additional coverage", () => {
         role: "viewer",
       });
 
-      const result = await t.query(api.queries.checkPermission, {
+      const result = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -249,7 +249,7 @@ describe("queries - additional coverage", () => {
         permission: "documents:*",
       });
 
-      const readResult = await t.query(api.queries.checkPermission, {
+      const readResult = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -257,7 +257,7 @@ describe("queries - additional coverage", () => {
       });
       expect(readResult.allowed).toBe(true);
 
-      const deleteResult = await t.query(api.queries.checkPermission, {
+      const deleteResult = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -265,7 +265,7 @@ describe("queries - additional coverage", () => {
       });
       expect(deleteResult.allowed).toBe(true);
 
-      const otherResult = await t.query(api.queries.checkPermission, {
+      const otherResult = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "settings:read",
@@ -283,7 +283,7 @@ describe("queries - additional coverage", () => {
         permission: "*:read",
       });
 
-      const docRead = await t.query(api.queries.checkPermission, {
+      const docRead = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -291,7 +291,7 @@ describe("queries - additional coverage", () => {
       });
       expect(docRead.allowed).toBe(true);
 
-      const settingsRead = await t.query(api.queries.checkPermission, {
+      const settingsRead = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "settings:read",
@@ -299,7 +299,7 @@ describe("queries - additional coverage", () => {
       });
       expect(settingsRead.allowed).toBe(true);
 
-      const docWrite = await t.query(api.queries.checkPermission, {
+      const docWrite = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:write",
@@ -317,7 +317,7 @@ describe("queries - additional coverage", () => {
         permission: "*",
       });
 
-      const result = await t.query(api.queries.checkPermission, {
+      const result = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -325,7 +325,7 @@ describe("queries - additional coverage", () => {
       });
       expect(result.allowed).toBe(true);
 
-      const anyResult = await t.query(api.queries.checkPermission, {
+      const anyResult = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "any:action",
@@ -343,7 +343,7 @@ describe("queries - additional coverage", () => {
         role: "poweruser",
       });
 
-      const result = await t.query(api.queries.checkPermission, {
+      const result = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -368,7 +368,7 @@ describe("queries - additional coverage", () => {
         permission: "documents:*",
       });
 
-      const result = await t.query(api.queries.checkPermission, {
+      const result = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -391,7 +391,7 @@ describe("queries - additional coverage", () => {
         role: "viewer",
       });
 
-      const result = await t.query(api.queries.checkPermissions, {
+      const result = await t.query(internal.queries.checkPermissions, {
         tenantId: TENANT,
         userId: "user_123",
         permissions: ["documents:delete", "documents:read", "documents:update"],
@@ -413,7 +413,7 @@ describe("queries - additional coverage", () => {
         role: "viewer",
       });
 
-      const result = await t.query(api.queries.checkPermissions, {
+      const result = await t.query(internal.queries.checkPermissions, {
         tenantId: TENANT,
         userId: "user_123",
         permissions: ["documents:delete", "documents:update"],
@@ -440,7 +440,7 @@ describe("queries - additional coverage", () => {
         permission: "documents:delete",
       });
 
-      const result = await t.query(api.queries.checkPermissions, {
+      const result = await t.query(internal.queries.checkPermissions, {
         tenantId: TENANT,
         userId: "user_123",
         permissions: ["documents:delete", "documents:read"],
@@ -456,7 +456,7 @@ describe("queries - additional coverage", () => {
     it("should return allowed false for empty permissions array", async () => {
       const t = convexTest(schema, modules);
 
-      const result = await t.query(api.queries.checkPermissions, {
+      const result = await t.query(internal.queries.checkPermissions, {
         tenantId: TENANT,
         userId: "user_123",
         permissions: [],
@@ -475,7 +475,7 @@ describe("queries - additional coverage", () => {
       );
 
       await expect(
-        t.query(api.queries.checkPermissions, {
+        t.query(internal.queries.checkPermissions, {
           tenantId: TENANT,
           userId: "user_123",
           permissions,
@@ -503,7 +503,7 @@ describe("queries - additional coverage", () => {
         scope: { type: "team", id: "team_1" },
       });
 
-      const result = await t.query(api.queries.getEffectivePermissions, {
+      const result = await t.query(internal.queries.getEffectivePermissions, {
         tenantId: TENANT,
         userId: "user_123",
         rolePermissions: {
@@ -527,7 +527,7 @@ describe("queries - additional coverage", () => {
         scope: { type: "team", id: "team_1" },
       });
 
-      const result = await t.query(api.queries.getEffectivePermissions, {
+      const result = await t.query(internal.queries.getEffectivePermissions, {
         tenantId: TENANT,
         userId: "user_123",
         rolePermissions: {},
@@ -550,7 +550,7 @@ describe("queries - additional coverage", () => {
         expiresAt: pastTime,
       });
 
-      const result = await t.query(api.queries.getEffectivePermissions, {
+      const result = await t.query(internal.queries.getEffectivePermissions, {
         tenantId: TENANT,
         userId: "user_123",
         rolePermissions: {},
@@ -857,7 +857,7 @@ describe("queries - additional coverage", () => {
         reason: "Custom deny reason",
       });
 
-      const result = await t.query(api.queries.checkPermission, {
+      const result = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -877,7 +877,7 @@ describe("queries - additional coverage", () => {
         permission: "documents:delete",
       });
 
-      const result = await t.query(api.queries.checkPermission, {
+      const result = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -898,7 +898,7 @@ describe("queries - additional coverage", () => {
         reason: "Custom allow reason",
       });
 
-      const result = await t.query(api.queries.checkPermission, {
+      const result = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -918,7 +918,7 @@ describe("queries - additional coverage", () => {
         permission: "documents:read",
       });
 
-      const result = await t.query(api.queries.checkPermission, {
+      const result = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -949,7 +949,7 @@ describe("queries - additional coverage", () => {
         role: "viewer",
       });
 
-      const result = await t.query(api.queries.getEffectivePermissions, {
+      const result = await t.query(internal.queries.getEffectivePermissions, {
         tenantId: TENANT,
         userId: "user_123",
         rolePermissions: {

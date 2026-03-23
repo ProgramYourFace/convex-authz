@@ -10,7 +10,7 @@
  */
 import { convexTest } from "convex-test";
 import schema from "../schema.js";
-import { api } from "../_generated/api.js";
+import { api, internal } from "../_generated/api.js";
 import { describe, test, expect } from "vitest";
 
 const TENANT = "bench-tenant";
@@ -107,7 +107,7 @@ describe("Performance Benchmarks", () => {
         });
       } catch {
         // Main branch: queries path (with rolePermissions map)
-        await t.query(api.queries.checkPermission, {
+        await t.query(internal.queries.checkPermission, {
           tenantId: TENANT,
           userId: "bench-user",
           permission: "resource0:action0",
@@ -139,7 +139,7 @@ describe("Performance Benchmarks", () => {
           permission: "nonexistent:permission",
         });
       } catch {
-        await t.query(api.queries.checkPermission, {
+        await t.query(internal.queries.checkPermission, {
           tenantId: TENANT,
           userId: "bench-user",
           permission: "nonexistent:permission",
@@ -290,7 +290,7 @@ describe("Performance Benchmarks", () => {
           permission: "docs:read",
         });
       } catch {
-        await t.query(api.queries.checkPermission, {
+        await t.query(internal.queries.checkPermission, {
           tenantId: TENANT,
           userId: "user-50",
           permission: "docs:read",

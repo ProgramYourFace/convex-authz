@@ -13,7 +13,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 import schema from "../schema.js";
-import { api } from "../_generated/api.js";
+import { api, internal } from "../_generated/api.js";
 
 const modules = import.meta.glob("../**/*.ts");
 const TENANT = "test-tenant";
@@ -442,7 +442,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
     const t = convexTest(schema, modules);
 
     // Alice is admin with full access
-    await t.mutation(api.indexed.assignRoleWithCompute, {
+    await t.mutation(internal.indexed.assignRoleWithCompute, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
@@ -450,7 +450,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
     });
 
     // But specifically denied delete on a sensitive document
-    await t.mutation(api.indexed.denyPermissionDirect, {
+    await t.mutation(internal.indexed.denyPermissionDirect, {
       tenantId: TENANT,
       userId: USERS.alice,
       permission: "documents:delete",
@@ -485,7 +485,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
     const oneHourLater = now + 3600000;
 
     // Grant temporary access that has already expired
-    await t.mutation(api.indexed.grantPermissionDirect, {
+    await t.mutation(internal.indexed.grantPermissionDirect, {
       tenantId: TENANT,
       userId: USERS.eve,
       permission: "documents:read",
@@ -505,7 +505,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
     expect(canReadExpired).toBe(false);
 
     // Grant access that expires in the future
-    await t.mutation(api.indexed.grantPermissionDirect, {
+    await t.mutation(internal.indexed.grantPermissionDirect, {
       tenantId: TENANT,
       userId: USERS.eve,
       permission: "documents:write",
@@ -531,7 +531,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
     // Eve has no roles or org membership
     // But has specific grants for Project Alpha
 
-    await t.mutation(api.indexed.grantPermissionDirect, {
+    await t.mutation(internal.indexed.grantPermissionDirect, {
       tenantId: TENANT,
       userId: USERS.eve,
       permission: "documents:read",
@@ -635,7 +635,7 @@ describe("Scenario: Users with Multiple Roles", () => {
     const t = convexTest(schema, modules);
 
     // Alice has viewer role (read only)
-    await t.mutation(api.indexed.assignRoleWithCompute, {
+    await t.mutation(internal.indexed.assignRoleWithCompute, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "viewer",
@@ -643,7 +643,7 @@ describe("Scenario: Users with Multiple Roles", () => {
     });
 
     // Alice also has editor role (read + write)
-    await t.mutation(api.indexed.assignRoleWithCompute, {
+    await t.mutation(internal.indexed.assignRoleWithCompute, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "editor",
@@ -677,7 +677,7 @@ describe("Scenario: Security Boundaries", () => {
     const t = convexTest(schema, modules);
 
     // Frank has no roles, no relationships, no grants
-    const canRead = await t.query(api.queries.checkPermission, {
+    const canRead = await t.query(internal.queries.checkPermission, {
       tenantId: TENANT,
       userId: USERS.frank,
       permission: "documents:read",
@@ -695,7 +695,7 @@ describe("Scenario: Security Boundaries", () => {
     const t = convexTest(schema, modules);
 
     // Alice is admin
-    await t.mutation(api.indexed.assignRoleWithCompute, {
+    await t.mutation(internal.indexed.assignRoleWithCompute, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
@@ -711,7 +711,7 @@ describe("Scenario: Security Boundaries", () => {
     expect(canDelete).toBe(true);
 
     // Revoke admin role
-    await t.mutation(api.indexed.revokeRoleWithCompute, {
+    await t.mutation(internal.indexed.revokeRoleWithCompute, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
@@ -814,7 +814,7 @@ describe("Scenario: Wildcard & Super Admin", () => {
       role: "superadmin",
     });
 
-    const result = await t.query(api.queries.checkPermission, {
+    const result = await t.query(internal.queries.checkPermission, {
       tenantId: TENANT,
       userId: USERS.alice,
       permission: "anything:action",
@@ -839,7 +839,7 @@ describe("Scenario: Wildcard & Super Admin", () => {
       doc_admin: ["documents:*"], // All document actions
     };
 
-    const canRead = await t.query(api.queries.checkPermission, {
+    const canRead = await t.query(internal.queries.checkPermission, {
       tenantId: TENANT,
       userId: USERS.alice,
       permission: "documents:read",
@@ -847,7 +847,7 @@ describe("Scenario: Wildcard & Super Admin", () => {
     });
     expect(canRead.allowed).toBe(true);
 
-    const canDelete = await t.query(api.queries.checkPermission, {
+    const canDelete = await t.query(internal.queries.checkPermission, {
       tenantId: TENANT,
       userId: USERS.alice,
       permission: "documents:delete",
@@ -856,7 +856,7 @@ describe("Scenario: Wildcard & Super Admin", () => {
     expect(canDelete.allowed).toBe(true);
 
     // But not other resources
-    const canReadProjects = await t.query(api.queries.checkPermission, {
+    const canReadProjects = await t.query(internal.queries.checkPermission, {
       tenantId: TENANT,
       userId: USERS.alice,
       permission: "projects:read",
@@ -926,7 +926,7 @@ describe("Scenario: Cross-Tenant Data Room (RBAC + Overrides + O(1) indexed)", (
     const t = convexTest(schema, modules);
 
     // Alice is admin on Project Alpha (full CRUD)
-    await t.mutation(api.indexed.assignRoleWithCompute, {
+    await t.mutation(internal.indexed.assignRoleWithCompute, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
@@ -939,7 +939,7 @@ describe("Scenario: Cross-Tenant Data Room (RBAC + Overrides + O(1) indexed)", (
     });
 
     // External contractor (Frank) gets explicit read but explicit deny for delete
-    await t.mutation(api.indexed.grantPermissionDirect, {
+    await t.mutation(internal.indexed.grantPermissionDirect, {
       tenantId: TENANT,
       userId: USERS.frank,
       permission: "documents:read",
@@ -947,7 +947,7 @@ describe("Scenario: Cross-Tenant Data Room (RBAC + Overrides + O(1) indexed)", (
       reason: "Contractor read-only access",
     });
 
-    await t.mutation(api.indexed.denyPermissionDirect, {
+    await t.mutation(internal.indexed.denyPermissionDirect, {
       tenantId: TENANT,
       userId: USERS.frank,
       permission: "documents:delete",
@@ -1245,7 +1245,7 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
     const ORDER_BETA = "order:beta";
 
     // Base assignments (RBAC per order)
-    await t.mutation(api.indexed.assignRoleWithCompute, {
+    await t.mutation(internal.indexed.assignRoleWithCompute, {
       tenantId: TENANT,
       userId: USERS.diana, // customer
       role: "customer",
@@ -1253,7 +1253,7 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
       scope: { type: "order", id: ORDER_ALPHA },
     });
 
-    await t.mutation(api.indexed.assignRoleWithCompute, {
+    await t.mutation(internal.indexed.assignRoleWithCompute, {
       tenantId: TENANT,
       userId: USERS.bob, // vendor
       role: "vendor",
@@ -1262,7 +1262,7 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
     });
 
     // Admin (global)
-    await t.mutation(api.indexed.assignRoleWithCompute, {
+    await t.mutation(internal.indexed.assignRoleWithCompute, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
@@ -1270,14 +1270,14 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
     });
 
     // Make admin explicitly allowed on both orders (global may not cover scoped keys)
-    await t.mutation(api.indexed.grantPermissionDirect, {
+    await t.mutation(internal.indexed.grantPermissionDirect, {
       tenantId: TENANT,
       userId: USERS.alice,
       permission: "orders:deliver",
       scope: { type: "order", id: ORDER_ALPHA },
       reason: "Admin global deliver",
     });
-    await t.mutation(api.indexed.grantPermissionDirect, {
+    await t.mutation(internal.indexed.grantPermissionDirect, {
       tenantId: TENANT,
       userId: USERS.alice,
       permission: "orders:deliver",
@@ -1286,7 +1286,7 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
     });
 
     // Another order in a different scope (to prove isolation)
-    await t.mutation(api.indexed.assignRoleWithCompute, {
+    await t.mutation(internal.indexed.assignRoleWithCompute, {
       tenantId: TENANT,
       userId: USERS.bob,
       role: "vendor",
@@ -1331,7 +1331,7 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
       key: "rides",
       value: 600,
     });
-    await t.mutation(api.indexed.grantPermissionDirect, {
+    await t.mutation(internal.indexed.grantPermissionDirect, {
       tenantId: TENANT,
       userId: USERS.charlie,
       permission: "orders:deliver",
