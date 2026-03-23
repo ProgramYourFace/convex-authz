@@ -321,7 +321,7 @@ describe("mutations - additional coverage", () => {
     it("should throw when roles exceed limit", async () => {
       const t = convexTest(schema, modules);
 
-      const roles = Array.from({ length: 101 }, (_, i) => ({
+      const roles = Array.from({ length: 21 }, (_, i) => ({
         role: "viewer",
         scope: { type: "team", id: `team_${i}` },
       }));
@@ -332,7 +332,7 @@ describe("mutations - additional coverage", () => {
           userId: "user_123",
           roles,
         })
-      ).rejects.toThrow(/must not exceed 100/);
+      ).rejects.toThrow(/must not exceed 20/);
     });
   });
 

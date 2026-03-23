@@ -460,9 +460,9 @@ export class Authz<
     scope?: Scope,
     requestContext?: Record<string, unknown>,
   ): Promise<boolean> {
-    if (!policyName || !this.options.policies) return true;
+    if (!policyName || !this.options.policies) return false;
     const policy = (this.options.policies as Record<string, { condition: (ctx: PolicyContext) => boolean | Promise<boolean> }>)[policyName];
-    if (!policy) return true;
+    if (!policy) return false;
 
     // Fetch user attributes and roles for the context
     const [attrs, roles] = await Promise.all([

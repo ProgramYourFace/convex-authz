@@ -3,7 +3,7 @@ import { mutation } from "./_generated/server";
 import { isExpired } from "./helpers";
 import { scopeValidator } from "./validators";
 
-const MAX_BULK_ROLES = 100;
+const MAX_BULK_ROLES = 20;
 const BATCH_SIZE = 500;
 
 /**
@@ -1114,6 +1114,42 @@ export const cleanupExpired = mutation({
         }
       }
       if (overrides.length < BATCH_SIZE || !deletedAny) break;
+    }
+
+    // Also clean expired effective tables
+    const BATCH = 500;
+    while (true) {
+      const batch = args.tenantId
+        ? await ctx.db.query("effectiveRoles")
+            .withIndex("by_tenant_user", (q) => q.eq("tenantId", args.tenantId!))
+            .take(BATCH)
+        : await ctx.db.query("effectiveRoles").order("asc").take(BATCH);
+      if (batch.length === 0) break;
+      let deletedAny = false;
+      for (const row of batch) {
+        if (row.expiresAt && row.expiresAt < now) {
+          await ctx.db.delete(row._id);
+          deletedAny = true;
+        }
+      }
+      if (batch.length < BATCH || !deletedAny) break;
+    }
+
+    while (true) {
+      const batch = args.tenantId
+        ? await ctx.db.query("effectivePermissions")
+            .withIndex("by_tenant_user", (q) => q.eq("tenantId", args.tenantId!))
+            .take(BATCH)
+        : await ctx.db.query("effectivePermissions").order("asc").take(BATCH);
+      if (batch.length === 0) break;
+      let deletedAny = false;
+      for (const row of batch) {
+        if (row.expiresAt && row.expiresAt < now) {
+          await ctx.db.delete(row._id);
+          deletedAny = true;
+        }
+      }
+      if (batch.length < BATCH || !deletedAny) break;
     }
 
     return { expiredRoles, expiredOverrides };
