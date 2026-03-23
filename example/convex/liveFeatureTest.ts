@@ -7,7 +7,7 @@
  * just assertions inside Convex actions.
  */
 import { action, mutation, query } from "./_generated/server.js";
-import { components, internal } from "./_generated/api.js";
+import { api, components } from "./_generated/api.js";
 import {
   Authz,
   definePermissions,
@@ -89,7 +89,7 @@ export const testBasicRBAC = action({
   returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
   handler: async (ctx) => {
     const results: TestResult[] = [];
-    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "rbac-user" });
+    const userId = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "rbac-user" });
 
     try {
       // 1. Assign role
@@ -133,8 +133,8 @@ export const testScopedPermissions = action({
   returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
   handler: async (ctx) => {
     const results: TestResult[] = [];
-    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "scope-user" });
-    const orgId = await ctx.runMutation(internal.liveFeatureTest.createTestOrg, { slug: "scope" });
+    const userId = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "scope-user" });
+    const orgId = await ctx.runMutation(api.liveFeatureTest.createTestOrg, { slug: "scope" });
 
     try {
       const scope = { type: "org", id: String(orgId) };
@@ -170,7 +170,7 @@ export const testDirectGrantDeny = action({
   returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
   handler: async (ctx) => {
     const results: TestResult[] = [];
-    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "grantdeny-user" });
+    const userId = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "grantdeny-user" });
 
     try {
       // 1. Direct grant
@@ -217,7 +217,7 @@ export const testBulkOperations = action({
   returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
   handler: async (ctx) => {
     const results: TestResult[] = [];
-    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "bulk-user" });
+    const userId = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "bulk-user" });
 
     try {
       // 1. Bulk assign
@@ -273,7 +273,7 @@ export const testReBAC = action({
   returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
   handler: async (ctx) => {
     const results: TestResult[] = [];
-    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "rebac-user" });
+    const userId = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "rebac-user" });
 
     try {
       // 1. Add relation
@@ -346,7 +346,7 @@ export const testAttributes = action({
   returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
   handler: async (ctx) => {
     const results: TestResult[] = [];
-    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "attr-user" });
+    const userId = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "attr-user" });
 
     try {
       // 1. Set attribute
@@ -384,7 +384,7 @@ export const testCrossTenantIsolation = action({
   returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
   handler: async (ctx) => {
     const results: TestResult[] = [];
-    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "tenant-user" });
+    const userId = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "tenant-user" });
 
     try {
       // Assign role in tenant A
@@ -422,7 +422,7 @@ export const testRecomputeUser = action({
   returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
   handler: async (ctx) => {
     const results: TestResult[] = [];
-    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "recompute-user" });
+    const userId = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "recompute-user" });
 
     try {
       // Assign role
@@ -461,7 +461,7 @@ export const testOffboardDeprovision = action({
 
     try {
       // Test offboard
-      const userId1 = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "offboard-user" });
+      const userId1 = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "offboard-user" });
       await authz.assignRole(ctx, userId1, "admin");
       await authz.grantPermission(ctx, userId1, "billing:manage");
       await authz.setAttribute(ctx, userId1, "dept", "eng");
@@ -478,7 +478,7 @@ export const testOffboardDeprovision = action({
       results.push({ name: "role perm denied after offboard", passed: canAfterOffboard === false, detail: `documents:delete=${canAfterOffboard}` });
 
       // Test deprovision
-      const userId2 = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "deprov-user" });
+      const userId2 = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "deprov-user" });
       await authz.assignRole(ctx, userId2, "admin");
       await authz.grantPermission(ctx, userId2, "billing:manage");
       await authz.setAttribute(ctx, userId2, "dept", "eng");
@@ -504,7 +504,7 @@ export const testExpiry = action({
   returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
   handler: async (ctx) => {
     const results: TestResult[] = [];
-    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "expiry-user" });
+    const userId = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "expiry-user" });
 
     try {
       // Assign role with already-expired expiresAt
@@ -539,7 +539,7 @@ export const testWildcardPatterns = action({
   returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
   handler: async (ctx) => {
     const results: TestResult[] = [];
-    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "wildcard-user" });
+    const userId = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "wildcard-user" });
 
     try {
       // 1. wildcard docs:* grants docs:read and docs:write
@@ -609,7 +609,7 @@ export const testMultiRoleInteractions = action({
   returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
   handler: async (ctx) => {
     const results: TestResult[] = [];
-    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "multirole-user" });
+    const userId = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "multirole-user" });
 
     try {
       // 1. two roles sharing permission, revoke one, still allowed
@@ -665,7 +665,7 @@ export const testExpiryEdgeCases = action({
   returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
   handler: async (ctx) => {
     const results: TestResult[] = [];
-    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "expiry-edge-user" });
+    const userId = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "expiry-edge-user" });
 
     try {
       // 1. extend expiry by reassigning with later date
@@ -711,7 +711,7 @@ export const testOffboardEdgeCases = action({
 
     try {
       // 1. offboard with removeOverrides=true removes direct grants
-      const userId1 = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "offboard-override-user" });
+      const userId1 = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "offboard-override-user" });
       await authz.grantPermission(ctx, userId1, "documents:delete");
       const canBefore = await authz.can(ctx, userId1, "documents:delete");
       assert(canBefore === true, "direct grant should allow before offboard");
@@ -722,7 +722,7 @@ export const testOffboardEdgeCases = action({
       await authz.deprovisionUser(ctx, userId1);
 
       // 2. offboard with removeRelationships=true removes relations
-      const userId2 = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "offboard-rel-user" });
+      const userId2 = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "offboard-rel-user" });
       await authz.addRelation(ctx, { type: "user", id: userId2 }, "member", { type: "team", id: "team-offboard" });
       const hasBefore = await authz.hasRelation(ctx, { type: "user", id: userId2 }, "member", { type: "team", id: "team-offboard" });
       assert(hasBefore === true, "should have relation before offboard");
@@ -733,7 +733,7 @@ export const testOffboardEdgeCases = action({
       await authz.deprovisionUser(ctx, userId2);
 
       // 3. offboard preserves attributes when removeAttributes=false
-      const userId3 = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "offboard-attr-user" });
+      const userId3 = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "offboard-attr-user" });
       await authz.setAttribute(ctx, userId3, "department", "engineering");
       await authz.assignRole(ctx, userId3, "editor");
       await authz.offboardUser(ctx, userId3, { removeAttributes: false });
@@ -745,7 +745,7 @@ export const testOffboardEdgeCases = action({
       await authz.deprovisionUser(ctx, userId3);
 
       // 4. deprovision user with zero data returns zero counts
-      const userId4 = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "offboard-empty-user" });
+      const userId4 = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "offboard-empty-user" });
       const depResult = await authz.deprovisionUser(ctx, userId4);
       assert(depResult.rolesRevoked === 0, "rolesRevoked should be 0");
       assert(depResult.overridesRemoved === 0, "overridesRemoved should be 0");
@@ -767,9 +767,9 @@ export const testScopeInteractions = action({
   returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
   handler: async (ctx) => {
     const results: TestResult[] = [];
-    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "scope-interaction-user" });
-    const orgA = await ctx.runMutation(internal.liveFeatureTest.createTestOrg, { slug: "scope-a" });
-    const orgB = await ctx.runMutation(internal.liveFeatureTest.createTestOrg, { slug: "scope-b" });
+    const userId = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "scope-interaction-user" });
+    const orgA = await ctx.runMutation(api.liveFeatureTest.createTestOrg, { slug: "scope-a" });
+    const orgB = await ctx.runMutation(api.liveFeatureTest.createTestOrg, { slug: "scope-b" });
     const scopeA = { type: "org", id: String(orgA) };
     const scopeB = { type: "org", id: String(orgB) };
 
@@ -820,7 +820,7 @@ export const testAuditLog = action({
   returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
   handler: async (ctx) => {
     const results: TestResult[] = [];
-    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "audit-user" });
+    const userId = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "audit-user" });
 
     try {
       // 1. assignRole creates audit entry
@@ -859,7 +859,7 @@ export const testRequireMethod = action({
   returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
   handler: async (ctx) => {
     const results: TestResult[] = [];
-    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "require-user" });
+    const userId = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "require-user" });
 
     try {
       // 1. require passes for allowed permission
@@ -902,7 +902,7 @@ export const testCanAny = action({
   returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
   handler: async (ctx) => {
     const results: TestResult[] = [];
-    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "canany-user" });
+    const userId = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "canany-user" });
 
     try {
       // 1. canAny returns true if any permission matches
@@ -931,7 +931,7 @@ export const testGetUserPermissions = action({
   returns: v.array(v.object({ name: v.string(), passed: v.boolean(), detail: v.string() })),
   handler: async (ctx) => {
     const results: TestResult[] = [];
-    const userId = await ctx.runMutation(internal.liveFeatureTest.createTestUser, { name: "perms-user" });
+    const userId = await ctx.runMutation(api.liveFeatureTest.createTestUser, { name: "perms-user" });
 
     try {
       // 1. getUserPermissions returns all effective permissions
@@ -962,25 +962,25 @@ export const runAll = action({
     console.log("\n🧪 Running live feature tests...\n");
 
     const suites = [
-      { name: "Basic RBAC", fn: internal.liveFeatureTest.testBasicRBAC },
-      { name: "Scoped Permissions", fn: internal.liveFeatureTest.testScopedPermissions },
-      { name: "Direct Grant/Deny", fn: internal.liveFeatureTest.testDirectGrantDeny },
-      { name: "Bulk Operations", fn: internal.liveFeatureTest.testBulkOperations },
-      { name: "ReBAC", fn: internal.liveFeatureTest.testReBAC },
-      { name: "Attributes", fn: internal.liveFeatureTest.testAttributes },
-      { name: "Cross-Tenant Isolation", fn: internal.liveFeatureTest.testCrossTenantIsolation },
-      { name: "Recompute User", fn: internal.liveFeatureTest.testRecomputeUser },
-      { name: "Offboard/Deprovision", fn: internal.liveFeatureTest.testOffboardDeprovision },
-      { name: "Expiry", fn: internal.liveFeatureTest.testExpiry },
-      { name: "Wildcard Patterns", fn: internal.liveFeatureTest.testWildcardPatterns },
-      { name: "Multi-Role Interactions", fn: internal.liveFeatureTest.testMultiRoleInteractions },
-      { name: "Expiry Edge Cases", fn: internal.liveFeatureTest.testExpiryEdgeCases },
-      { name: "Offboard Edge Cases", fn: internal.liveFeatureTest.testOffboardEdgeCases },
-      { name: "Scope Interactions", fn: internal.liveFeatureTest.testScopeInteractions },
-      { name: "Audit Log", fn: internal.liveFeatureTest.testAuditLog },
-      { name: "Require Method", fn: internal.liveFeatureTest.testRequireMethod },
-      { name: "canAny", fn: internal.liveFeatureTest.testCanAny },
-      { name: "getUserPermissions", fn: internal.liveFeatureTest.testGetUserPermissions },
+      { name: "Basic RBAC", fn: api.liveFeatureTest.testBasicRBAC },
+      { name: "Scoped Permissions", fn: api.liveFeatureTest.testScopedPermissions },
+      { name: "Direct Grant/Deny", fn: api.liveFeatureTest.testDirectGrantDeny },
+      { name: "Bulk Operations", fn: api.liveFeatureTest.testBulkOperations },
+      { name: "ReBAC", fn: api.liveFeatureTest.testReBAC },
+      { name: "Attributes", fn: api.liveFeatureTest.testAttributes },
+      { name: "Cross-Tenant Isolation", fn: api.liveFeatureTest.testCrossTenantIsolation },
+      { name: "Recompute User", fn: api.liveFeatureTest.testRecomputeUser },
+      { name: "Offboard/Deprovision", fn: api.liveFeatureTest.testOffboardDeprovision },
+      { name: "Expiry", fn: api.liveFeatureTest.testExpiry },
+      { name: "Wildcard Patterns", fn: api.liveFeatureTest.testWildcardPatterns },
+      { name: "Multi-Role Interactions", fn: api.liveFeatureTest.testMultiRoleInteractions },
+      { name: "Expiry Edge Cases", fn: api.liveFeatureTest.testExpiryEdgeCases },
+      { name: "Offboard Edge Cases", fn: api.liveFeatureTest.testOffboardEdgeCases },
+      { name: "Scope Interactions", fn: api.liveFeatureTest.testScopeInteractions },
+      { name: "Audit Log", fn: api.liveFeatureTest.testAuditLog },
+      { name: "Require Method", fn: api.liveFeatureTest.testRequireMethod },
+      { name: "canAny", fn: api.liveFeatureTest.testCanAny },
+      { name: "getUserPermissions", fn: api.liveFeatureTest.testGetUserPermissions },
     ];
 
     for (const suite of suites) {

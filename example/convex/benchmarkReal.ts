@@ -8,7 +8,7 @@
  *   npx convex run benchmark-real:cleanup
  */
 import { mutation, query, action } from "./_generated/server.js";
-import { components, internal } from "./_generated/api.js";
+import { api, components } from "./_generated/api.js";
 import { Authz, definePermissions, defineRoles } from "@djpanda/convex-authz";
 import { v } from "convex/values";
 
@@ -110,15 +110,15 @@ export const seedLargeData = action({
     const batchSize = args.batchSize ?? 20;
 
     // Create or get benchmark org
-    let orgId = await ctx.runQuery(internal.benchmarkReal.getBenchOrg);
+    let orgId = await ctx.runQuery(api.benchmarkReal.getBenchOrg);
     if (!orgId) {
-      orgId = await ctx.runMutation(internal.benchmarkReal.createBenchOrg);
+      orgId = await ctx.runMutation(api.benchmarkReal.createBenchOrg);
     }
 
     console.log(`Seeding ${total} users in batches of ${batchSize}...`);
 
     for (let start = 0; start < total; start += batchSize) {
-      const result = await ctx.runMutation(internal.benchmarkReal.seedBatch, {
+      const result = await ctx.runMutation(api.benchmarkReal.seedBatch, {
         batchStart: start,
         batchSize: Math.min(batchSize, total - start),
         orgId,
@@ -167,10 +167,10 @@ export const benchmarkReads = action({
     const iterations = args.iterations ?? 50;
 
     // Find a benchmark user
-    const orgId = await ctx.runQuery(internal.benchmarkReal.getBenchOrg);
+    const orgId = await ctx.runQuery(api.benchmarkReal.getBenchOrg);
     if (!orgId) return "No benchmark org found. Run seedLargeData first.";
 
-    const userId = await ctx.runQuery(internal.benchmarkReal.findBenchUser, {
+    const userId = await ctx.runQuery(api.benchmarkReal.findBenchUser, {
       index: 25,
     });
     if (!userId) return "No benchmark users found. Run seedLargeData first.";
@@ -181,7 +181,7 @@ export const benchmarkReads = action({
     const allowedTimes: number[] = [];
     for (let i = 0; i < iterations; i++) {
       const start = Date.now();
-      await ctx.runQuery(internal.benchmarkReal.checkPermissionDirect, {
+      await ctx.runQuery(api.benchmarkReal.checkPermissionDirect, {
         userId,
         permission: "documents:read",
         orgId,
@@ -193,7 +193,7 @@ export const benchmarkReads = action({
     const deniedTimes: number[] = [];
     for (let i = 0; i < iterations; i++) {
       const start = Date.now();
-      await ctx.runQuery(internal.benchmarkReal.checkPermissionDirect, {
+      await ctx.runQuery(api.benchmarkReal.checkPermissionDirect, {
         userId,
         permission: "billing:manage",
         orgId,
@@ -205,7 +205,7 @@ export const benchmarkReads = action({
     const allPermsTimes: number[] = [];
     for (let i = 0; i < iterations; i++) {
       const start = Date.now();
-      await ctx.runQuery(internal.benchmarkReal.checkAllPermsDirect, {
+      await ctx.runQuery(api.benchmarkReal.checkAllPermsDirect, {
         userId,
         orgId,
       });
@@ -216,7 +216,7 @@ export const benchmarkReads = action({
     const wrongScopeTimes: number[] = [];
     for (let i = 0; i < iterations; i++) {
       const start = Date.now();
-      await ctx.runQuery(internal.benchmarkReal.checkPermissionDirect, {
+      await ctx.runQuery(api.benchmarkReal.checkPermissionDirect, {
         userId,
         permission: "documents:read",
         // no orgId = global scope = should be denied for org-scoped role
@@ -268,7 +268,7 @@ export const benchmarkWrites = action({
   handler: async (ctx, args) => {
     const iterations = args.iterations ?? 10;
 
-    const orgId = await ctx.runQuery(internal.benchmarkReal.getBenchOrg);
+    const orgId = await ctx.runQuery(api.benchmarkReal.getBenchOrg);
     if (!orgId) return "No benchmark org found. Run seedLargeData first.";
 
     // Create temp users for write benchmarks
@@ -278,14 +278,14 @@ export const benchmarkWrites = action({
     const denyTimes: number[] = [];
 
     for (let i = 0; i < iterations; i++) {
-      const userId = await ctx.runMutation(internal.benchmarkReal.createTempUser, {
+      const userId = await ctx.runMutation(api.benchmarkReal.createTempUser, {
         index: 10000 + i,
         orgId,
       });
 
       // Benchmark assignRole
       const start1 = Date.now();
-      await ctx.runMutation(internal.benchmarkReal.assignRoleDirect, {
+      await ctx.runMutation(api.benchmarkReal.assignRoleDirect, {
         userId,
         role: "editor",
         orgId,
@@ -294,7 +294,7 @@ export const benchmarkWrites = action({
 
       // Benchmark grantPermission
       const start2 = Date.now();
-      await ctx.runMutation(internal.benchmarkReal.grantPermissionDirect, {
+      await ctx.runMutation(api.benchmarkReal.grantPermissionDirect, {
         userId,
         permission: "documents:delete",
         orgId,
@@ -303,7 +303,7 @@ export const benchmarkWrites = action({
 
       // Benchmark denyPermission
       const start3 = Date.now();
-      await ctx.runMutation(internal.benchmarkReal.denyPermissionDirect, {
+      await ctx.runMutation(api.benchmarkReal.denyPermissionDirect, {
         userId,
         permission: "documents:delete",
         orgId,
@@ -312,7 +312,7 @@ export const benchmarkWrites = action({
 
       // Benchmark revokeRole
       const start4 = Date.now();
-      await ctx.runMutation(internal.benchmarkReal.revokeRoleDirect, {
+      await ctx.runMutation(api.benchmarkReal.revokeRoleDirect, {
         userId,
         role: "editor",
         orgId,
