@@ -1,7 +1,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 import schema from "../schema.js";
-import { api } from "../_generated/api.js";
+import { api, internal } from "../_generated/api.js";
 
 const modules = import.meta.glob("../**/*.ts");
 
@@ -43,7 +43,7 @@ describe("Cross-tenant permission check isolation", () => {
       role: "admin",
     });
 
-    const resultA = await t.query(api.queries.checkPermission, {
+    const resultA = await t.query(internal.queries.checkPermission, {
       tenantId: TENANT_A,
       userId: "user1",
       permission: "documents:read",
@@ -51,7 +51,7 @@ describe("Cross-tenant permission check isolation", () => {
     });
     expect(resultA.allowed).toBe(true);
 
-    const resultB = await t.query(api.queries.checkPermission, {
+    const resultB = await t.query(internal.queries.checkPermission, {
       tenantId: TENANT_B,
       userId: "user1",
       permission: "documents:read",
@@ -152,7 +152,7 @@ describe("Cross-tenant indexed isolation", () => {
   it("indexed role/permission in tenant A is not visible in tenant B", async () => {
     const t = convexTest(schema, modules);
 
-    await t.mutation(api.indexed.assignRoleWithCompute, {
+    await t.mutation(internal.indexed.assignRoleWithCompute, {
       tenantId: TENANT_A,
       userId: "user1",
       role: "admin",
@@ -250,7 +250,7 @@ describe("Cleanup with tenantId scoped", () => {
 
     const pastTime = Date.now() - 3600000;
 
-    await t.mutation(api.indexed.assignRoleWithCompute, {
+    await t.mutation(internal.indexed.assignRoleWithCompute, {
       tenantId: TENANT_A,
       userId: "user1",
       role: "admin",
@@ -258,7 +258,7 @@ describe("Cleanup with tenantId scoped", () => {
       expiresAt: pastTime,
     });
 
-    await t.mutation(api.indexed.assignRoleWithCompute, {
+    await t.mutation(internal.indexed.assignRoleWithCompute, {
       tenantId: TENANT_B,
       userId: "user1",
       role: "admin",
@@ -276,7 +276,7 @@ describe("Cleanup with tenantId scoped", () => {
 
     const pastTime = Date.now() - 3600000;
 
-    await t.mutation(api.indexed.assignRoleWithCompute, {
+    await t.mutation(internal.indexed.assignRoleWithCompute, {
       tenantId: TENANT_A,
       userId: "user1",
       role: "admin",
@@ -284,7 +284,7 @@ describe("Cleanup with tenantId scoped", () => {
       expiresAt: pastTime,
     });
 
-    await t.mutation(api.indexed.assignRoleWithCompute, {
+    await t.mutation(internal.indexed.assignRoleWithCompute, {
       tenantId: TENANT_B,
       userId: "user1",
       role: "admin",

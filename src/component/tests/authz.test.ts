@@ -1,7 +1,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 import schema from "../schema.js";
-import { api } from "../_generated/api.js";
+import { api, internal } from "../_generated/api.js";
 
 const modules = import.meta.glob("../**/*.ts");
 const TENANT = "test-tenant";
@@ -149,7 +149,7 @@ describe("authz component", () => {
         role: "admin",
       });
 
-      const result = await t.query(api.queries.checkPermission, {
+      const result = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -172,7 +172,7 @@ describe("authz component", () => {
         role: "viewer",
       });
 
-      const result = await t.query(api.queries.checkPermission, {
+      const result = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -194,7 +194,7 @@ describe("authz component", () => {
         role: "superadmin",
       });
 
-      const result = await t.query(api.queries.checkPermission, {
+      const result = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -218,7 +218,7 @@ describe("authz component", () => {
         reason: "Temporary access",
       });
 
-      const result = await t.query(api.queries.checkPermission, {
+      const result = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -247,7 +247,7 @@ describe("authz component", () => {
         reason: "Access revoked",
       });
 
-      const result = await t.query(api.queries.checkPermission, {
+      const result = await t.query(internal.queries.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -344,7 +344,7 @@ describe("authz component", () => {
         role: "editor",
       });
 
-      const result = await t.query(api.queries.getEffectivePermissions, {
+      const result = await t.query(internal.queries.getEffectivePermissions, {
         tenantId: TENANT,
         userId: "user_123",
         rolePermissions: {
@@ -373,7 +373,7 @@ describe("authz component", () => {
         permission: "documents:delete",
       });
 
-      const result = await t.query(api.queries.getEffectivePermissions, {
+      const result = await t.query(internal.queries.getEffectivePermissions, {
         tenantId: TENANT,
         userId: "user_123",
         rolePermissions: {
