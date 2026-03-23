@@ -348,6 +348,138 @@ export const recompute = mutation({
 });
 
 // ---------------------------------------------------------------------------
+// Bulk operations
+// ---------------------------------------------------------------------------
+
+export const assignRoles = mutation({
+  args: {
+    userId: v.string(),
+    roles: v.array(
+      v.object({
+        role: v.string(),
+        scope: v.optional(v.object({ type: v.string(), id: v.string() })),
+      }),
+    ),
+  },
+  returns: v.object({
+    assigned: v.number(),
+    assignmentIds: v.array(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    return await authz.assignRoles(
+      ctx,
+      args.userId,
+      args.roles.map((r) => ({
+        role: r.role as keyof typeof roles,
+        scope: r.scope,
+      })),
+    );
+  },
+});
+
+export const revokeRoles = mutation({
+  args: {
+    userId: v.string(),
+    roles: v.array(
+      v.object({
+        role: v.string(),
+        scope: v.optional(v.object({ type: v.string(), id: v.string() })),
+      }),
+    ),
+  },
+  returns: v.object({ revoked: v.number() }),
+  handler: async (ctx, args) => {
+    return await authz.revokeRoles(
+      ctx,
+      args.userId,
+      args.roles.map((r) => ({ role: r.role, scope: r.scope })),
+    );
+  },
+});
+
+export const revokeAllRoles = mutation({
+  args: {
+    userId: v.string(),
+    scope: v.optional(v.object({ type: v.string(), id: v.string() })),
+  },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    return await authz.revokeAllRoles(ctx, args.userId, args.scope);
+  },
+});
+
+// ---------------------------------------------------------------------------
+// canAny
+// ---------------------------------------------------------------------------
+
+export const canAny = query({
+  args: {
+    userId: v.string(),
+    permissions: v.array(v.string()),
+    scope: v.optional(v.object({ type: v.string(), id: v.string() })),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    return await authz.canAny(
+      ctx,
+      args.userId,
+      args.permissions,
+      args.scope,
+    );
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Offboard
+// ---------------------------------------------------------------------------
+
+export const offboardUser = mutation({
+  args: {
+    userId: v.string(),
+    removeOverrides: v.optional(v.boolean()),
+    removeAttributes: v.optional(v.boolean()),
+    removeRelationships: v.optional(v.boolean()),
+    scope: v.optional(v.object({ type: v.string(), id: v.string() })),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    return await authz.offboardUser(ctx, args.userId, {
+      scope: args.scope,
+      removeOverrides: args.removeOverrides,
+      removeAttributes: args.removeAttributes,
+      removeRelationships: args.removeRelationships,
+    });
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Audit log
+// ---------------------------------------------------------------------------
+
+export const getAuditLog = query({
+  args: { userId: v.optional(v.string()), limit: v.optional(v.number()) },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    return await authz.getAuditLog(ctx, {
+      userId: args.userId,
+      limit: args.limit,
+    });
+  },
+});
+
+// ---------------------------------------------------------------------------
+// User attributes query
+// ---------------------------------------------------------------------------
+
+export const getUserAttributes = query({
+  args: { userId: v.string() },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    return await authz.getUserAttributes(ctx, args.userId);
+  },
+});
+
+// ---------------------------------------------------------------------------
 // Tenant B (for isolation tests)
 // ---------------------------------------------------------------------------
 
