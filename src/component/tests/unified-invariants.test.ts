@@ -9,7 +9,7 @@
 import { convexTest } from "convex-test";
 import { describe, test, expect } from "vitest";
 import schema from "../schema.js";
-import { api } from "../_generated/api.js";
+import { api, internal } from "../_generated/api.js";
 
 const modules = import.meta.glob("../**/*.ts");
 const TENANT = "test-tenant";
@@ -443,7 +443,7 @@ describe("Category 2: Interaction between operations", () => {
 
     // revokeAllRoles only deletes source roleAssignments, then recomputeUser
     // rebuilds effective tables (preserving direct grants/denies)
-    await t.mutation(api.mutations.revokeAllRoles, {
+    await t.mutation(internal.mutations.revokeAllRoles, {
       tenantId: TENANT,
       userId: "alice",
     });
@@ -482,7 +482,7 @@ describe("Category 3: Bulk operations -> effective tables sync", () => {
     const t = convexTest(schema, modules);
 
     // Use bulk assignRoles (the old mutations path)
-    await t.mutation(api.mutations.assignRoles, {
+    await t.mutation(internal.mutations.assignRoles, {
       tenantId: TENANT,
       userId: "alice",
       roles: [
@@ -550,7 +550,7 @@ describe("Category 3: Bulk operations -> effective tables sync", () => {
     });
 
     // Use bulk revokeRoles to revoke 2 of them
-    await t.mutation(api.mutations.revokeRoles, {
+    await t.mutation(internal.mutations.revokeRoles, {
       tenantId: TENANT,
       userId: "alice",
       roles: [
@@ -598,7 +598,7 @@ describe("Category 3: Bulk operations -> effective tables sync", () => {
     const t = convexTest(schema, modules);
 
     // Bulk assign 3 roles + recompute
-    await t.mutation(api.mutations.assignRoles, {
+    await t.mutation(internal.mutations.assignRoles, {
       tenantId: TENANT,
       userId: "alice",
       roles: [
@@ -1034,7 +1034,7 @@ describe("Category 6: Cross-tenant isolation", () => {
     });
 
     // Revoke all in tenant A
-    await t.mutation(api.mutations.revokeAllRoles, {
+    await t.mutation(internal.mutations.revokeAllRoles, {
       tenantId: "tenant-a",
       userId: "alice",
     });

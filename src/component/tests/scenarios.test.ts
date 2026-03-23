@@ -104,7 +104,7 @@ describe("Scenario: Multi-Organization Isolation", () => {
     const t = convexTest(schema, modules);
 
     // Setup: Alice is admin of ACME
-    await t.mutation(api.mutations.assignRole, {
+    await t.mutation(internal.mutations.assignRole, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
@@ -112,7 +112,7 @@ describe("Scenario: Multi-Organization Isolation", () => {
     });
 
     // Setup: Diana is admin of BetaCo
-    await t.mutation(api.mutations.assignRole, {
+    await t.mutation(internal.mutations.assignRole, {
       tenantId: TENANT,
       userId: USERS.diana,
       role: "admin",
@@ -160,14 +160,14 @@ describe("Scenario: Multi-Organization Isolation", () => {
     const t = convexTest(schema, modules);
 
     // Alice has global viewer role
-    await t.mutation(api.mutations.assignRole, {
+    await t.mutation(internal.mutations.assignRole, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "viewer",
     });
 
     // Alice has scoped admin role for ACME only
-    await t.mutation(api.mutations.assignRole, {
+    await t.mutation(internal.mutations.assignRole, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
@@ -219,7 +219,7 @@ describe("Scenario: Team-Based Access Control", () => {
     const t = convexTest(schema, modules);
 
     // Setup: Alice is member of Engineering team
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
@@ -229,7 +229,7 @@ describe("Scenario: Team-Based Access Control", () => {
     });
 
     // Setup: Engineering team owns Project Alpha
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: TYPES.team,
       subjectId: TEAMS.acmeEng,
@@ -260,7 +260,7 @@ describe("Scenario: Team-Based Access Control", () => {
     const t = convexTest(schema, modules);
 
     // Setup: Charlie is member of Sales team (not Engineering)
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.charlie,
@@ -270,7 +270,7 @@ describe("Scenario: Team-Based Access Control", () => {
     });
 
     // Setup: Engineering team owns Project Alpha
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: TYPES.team,
       subjectId: TEAMS.acmeEng,
@@ -301,7 +301,7 @@ describe("Scenario: Team-Based Access Control", () => {
     const t = convexTest(schema, modules);
 
     // Setup: Alice is admin of Engineering team
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
@@ -311,7 +311,7 @@ describe("Scenario: Team-Based Access Control", () => {
     });
 
     // Setup: Bob is member of Engineering team
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.bob,
@@ -321,7 +321,7 @@ describe("Scenario: Team-Based Access Control", () => {
     });
 
     // Setup: Engineering team owns Project Alpha
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: TYPES.team,
       subjectId: TEAMS.acmeEng,
@@ -376,7 +376,7 @@ describe("Scenario: Nested Resource Hierarchy (Org → Team → Project → Docu
     // alice -> member -> acme-eng -> owner -> alpha -> contains -> a1
 
     // Alice is member of Engineering
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
@@ -386,7 +386,7 @@ describe("Scenario: Nested Resource Hierarchy (Org → Team → Project → Docu
     });
 
     // Engineering owns Project Alpha
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: TYPES.team,
       subjectId: TEAMS.acmeEng,
@@ -396,7 +396,7 @@ describe("Scenario: Nested Resource Hierarchy (Org → Team → Project → Docu
     });
 
     // Project Alpha contains Document A1
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: TYPES.project,
       subjectId: PROJECTS.alpha,
@@ -584,20 +584,20 @@ describe("Scenario: Users with Multiple Roles", () => {
     // - Admin of Team Engineering
     // - Member of Team Sales
 
-    await t.mutation(api.mutations.assignRole, {
+    await t.mutation(internal.mutations.assignRole, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "viewer",
     });
 
-    await t.mutation(api.mutations.assignRole, {
+    await t.mutation(internal.mutations.assignRole, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
       scope: { type: TYPES.team, id: TEAMS.acmeEng },
     });
 
-    await t.mutation(api.mutations.assignRole, {
+    await t.mutation(internal.mutations.assignRole, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "member",
@@ -738,7 +738,7 @@ describe("Scenario: Security Boundaries", () => {
     const t = convexTest(schema, modules);
 
     // Setup: alice -> member -> acme-eng -> owner -> alpha
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
@@ -747,7 +747,7 @@ describe("Scenario: Security Boundaries", () => {
       objectId: TEAMS.acmeEng,
     });
 
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: TYPES.team,
       subjectId: TEAMS.acmeEng,
@@ -773,7 +773,7 @@ describe("Scenario: Security Boundaries", () => {
     expect(result.allowed).toBe(true);
 
     // Remove alice from team
-    await t.mutation(api.rebac.removeRelation, {
+    await t.mutation(internal.rebac.removeRelation, {
       tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
@@ -808,7 +808,7 @@ describe("Scenario: Wildcard & Super Admin", () => {
   it("super admin with *:* has all permissions", async () => {
     const t = convexTest(schema, modules);
 
-    await t.mutation(api.mutations.assignRole, {
+    await t.mutation(internal.mutations.assignRole, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "superadmin",
@@ -829,7 +829,7 @@ describe("Scenario: Wildcard & Super Admin", () => {
   it("resource-level wildcard grants all actions on resource", async () => {
     const t = convexTest(schema, modules);
 
-    await t.mutation(api.mutations.assignRole, {
+    await t.mutation(internal.mutations.assignRole, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "doc_admin",
@@ -875,7 +875,7 @@ describe("Scenario: Audit Trail", () => {
     const t = convexTest(schema, modules);
 
     // Assign role
-    await t.mutation(api.mutations.assignRole, {
+    await t.mutation(internal.mutations.assignRole, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
@@ -884,7 +884,7 @@ describe("Scenario: Audit Trail", () => {
     });
 
     // Revoke role
-    await t.mutation(api.mutations.revokeRole, {
+    await t.mutation(internal.mutations.revokeRole, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
@@ -893,7 +893,7 @@ describe("Scenario: Audit Trail", () => {
     });
 
     // Grant permission
-    await t.mutation(api.mutations.grantPermission, {
+    await t.mutation(internal.mutations.grantPermission, {
       tenantId: TENANT,
       userId: USERS.alice,
       permission: "special:access",
@@ -995,7 +995,7 @@ describe("Scenario: ReBAC traversal with cycle protection", () => {
     const t = convexTest(schema, modules);
 
     // user -> team -> project
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
@@ -1004,7 +1004,7 @@ describe("Scenario: ReBAC traversal with cycle protection", () => {
       objectId: TEAMS.acmeEng,
     });
 
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: TYPES.team,
       subjectId: TEAMS.acmeEng,
@@ -1014,7 +1014,7 @@ describe("Scenario: ReBAC traversal with cycle protection", () => {
     });
 
     // Introduce a cycle: project references team as parent (synthetic example)
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: TYPES.project,
       subjectId: PROJECTS.alpha,
@@ -1070,7 +1070,7 @@ describe("Scenario: Google Drive-style sharing", () => {
 
     // Relations setup
     // file -> folder (parent)
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: "folder",
       subjectId: FOLDER,
@@ -1080,7 +1080,7 @@ describe("Scenario: Google Drive-style sharing", () => {
     });
 
     // folder -> account (parent)
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: "account",
       subjectId: ACCOUNT,
@@ -1090,7 +1090,7 @@ describe("Scenario: Google Drive-style sharing", () => {
     });
 
     // file -> account (account_global) for everyone in account
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: "account",
       subjectId: ACCOUNT,
@@ -1101,7 +1101,7 @@ describe("Scenario: Google Drive-style sharing", () => {
 
     // Direct access and roles
     // John: direct viewer on file
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: "user",
       subjectId: JOHN,
@@ -1111,7 +1111,7 @@ describe("Scenario: Google Drive-style sharing", () => {
     });
 
     // Jane: editor on folder
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: "user",
       subjectId: JANE,
@@ -1121,7 +1121,7 @@ describe("Scenario: Google Drive-style sharing", () => {
     });
 
     // Alice: admin on account
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: "user",
       subjectId: ALICE,
@@ -1131,7 +1131,7 @@ describe("Scenario: Google Drive-style sharing", () => {
     });
 
     // Bob: member on account (general access)
-    await t.mutation(api.rebac.addRelation, {
+    await t.mutation(internal.rebac.addRelation, {
       tenantId: TENANT,
       subjectType: "user",
       subjectId: BOB,
@@ -1325,7 +1325,7 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
     expect(riderDeliverInitial).toBe(false);
 
     // After rider reaches threshold, grant deliver explicitly
-    await t.mutation(api.mutations.setAttribute, {
+    await t.mutation(internal.mutations.setAttribute, {
       tenantId: TENANT,
       userId: USERS.charlie,
       key: "rides",

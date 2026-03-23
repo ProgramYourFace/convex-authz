@@ -118,61 +118,11 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       >;
     };
     mutations: {
-      assignRole: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          assignedBy?: string;
-          enableAudit?: boolean;
-          expiresAt?: number;
-          metadata?: any;
-          role: string;
-          scope?: { id: string; type: string };
-          tenantId: string;
-          userId: string;
-        },
-        string,
-        Name
-      >;
-      assignRoles: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          assignedBy?: string;
-          enableAudit?: boolean;
-          roles: Array<{
-            expiresAt?: number;
-            metadata?: any;
-            role: string;
-            scope?: { id: string; type: string };
-          }>;
-          tenantId: string;
-          userId: string;
-        },
-        { assigned: number; assignmentIds: Array<string> },
-        Name
-      >;
       cleanupExpired: FunctionReference<
         "mutation",
         "internal",
         { tenantId?: string },
         { expiredOverrides: number; expiredRoles: number },
-        Name
-      >;
-      denyPermission: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          createdBy?: string;
-          enableAudit?: boolean;
-          expiresAt?: number;
-          permission: string;
-          reason?: string;
-          scope?: { id: string; type: string };
-          tenantId: string;
-          userId: string;
-        },
-        string,
         Name
       >;
       deprovisionUser: FunctionReference<
@@ -193,36 +143,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           relationshipsRemoved: number;
           rolesRevoked: number;
         },
-        Name
-      >;
-      grantPermission: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          createdBy?: string;
-          enableAudit?: boolean;
-          expiresAt?: number;
-          permission: string;
-          reason?: string;
-          scope?: { id: string; type: string };
-          tenantId: string;
-          userId: string;
-        },
-        string,
-        Name
-      >;
-      logPermissionCheck: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          permission: string;
-          reason?: string;
-          result: boolean;
-          scope?: { id: string; type: string };
-          tenantId: string;
-          userId: string;
-        },
-        null,
         Name
       >;
       offboardUser: FunctionReference<
@@ -249,18 +169,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         },
         Name
       >;
-      removeAllAttributes: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          enableAudit?: boolean;
-          removedBy?: string;
-          tenantId: string;
-          userId: string;
-        },
-        number,
-        Name
-      >;
       removeAttribute: FunctionReference<
         "mutation",
         "internal",
@@ -272,60 +180,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           userId: string;
         },
         boolean,
-        Name
-      >;
-      removePermissionOverride: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          enableAudit?: boolean;
-          permission: string;
-          removedBy?: string;
-          scope?: { id: string; type: string };
-          tenantId: string;
-          userId: string;
-        },
-        boolean,
-        Name
-      >;
-      revokeAllRoles: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          enableAudit?: boolean;
-          revokedBy?: string;
-          scope?: { id: string; type: string };
-          tenantId: string;
-          userId: string;
-        },
-        number,
-        Name
-      >;
-      revokeRole: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          enableAudit?: boolean;
-          revokedBy?: string;
-          role: string;
-          scope?: { id: string; type: string };
-          tenantId: string;
-          userId: string;
-        },
-        boolean,
-        Name
-      >;
-      revokeRoles: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          enableAudit?: boolean;
-          revokedBy?: string;
-          roles: Array<{ role: string; scope?: { id: string; type: string } }>;
-          tenantId: string;
-          userId: string;
-        },
-        { revoked: number },
         Name
       >;
       runAuditRetentionCleanup: FunctionReference<
@@ -345,20 +199,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           expiredOverrides: number;
           expiredRoleAssignments: number;
         },
-        Name
-      >;
-      setAttribute: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          enableAudit?: boolean;
-          key: string;
-          setBy?: string;
-          tenantId: string;
-          userId: string;
-          value: any;
-        },
-        string,
         Name
       >;
     };
@@ -479,21 +319,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       >;
     };
     rebac: {
-      addRelation: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          createdBy?: string;
-          objectId: string;
-          objectType: string;
-          relation: string;
-          subjectId: string;
-          subjectType: string;
-          tenantId: string;
-        },
-        string,
-        Name
-      >;
       checkRelationWithTraversal: FunctionReference<
         "query",
         "internal",
@@ -583,20 +408,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           tenantId: string;
         },
         Array<{ userId: string; via: string }>,
-        Name
-      >;
-      removeRelation: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          objectId: string;
-          objectType: string;
-          relation: string;
-          subjectId: string;
-          subjectType: string;
-          tenantId: string;
-        },
-        boolean,
         Name
       >;
     };

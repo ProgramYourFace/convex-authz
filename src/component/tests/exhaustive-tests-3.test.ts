@@ -7,7 +7,7 @@
 
 import { convexTest } from "convex-test";
 import schema from "../schema.js";
-import { api } from "../_generated/api.js";
+import { api, internal } from "../_generated/api.js";
 import { describe, test, expect } from "vitest";
 
 const modules = import.meta.glob("../**/*.ts");
@@ -77,7 +77,7 @@ describe("Category 11: Offboarding / Deprovisioning", () => {
     const t = convexTest(schema, modules);
 
     // Set attribute
-    await t.mutation(api.mutations.setAttribute, {
+    await t.mutation(internal.mutations.setAttribute, {
       tenantId: TENANT,
       userId: "alice",
       key: "department",
@@ -114,7 +114,7 @@ describe("Category 11: Offboarding / Deprovisioning", () => {
     const t = convexTest(schema, modules);
 
     // Set attribute
-    await t.mutation(api.mutations.setAttribute, {
+    await t.mutation(internal.mutations.setAttribute, {
       tenantId: TENANT,
       userId: "alice",
       key: "department",
@@ -212,7 +212,7 @@ describe("Category 11: Offboarding / Deprovisioning", () => {
     });
 
     // Set 1 attribute
-    await t.mutation(api.mutations.setAttribute, {
+    await t.mutation(internal.mutations.setAttribute, {
       tenantId: TENANT,
       userId: "alice",
       key: "level",
@@ -260,7 +260,7 @@ describe("Category 11: Offboarding / Deprovisioning", () => {
       role: "admin",
       rolePermissions: ["admin:manage", "admin:delete"],
     });
-    await t.mutation(api.mutations.setAttribute, {
+    await t.mutation(internal.mutations.setAttribute, {
       tenantId: TENANT,
       userId: "alice",
       key: "tier",
@@ -1081,7 +1081,7 @@ describe("Category 13: Recompute scenarios", () => {
     });
 
     // Revoke all roles from source table
-    await t.mutation(api.mutations.revokeAllRoles, {
+    await t.mutation(internal.mutations.revokeAllRoles, {
       tenantId: TENANT,
       userId: "alice",
     });
@@ -1383,14 +1383,14 @@ describe("Category 14: Edge cases", () => {
   test("14.11 setAttribute same key twice -> value updated not duplicated", async () => {
     const t = convexTest(schema, modules);
 
-    await t.mutation(api.mutations.setAttribute, {
+    await t.mutation(internal.mutations.setAttribute, {
       tenantId: TENANT,
       userId: "alice",
       key: "theme",
       value: "dark",
     });
 
-    await t.mutation(api.mutations.setAttribute, {
+    await t.mutation(internal.mutations.setAttribute, {
       tenantId: TENANT,
       userId: "alice",
       key: "theme",

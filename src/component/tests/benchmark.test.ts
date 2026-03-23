@@ -69,7 +69,7 @@ describe("Performance Benchmarks", () => {
         });
       } catch {
         // Main branch: use mutations.assignRole (source only)
-        await t.mutation(api.mutations.assignRole, {
+        await t.mutation(internal.mutations.assignRole, {
           tenantId: TENANT,
           userId: "bench-user",
           role,
@@ -86,7 +86,7 @@ describe("Performance Benchmarks", () => {
           permission: `override${i}:read`,
         });
       } catch {
-        await t.mutation(api.mutations.grantPermission, {
+        await t.mutation(internal.mutations.grantPermission, {
           tenantId: TENANT,
           userId: "bench-user",
           permission: `override${i}:read`,
@@ -189,7 +189,7 @@ describe("Performance Benchmarks", () => {
           ],
         });
       } catch {
-        await t.mutation(api.mutations.assignRole, {
+        await t.mutation(internal.mutations.assignRole, {
           tenantId: TENANT,
           userId: `user-${i}`,
           role: "editor",
@@ -219,7 +219,7 @@ describe("Performance Benchmarks", () => {
         rolePermissions: ["all:manage"],
       });
     } catch {
-      await t.mutation(api.mutations.assignRole, {
+      await t.mutation(internal.mutations.assignRole, {
         tenantId: TENANT,
         userId: "bench-user",
         role: "admin",
@@ -270,7 +270,7 @@ describe("Performance Benchmarks", () => {
             rolePermissions: perms,
           });
         } catch {
-          await t.mutation(api.mutations.assignRole, {
+          await t.mutation(internal.mutations.assignRole, {
             tenantId: TENANT,
             userId: `user-${u}`,
             role,
