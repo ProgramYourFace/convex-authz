@@ -742,4 +742,722 @@ describe("Consumer Integration Tests (Authz class -> real DB)", () => {
       }),
     ).toBe(false);
   });
+
+  // =========================================================================
+  // 20. Two roles sharing permission, revoke one -> still allowed
+  // =========================================================================
+  test("two roles sharing permission, revoke one -> still allowed", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "rachel",
+    });
+
+    // Both editor (inherits base:documents:read) and viewer grant documents:read
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "editor",
+    });
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "viewer",
+    });
+
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:read",
+      }),
+    ).toBe(true);
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:create",
+      }),
+    ).toBe(true);
+
+    // Revoke editor — viewer still provides documents:read
+    await t.mutation(api.consumerTests.revokeRole, {
+      userId,
+      role: "editor",
+    });
+
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:read",
+      }),
+    ).toBe(true);
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:create",
+      }),
+    ).toBe(false);
+  });
+
+  // =========================================================================
+  // 21. Three roles, revoke two, shared perm survives
+  // =========================================================================
+  test("three roles, revoke two, shared perm survives", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "sam",
+    });
+
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "admin",
+    });
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "editor",
+    });
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "viewer",
+    });
+
+    await t.mutation(api.consumerTests.revokeRole, {
+      userId,
+      role: "admin",
+    });
+    await t.mutation(api.consumerTests.revokeRole, {
+      userId,
+      role: "editor",
+    });
+
+    // viewer still provides documents:read
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:read",
+      }),
+    ).toBe(true);
+    // documents:delete was only on admin
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:delete",
+      }),
+    ).toBe(false);
+  });
+
+  // =========================================================================
+  // 22. assignRoles bulk -> all permissions correct
+  // =========================================================================
+  test("assignRoles bulk -> all permissions correct", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "tina",
+    });
+
+    const result = await t.mutation(api.consumerTests.assignRoles, {
+      userId,
+      roles: [{ role: "admin" }, { role: "viewer" }],
+    });
+
+    expect(result.assigned).toBe(2);
+    expect(result.assignmentIds.length).toBe(2);
+
+    // admin perms present
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:delete",
+      }),
+    ).toBe(true);
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "settings:manage",
+      }),
+    ).toBe(true);
+  });
+
+  // =========================================================================
+  // 23. revokeRoles bulk -> correct perms removed
+  // =========================================================================
+  test("revokeRoles bulk -> correct perms removed", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "uma",
+    });
+
+    await t.mutation(api.consumerTests.assignRoles, {
+      userId,
+      roles: [{ role: "admin" }, { role: "editor" }, { role: "viewer" }],
+    });
+
+    const result = await t.mutation(api.consumerTests.revokeRoles, {
+      userId,
+      roles: [{ role: "admin" }, { role: "editor" }],
+    });
+    expect(result.revoked).toBe(2);
+
+    // viewer still provides documents:read
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:read",
+      }),
+    ).toBe(true);
+    // documents:delete was only on admin
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:delete",
+      }),
+    ).toBe(false);
+  });
+
+  // =========================================================================
+  // 24. revokeAllRoles -> all denied
+  // =========================================================================
+  test("revokeAllRoles -> all denied", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "victor",
+    });
+
+    await t.mutation(api.consumerTests.assignRoles, {
+      userId,
+      roles: [{ role: "admin" }, { role: "editor" }],
+    });
+
+    const revoked = await t.mutation(api.consumerTests.revokeAllRoles, {
+      userId,
+    });
+    expect(revoked).toBe(2);
+
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:read",
+      }),
+    ).toBe(false);
+  });
+
+  // =========================================================================
+  // 25. revokeAllRoles preserves direct grants
+  // =========================================================================
+  test("revokeAllRoles preserves direct grants", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "wendy",
+    });
+
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "admin",
+    });
+    await t.mutation(api.consumerTests.grantPermission, {
+      userId,
+      permission: "billing:view",
+    });
+
+    await t.mutation(api.consumerTests.revokeAllRoles, { userId });
+
+    // Role-based perm gone
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:read",
+      }),
+    ).toBe(false);
+    // Direct grant preserved
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "billing:view",
+      }),
+    ).toBe(true);
+  });
+
+  // =========================================================================
+  // 26. canAny returns true if any permission matches
+  // =========================================================================
+  test("canAny returns true if any permission matches", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "xander",
+    });
+
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "viewer",
+    });
+
+    // viewer has documents:read but not documents:delete
+    expect(
+      await t.query(api.consumerTests.canAny, {
+        userId,
+        permissions: ["documents:read", "documents:delete"],
+      }),
+    ).toBe(true);
+  });
+
+  // =========================================================================
+  // 27. canAny returns false if no permission matches
+  // =========================================================================
+  test("canAny returns false if no permission matches", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "yolanda",
+    });
+
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "viewer",
+    });
+
+    expect(
+      await t.query(api.consumerTests.canAny, {
+        userId,
+        permissions: ["documents:delete", "billing:manage"],
+      }),
+    ).toBe(false);
+  });
+
+  // =========================================================================
+  // 28. deny then assignRole same permission -> deny still wins
+  // =========================================================================
+  test("deny then assignRole same permission -> deny still wins", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "zach",
+    });
+
+    await t.mutation(api.consumerTests.denyPermission, {
+      userId,
+      permission: "documents:read",
+    });
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "editor",
+    });
+
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:read",
+      }),
+    ).toBe(false);
+  });
+
+  // =========================================================================
+  // 29. assignRole then grantPermission same permission -> grant survives revoke
+  // =========================================================================
+  test("assignRole then grantPermission same permission -> grant survives revoke", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "amber",
+    });
+
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "editor",
+    });
+    await t.mutation(api.consumerTests.grantPermission, {
+      userId,
+      permission: "documents:read",
+    });
+
+    // Revoke the role
+    await t.mutation(api.consumerTests.revokeRole, {
+      userId,
+      role: "editor",
+    });
+
+    // Direct grant survives
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:read",
+      }),
+    ).toBe(true);
+  });
+
+  // =========================================================================
+  // 31. offboard removes roles, preserves overrides source when removeOverrides=false
+  // =========================================================================
+  test("offboard removes roles, preserves overrides when removeOverrides=false", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "blake",
+    });
+
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "admin",
+    });
+    await t.mutation(api.consumerTests.grantPermission, {
+      userId,
+      permission: "billing:view",
+    });
+
+    const result = await t.mutation(api.consumerTests.offboardUser, {
+      userId,
+      removeOverrides: false,
+    });
+
+    // Role-based perm gone
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:delete",
+      }),
+    ).toBe(false);
+
+    // Overrides source rows preserved (overridesRemoved == 0)
+    expect(result.overridesRemoved).toBe(0);
+    // Roles were removed
+    expect(result.rolesRevoked).toBe(1);
+
+    // Re-granting the same permission works because the override source is still there
+    // (grantPermission is idempotent — it finds the existing source row and upserts)
+    await t.mutation(api.consumerTests.grantPermission, {
+      userId,
+      permission: "billing:view",
+    });
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "billing:view",
+      }),
+    ).toBe(true);
+  });
+
+  // =========================================================================
+  // 32. offboard with removeOverrides=true removes everything
+  // =========================================================================
+  test("offboard with removeOverrides=true removes everything", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "charlie",
+    });
+
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "admin",
+    });
+    await t.mutation(api.consumerTests.grantPermission, {
+      userId,
+      permission: "billing:view",
+    });
+
+    await t.mutation(api.consumerTests.offboardUser, {
+      userId,
+      removeOverrides: true,
+    });
+
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "billing:view",
+      }),
+    ).toBe(false);
+  });
+
+  // =========================================================================
+  // 33. audit log captures role_assigned event
+  // =========================================================================
+  test("audit log captures role_assigned event", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "diana",
+    });
+
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "admin",
+    });
+
+    const logs = await t.query(api.consumerTests.getAuditLog, {
+      userId,
+    });
+    const logArray = Array.isArray(logs) ? logs : logs.page;
+    expect(logArray.length).toBeGreaterThan(0);
+    expect(
+      logArray.some(
+        (entry: { action: string }) => entry.action === "role_assigned",
+      ),
+    ).toBe(true);
+  });
+
+  // =========================================================================
+  // 34. audit log captures permission_granted event
+  // =========================================================================
+  test("audit log captures permission_granted event", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "ethan",
+    });
+
+    await t.mutation(api.consumerTests.grantPermission, {
+      userId,
+      permission: "billing:view",
+    });
+
+    const logs = await t.query(api.consumerTests.getAuditLog, {
+      userId,
+    });
+    const logArray = Array.isArray(logs) ? logs : logs.page;
+    expect(logArray.length).toBeGreaterThan(0);
+    expect(
+      logArray.some(
+        (entry: { action: string }) => entry.action === "permission_granted",
+      ),
+    ).toBe(true);
+  });
+
+  // =========================================================================
+  // 35. same role in two different scopes -> revoke one preserves other
+  // =========================================================================
+  test("same role in two different scopes -> revoke one preserves other", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "fiona",
+    });
+
+    const scopeP1 = { type: "project", id: "p1" };
+    const scopeP2 = { type: "project", id: "p2" };
+
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "editor",
+      scope: scopeP1,
+    });
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "editor",
+      scope: scopeP2,
+    });
+
+    // Revoke only in p1
+    await t.mutation(api.consumerTests.revokeRole, {
+      userId,
+      role: "editor",
+      scope: scopeP1,
+    });
+
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:read",
+        scope: scopeP1,
+      }),
+    ).toBe(false);
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:read",
+        scope: scopeP2,
+      }),
+    ).toBe(true);
+  });
+
+  // =========================================================================
+  // 36. global role + scoped role -> independent
+  // =========================================================================
+  test("global role + scoped role -> independent", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "george",
+    });
+
+    const scopeP1 = { type: "project", id: "p1" };
+
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "admin",
+    });
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "viewer",
+      scope: scopeP1,
+    });
+
+    // Revoke global admin
+    await t.mutation(api.consumerTests.revokeRole, {
+      userId,
+      role: "admin",
+    });
+
+    // Global admin perm gone
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:delete",
+      }),
+    ).toBe(false);
+    // Scoped viewer still there
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:read",
+        scope: scopeP1,
+      }),
+    ).toBe(true);
+  });
+
+  // =========================================================================
+  // 37. revokeAllRoles with scope -> only revokes in that scope
+  // =========================================================================
+  test("revokeAllRoles with scope -> only revokes in that scope", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "hannah",
+    });
+
+    const scopeP1 = { type: "project", id: "p1" };
+
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "admin",
+    });
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "editor",
+      scope: scopeP1,
+    });
+
+    // Revoke all roles only in scope p1
+    await t.mutation(api.consumerTests.revokeAllRoles, {
+      userId,
+      scope: scopeP1,
+    });
+
+    // Global admin preserved
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:delete",
+      }),
+    ).toBe(true);
+    // Scoped editor gone
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:read",
+        scope: scopeP1,
+      }),
+    ).toBe(false);
+  });
+
+  // =========================================================================
+  // 39. recompute after deprovision + reassign -> clean state
+  // =========================================================================
+  test("recompute after deprovision + reassign -> clean state", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "iris",
+    });
+
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "admin",
+    });
+    await t.mutation(api.consumerTests.deprovision, { userId });
+
+    // Reassign viewer
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "viewer",
+    });
+    await t.mutation(api.consumerTests.recompute, { userId });
+
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:read",
+      }),
+    ).toBe(true);
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:delete",
+      }),
+    ).toBe(false);
+  });
+
+  // =========================================================================
+  // 40. double assignRole is idempotent
+  // =========================================================================
+  test("double assignRole is idempotent", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "jack",
+    });
+
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "editor",
+    });
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "editor",
+    });
+
+    const roles = await t.query(api.consumerTests.getUserRoles, { userId });
+    const editorRoles = roles.filter(
+      (r: { role: string }) => r.role === "editor",
+    );
+    expect(editorRoles.length).toBe(1);
+  });
+
+  // =========================================================================
+  // 41. double revoke returns false
+  // =========================================================================
+  test("double revoke returns false", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "kate",
+    });
+
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "editor",
+    });
+
+    const first = await t.mutation(api.consumerTests.revokeRole, {
+      userId,
+      role: "editor",
+    });
+    expect(first).toBe(true);
+
+    const second = await t.mutation(api.consumerTests.revokeRole, {
+      userId,
+      role: "editor",
+    });
+    expect(second).toBe(false);
+  });
+
+  // =========================================================================
+  // 42. addRelation is idempotent
+  // =========================================================================
+  test("addRelation is idempotent", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "leo",
+    });
+
+    const id1 = await t.mutation(api.consumerTests.addRelation, {
+      subjectType: "user",
+      subjectId: userId,
+      relation: "member",
+      objectType: "team",
+      objectId: "team-1",
+    });
+
+    const id2 = await t.mutation(api.consumerTests.addRelation, {
+      subjectType: "user",
+      subjectId: userId,
+      relation: "member",
+      objectType: "team",
+      objectId: "team-1",
+    });
+
+    // Both return same ID (idempotent)
+    expect(id1).toBe(id2);
+  });
 });
