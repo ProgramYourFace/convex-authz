@@ -220,6 +220,12 @@ export const assignRoleUnified = mutation({
 
     for (const row of existing) {
       if (matchesScope(row.scope, args.scope) && !isExpired(row.expiresAt)) {
+        // Extend expiry if new value is later or removes expiry
+        const shouldExtend = args.expiresAt === undefined ||
+          (row.expiresAt !== undefined && args.expiresAt > row.expiresAt);
+        if (shouldExtend && args.expiresAt !== row.expiresAt) {
+          await ctx.db.patch(row._id, { expiresAt: args.expiresAt });
+        }
         return row._id;
       }
     }
@@ -653,7 +659,7 @@ export const setAttributeWithRecompute = mutation({
 
       for (const [permission, newResult] of Object.entries(args.policyReEvaluations)) {
         const matchingPerms = allEffectivePerms.filter(
-          (p) => p.permission === permission && p.policyName
+          (p) => p.permission === permission && p.policyResult !== undefined
         );
 
         for (const effectivePerm of matchingPerms) {
@@ -905,7 +911,7 @@ export const removeRelationUnified = mutation({
         tenantId: args.tenantId,
         timestamp: now,
         action: "relation_removed",
-        userId: args.subjectType === "user" ? args.subjectId : "system",
+        userId: args.subjectType === "user" ? args.subjectId : args.removedBy ?? "system",
         actorId: args.removedBy,
         details: {
           relation: args.relation,
@@ -971,6 +977,10 @@ export const recomputeUser = mutation({
     for (const row of existingEffectivePerms) {
       // Keep direct grants and direct denies — those come from permissionOverrides
       if (row.directGrant === true || row.directDeny === true) {
+        // Clear stale policy data from direct rows
+        if (row.policyResult !== undefined) {
+          await ctx.db.patch(row._id, { policyResult: undefined, policyName: undefined });
+        }
         continue;
       }
       await ctx.db.delete(row._id);

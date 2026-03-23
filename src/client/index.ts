@@ -647,6 +647,16 @@ export class Authz<
       this.options.roles as unknown as Record<string, Record<string, string[]>>,
       role
     );
+    // Build policy classifications for permissions being assigned
+    const policyClassifications: Record<string, "deferred" | "allow" | "deny" | null> = {};
+    if (this.options.policies) {
+      for (const perm of rolePermissions) {
+        const policy = (this.options.policies as Record<string, { type?: string }>)[perm];
+        if (policy) {
+          policyClassifications[perm] = policy.type === "deferred" ? "deferred" : null;
+        }
+      }
+    }
     return await ctx.runMutation(this.component.unified.assignRoleUnified, {
       tenantId: this.options.tenantId,
       userId,
@@ -656,6 +666,7 @@ export class Authz<
       expiresAt,
       assignedBy: actorId ?? this.options.defaultActorId,
       enableAudit: true,
+      policyClassifications: Object.keys(policyClassifications).length > 0 ? policyClassifications : undefined,
     });
   }
 
@@ -700,6 +711,20 @@ export class Authz<
     validateUserId(userId);
     validateRoleAssignItems(roles, this.options.roles);
     const assignedBy = actorId ?? this.options.defaultActorId;
+    // Build policy classifications from all permissions across all roles being assigned
+    const policyClassifications: Record<string, "deferred" | "allow" | "deny" | null> = {};
+    if (this.options.policies) {
+      const rolePermissionsMap = this.buildRolePermissionsMap();
+      for (const r of roles) {
+        const perms = rolePermissionsMap[r.role] ?? [];
+        for (const perm of perms) {
+          const policy = (this.options.policies as Record<string, { type?: string }>)[perm];
+          if (policy) {
+            policyClassifications[perm] = policy.type === "deferred" ? "deferred" : null;
+          }
+        }
+      }
+    }
     return ctx.runMutation(this.component.unified.assignRolesUnified, {
       userId,
       roles: roles.map((r) => ({
@@ -712,6 +737,7 @@ export class Authz<
       assignedBy,
       enableAudit: true,
       tenantId: this.options.tenantId,
+      policyClassifications: Object.keys(policyClassifications).length > 0 ? policyClassifications : undefined,
     });
   }
 
@@ -966,6 +992,7 @@ export class Authz<
       caveat: options?.caveat,
       caveatContext: options?.caveatContext,
       createdBy: options?.createdBy ?? this.options.defaultActorId,
+      enableAudit: true,
       tenantId: this.options.tenantId,
     });
   }
