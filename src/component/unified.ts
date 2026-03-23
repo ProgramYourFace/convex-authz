@@ -687,7 +687,9 @@ export const setAttributeWithRecompute = mutation({
         details: {
           attribute: {
             key: args.key,
-            value: args.value,
+            value: typeof args.value === "string" && args.value.length > 1000
+              ? args.value.slice(0, 1000) + "...[truncated]"
+              : args.value,
           },
         },
       });
@@ -836,6 +838,7 @@ export const removeRelationUnified = mutation({
     relation: v.string(),
     objectType: v.string(),
     objectId: v.string(),
+    removedBy: v.optional(v.string()),
     enableAudit: v.optional(v.boolean()),
   },
   returns: v.boolean(), // true if found and removed
@@ -903,6 +906,7 @@ export const removeRelationUnified = mutation({
         timestamp: now,
         action: "relation_removed",
         userId: args.subjectType === "user" ? args.subjectId : "system",
+        actorId: args.removedBy,
         details: {
           relation: args.relation,
           subject: `${args.subjectType}:${args.subjectId}`,
@@ -1541,6 +1545,9 @@ export const revokeAllRolesUnified = mutation({
     let revokedCount = 0;
 
     for (const assignment of assignments) {
+      // Skip expired assignments
+      if (isExpired(assignment.expiresAt)) continue;
+
       // Filter by scope if provided
       if (args.scope) {
         if (!assignment.scope) continue;
