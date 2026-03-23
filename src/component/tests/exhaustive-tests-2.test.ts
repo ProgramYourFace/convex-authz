@@ -114,7 +114,7 @@ describe("Category 6: Policy interactions", () => {
     expect(r2.allowed).toBe(true);
   });
 
-  test("6.6 setAttribute on permission without policyResult -> no effect", async () => {
+  test("6.6 setAttribute on permission without policyResult -> applies deny", async () => {
     const t = convexTest(schema, modules);
 
     // Assign role with NO policy classification -> policyResult is undefined
@@ -126,7 +126,8 @@ describe("Category 6: Policy interactions", () => {
     });
 
     // setAttributeWithRecompute with policyReEvaluations targeting docs:read
-    // Since docs:read has policyResult === undefined, the filter skips it
+    // Even though docs:read has policyResult === undefined, the broader filter
+    // now matches by permission name so the deny is applied correctly.
     await t.mutation(api.unified.setAttributeWithRecompute, {
       tenantId: TENANT,
       userId: "alice",
@@ -135,13 +136,13 @@ describe("Category 6: Policy interactions", () => {
       policyReEvaluations: { "docs:read": "deny" },
     });
 
-    // Permission should still be allowed (filter skips rows without policyResult)
+    // Permission should now be denied (filter matches rows without policyResult)
     const result = await t.query(api.unified.checkPermission, {
       tenantId: TENANT,
       userId: "alice",
       permission: "docs:read",
     });
-    expect(result.allowed).toBe(true);
+    expect(result.allowed).toBe(false);
   });
 
   test("6.7 directGrant overrides policy deny", async () => {
