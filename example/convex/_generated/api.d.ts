@@ -13,6 +13,7 @@ import type * as benchmarkReal from "../benchmarkReal.js";
 import type * as constants from "../constants.js";
 import type * as example from "../example.js";
 import type * as http from "../http.js";
+import type * as liveFeatureTest from "../liveFeatureTest.js";
 import type * as seed from "../seed.js";
 
 import type {
@@ -27,6 +28,7 @@ declare const fullApi: ApiFromModules<{
   constants: typeof constants;
   example: typeof example;
   http: typeof http;
+  liveFeatureTest: typeof liveFeatureTest;
   seed: typeof seed;
 }>;
 
