@@ -8,31 +8,35 @@ A comprehensive, production-ready authorization component for [Convex](https://c
 
 ## Features
 
-| Feature | Description |
-|---------|-------------|
-| **RBAC** | Role-Based Access Control with scoped roles |
-| **ABAC** | Attribute-Based Access Control with custom policies |
-| **ReBAC** | Relationship-Based Access Control with graph traversal |
-| **O(1) Lookups** | Pre-computed permissions for instant checks |
-| **Type Safety** | Full TypeScript support with type-safe permissions |
-| **Audit Logging** | Track all permission changes and checks |
-| **Scoped Permissions** | Resource-level access control |
-| **Expiring Grants** | Time-limited role assignments and permissions |
-| **Convex Native** | Built specifically for Convex, with real-time updates |
+
+| Feature                | Description                                            |
+| ---------------------- | ------------------------------------------------------ |
+| **RBAC**               | Role-Based Access Control with scoped roles            |
+| **ABAC**               | Attribute-Based Access Control with custom policies    |
+| **ReBAC**              | Relationship-Based Access Control with graph traversal |
+| **O(1) Lookups**       | Pre-computed permissions for instant checks            |
+| **Type Safety**        | Full TypeScript support with type-safe permissions     |
+| **Audit Logging**      | Track all permission changes and checks                |
+| **Scoped Permissions** | Resource-level access control                          |
+| **Expiring Grants**    | Time-limited role assignments and permissions          |
+| **Convex Native**      | Built specifically for Convex, with real-time updates  |
+
 
 ## Terminology
 
-| Term | Definition |
-|------|------------|
-| **RBAC** | Role-Based Access Control - permissions assigned via roles (admin, editor, viewer) |
-| **ABAC** | Attribute-Based Access Control - permissions based on user/resource attributes (department=engineering) |
-| **ReBAC** | Relationship-Based Access Control - permissions derived from relationships (member of team that owns resource) |
-| **Zanzibar** | Google's global authorization system, inspiration for OpenFGA and this component |
-| **Tuple** | A relationship triple: `(subject, relation, object)` e.g., `(user:alice, member, team:sales)` |
-| **Scope** | Resource-level permission context, e.g., "admin of team:123" vs global "admin" |
-| **Traversal** | Following relationship chains to determine inherited access |
-| **O(1) Lookup** | Constant-time permission check via pre-computed indexes |
-| **Permission Override** | Direct grant/deny that bypasses role-based permissions |
+
+| Term                    | Definition                                                                                                     |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **RBAC**                | Role-Based Access Control - permissions assigned via roles (admin, editor, viewer)                             |
+| **ABAC**                | Attribute-Based Access Control - permissions based on user/resource attributes (department=engineering)        |
+| **ReBAC**               | Relationship-Based Access Control - permissions derived from relationships (member of team that owns resource) |
+| **Zanzibar**            | Google's global authorization system, inspiration for OpenFGA and this component                               |
+| **Tuple**               | A relationship triple: `(subject, relation, object)` e.g., `(user:alice, member, team:sales)`                  |
+| **Scope**               | Resource-level permission context, e.g., "admin of team:123" vs global "admin"                                 |
+| **Traversal**           | Following relationship chains to determine inherited access                                                    |
+| **O(1) Lookup**         | Constant-time permission check via pre-computed indexes                                                        |
+| **Permission Override** | Direct grant/deny that bypasses role-based permissions                                                         |
+
 
 ---
 
@@ -103,8 +107,8 @@ export const authz = new Authz(components.authz, { permissions, roles, tenantId:
 
 Roles can be defined in terms of other roles to avoid repeating permission lists:
 
-- **`inherits`** – one parent role; effective permissions = parent’s permissions ∪ this role’s direct permissions.
-- **`includes`** – multiple roles; effective permissions = union of all included roles’ permissions ∪ this role’s direct permissions.
+- `**inherits**` – one parent role; effective permissions = parent’s permissions ∪ this role’s direct permissions.
+- `**includes**` – multiple roles; effective permissions = union of all included roles’ permissions ∪ this role’s direct permissions.
 
 Example with inheritance (admin > editor > viewer):
 
@@ -167,9 +171,9 @@ v2 consolidates everything into a single `Authz` class. If you previously used `
 - **One class**: `Authz` replaces both the original `Authz` and `IndexedAuthz`. O(1) reads via pre-computed effective tables are now the default.
 - **ReBAC on `Authz`**: `hasRelation`, `addRelation`, and `removeRelation` are available directly on every `Authz` instance.
 - **ABAC policy types**: Policies accept a `type` field (`"static"` or `"deferred"`). In the current implementation, both types are evaluated at read-time when `can()` is called — Convex mutations cannot call queries, so write-time evaluation is not possible. The `type` field is reserved for future optimization but currently has no behavioral difference.
-- **`canWithContext()`**: Check deferred ABAC policies that need runtime context (e.g. IP address, time of day).
-- **`recomputeUser()`**: Rebuild a user's effective-permissions table on demand — useful after a schema change or post-deploy migration.
-- **`withTenant()`**: Get a scoped copy of the client bound to a different tenant for cross-tenant admin operations.
+- `**canWithContext()`**: Check deferred ABAC policies that need runtime context (e.g. IP address, time of day).
+- `**recomputeUser()**`: Rebuild a user's effective-permissions table on demand — useful after a schema change or post-deploy migration.
+- `**withTenant()**`: Get a scoped copy of the client bound to a different tenant for cross-tenant admin operations.
 
 ### ReBAC example
 
@@ -473,14 +477,16 @@ Permission checks and overrides support **wildcard patterns** so you can grant o
 
 **Pattern format:** `resource:action`. Either `resource` or `action` (or both) may be `*`:
 
-| Pattern       | Meaning                         | Example matches                |
-|---------------|---------------------------------|--------------------------------|
-| `*`           | All permissions                 | `documents:read`, `settings:manage` |
-| `documents:*` | All actions on `documents`      | `documents:read`, `documents:update` |
-| `*:read`      | Read on any resource            | `documents:read`, `settings:read`   |
-| `*:*`         | All permissions (same as `*`)   | any `resource:action`         |
 
-**Checking:** When you call `can(ctx, userId, "documents:read")` or `require(ctx, userId, "documents:read")`, the backend treats any stored role or override that *matches* that permission as granting it. So if the user has a role with `documents:*` or an override `*:read`, they are allowed for `documents:read`.
+| Pattern       | Meaning                       | Example matches                      |
+| ------------- | ----------------------------- | ------------------------------------ |
+| `*`           | All permissions               | `documents:read`, `settings:manage`  |
+| `documents:`* | All actions on `documents`    | `documents:read`, `documents:update` |
+| `*:read`      | Read on any resource          | `documents:read`, `settings:read`    |
+| `*:*`         | All permissions (same as `*`) | any `resource:action`                |
+
+
+**Checking:** When you call `can(ctx, userId, "documents:read")` or `require(ctx, userId, "documents:read")`, the backend treats any stored role or override that *matches* that permission as granting it. So if the user has a role with `documents:`* or an override `*:read`, they are allowed for `documents:read`.
 
 **Allocation:** You can pass a pattern into `grantPermission` and `denyPermission`:
 
@@ -835,12 +841,14 @@ true/false
 
 ### Trade-offs
 
-| Operation | Traditional | Indexed |
-|-----------|------------|---------|
-| Permission Check | O(roles × perms) | **O(1)** |
-| Role Assignment | O(1) | O(permissions) |
-| Permission Grant | O(1) | O(1) |
-| Memory Usage | Lower | Higher (denormalized) |
+
+| Operation        | Traditional      | Indexed               |
+| ---------------- | ---------------- | --------------------- |
+| Permission Check | O(roles × perms) | **O(1)**              |
+| Role Assignment  | O(1)             | O(permissions)        |
+| Permission Grant | O(1)             | O(1)                  |
+| Memory Usage     | Lower            | Higher (denormalized) |
+
 
 **Use Indexed for production workloads with many permission checks.**
 
@@ -853,6 +861,7 @@ All authorization changes are logged for compliance and debugging.
 ### Automatic Logging
 
 The following actions are automatically logged:
+
 - `role_assigned` - When a role is assigned
 - `role_revoked` - When a role is revoked
 - `permission_granted` - When a direct permission is granted
@@ -944,16 +953,18 @@ await authz.denyPermission(ctx, userId, "documents:delete", undefined, "Access r
 
 ### Tables
 
-| Table | Purpose |
-|-------|---------|
-| `roleAssignments` | User role assignments |
-| `userAttributes` | User attributes for ABAC |
-| `permissionOverrides` | Direct permission grants/denials |
-| `relationships` | ReBAC relationship tuples |
-| `effectivePermissions` | Pre-computed permissions (O(1)) |
-| `effectiveRoles` | Pre-computed roles (O(1)) |
+
+| Table                    | Purpose                           |
+| ------------------------ | --------------------------------- |
+| `roleAssignments`        | User role assignments             |
+| `userAttributes`         | User attributes for ABAC          |
+| `permissionOverrides`    | Direct permission grants/denials  |
+| `relationships`          | ReBAC relationship tuples         |
+| `effectivePermissions`   | Pre-computed permissions (O(1))   |
+| `effectiveRoles`         | Pre-computed roles (O(1))         |
 | `effectiveRelationships` | Pre-computed relationships (O(1)) |
-| `auditLog` | Authorization audit trail |
+| `auditLog`               | Authorization audit trail         |
+
 
 ### Indexes
 
@@ -1017,19 +1028,21 @@ class Authz<P, R, Policy> {
 
 All public methods on `Authz` validate their arguments before calling the component. Invalid inputs throw an `Error` with a clear message so you can fail fast and fix call sites.
 
-| Argument | Rule | Example error |
-|----------|------|----------------|
-| `userId` | Non-empty string, max 512 characters | `"userId must be a non-empty string"` |
-| `permission` | Must be `resource:action` (e.g. `documents:read`) | `"Invalid permission format: \"read\". Expected \"resource:action\""` |
-| `scope` | When provided, `type` and `id` must be non-empty strings | `"scope must have non-empty type when provided"` |
-| `role` | Non-empty string; must be one of the roles passed at construction | `"Unknown role: \"superadmin\""` |
-| `expiresAt` | When provided, must be a finite number (timestamp) | `"expiresAt must be a finite number"` |
-| Attribute `key` | Non-empty string | `"Attribute key must be a non-empty string"` |
-| `getAuditLog` `limit` | When provided, positive integer 1–1000 | `"limit must be a positive integer when provided"` |
-| `getAuditLog` `numItems` | When provided (pagination), positive integer 1–1000 | same as `limit` |
-| Relation args | `subjectType`, `subjectId`, `relation`, `objectType`, `objectId` must be non-empty strings | `"subjectType must be a non-empty string"` |
-| `canAny` `permissions` | Non-empty array, each element valid `resource:action`, length ≤ 100 | `"permissions must not exceed 100 items"` |
-| `assignRoles` / `revokeRoles` `roles` | Non-empty array, each role valid, length ≤ 20 | `"roles must not exceed 20 items"` |
+
+| Argument                              | Rule                                                                                       | Example error                                                         |
+| ------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| `userId`                              | Non-empty string, max 512 characters                                                       | `"userId must be a non-empty string"`                                 |
+| `permission`                          | Must be `resource:action` (e.g. `documents:read`)                                          | `"Invalid permission format: \"read\". Expected \"resource:action\""` |
+| `scope`                               | When provided, `type` and `id` must be non-empty strings                                   | `"scope must have non-empty type when provided"`                      |
+| `role`                                | Non-empty string; must be one of the roles passed at construction                          | `"Unknown role: \"superadmin\""`                                      |
+| `expiresAt`                           | When provided, must be a finite number (timestamp)                                         | `"expiresAt must be a finite number"`                                 |
+| Attribute `key`                       | Non-empty string                                                                           | `"Attribute key must be a non-empty string"`                          |
+| `getAuditLog` `limit`                 | When provided, positive integer 1–1000                                                     | `"limit must be a positive integer when provided"`                    |
+| `getAuditLog` `numItems`              | When provided (pagination), positive integer 1–1000                                        | same as `limit`                                                       |
+| Relation args                         | `subjectType`, `subjectId`, `relation`, `objectType`, `objectId` must be non-empty strings | `"subjectType must be a non-empty string"`                            |
+| `canAny` `permissions`                | Non-empty array, each element valid `resource:action`, length ≤ 100                        | `"permissions must not exceed 100 items"`                             |
+| `assignRoles` / `revokeRoles` `roles` | Non-empty array, each role valid, length ≤ 20                                              | `"roles must not exceed 20 items"`                                    |
+
 
 Optional parameters are only validated when present (e.g. omitting `scope` is valid; passing `scope: { type: "", id: "x" }` throws).
 
@@ -1041,15 +1054,17 @@ This component implements concepts from [Google Zanzibar](https://research.googl
 
 ### Zanzibar Concepts Implemented
 
-| Zanzibar Concept | Our Implementation | Description |
-|------------------|-------------------|-------------|
-| **Relation Tuples** | `relationships` table | `(user:alice, member, team:sales)` |
-| **Usersets** | Traversal rules | Groups defined by relationships |
-| **Check API** | `checkPermissionFast` | O(1) "can user X do Y on Z?" |
-| **Expand API** | `checkRelationWithTraversal` | Find all paths granting access |
-| **Read API** | `getSubjectRelations` | List all relationships |
-| **Watch API** | Convex reactivity | Real-time permission updates |
-| **Computed Relations** | `effectivePermissions` | Pre-computed for O(1) lookup |
+
+| Zanzibar Concept       | Our Implementation           | Description                        |
+| ---------------------- | ---------------------------- | ---------------------------------- |
+| **Relation Tuples**    | `relationships` table        | `(user:alice, member, team:sales)` |
+| **Usersets**           | Traversal rules              | Groups defined by relationships    |
+| **Check API**          | `checkPermissionFast`        | O(1) "can user X do Y on Z?"       |
+| **Expand API**         | `checkRelationWithTraversal` | Find all paths granting access     |
+| **Read API**           | `getSubjectRelations`        | List all relationships             |
+| **Watch API**          | Convex reactivity            | Real-time permission updates       |
+| **Computed Relations** | `effectivePermissions`       | Pre-computed for O(1) lookup       |
+
 
 ### How Zanzibar Works
 
@@ -1089,35 +1104,34 @@ This component implements concepts from [Google Zanzibar](https://research.googl
 ### Key Zanzibar Benefits We Provide
 
 1. **Consistency at Scale**
-   - Pre-computed permissions ensure fast, consistent checks
-   - No permission drift between reads
-
+  - Pre-computed permissions ensure fast, consistent checks
+  - No permission drift between reads
 2. **Flexible Permission Model**
-   - Combine RBAC, ABAC, and ReBAC as needed
-   - Support complex hierarchies (org → team → project → resource)
-
+  - Combine RBAC, ABAC, and ReBAC as needed
+  - Support complex hierarchies (org → team → project → resource)
 3. **Auditability**
-   - Full audit log of all permission changes
-   - Path tracing shows WHY access was granted
-
+  - Full audit log of all permission changes
+  - Path tracing shows WHY access was granted
 4. **Real-time Updates**
-   - Convex reactivity means UI updates instantly when permissions change
-   - No polling required (better than Zanzibar!)
+  - Convex reactivity means UI updates instantly when permissions change
+  - No polling required (better than Zanzibar!)
 
 ---
 
 ## Comparison with Other Solutions
 
-| Feature | @djpanda/convex-authz | OpenFGA | Oso | Cerbos |
-|---------|------------------------|---------|-----|--------|
-| RBAC | ✅ | ✅ | ✅ | ✅ |
-| ABAC | ✅ | ⚠️ Limited | ✅ | ✅ |
-| ReBAC | ✅ | ✅ Native | ✅ | ⚠️ |
-| O(1) Lookups | ✅ | ✅ | ✅ | ✅ |
-| Convex Native | ✅ | ❌ | ❌ | ❌ |
-| Type Safety | ✅ TypeScript | DSL | Polar | YAML |
-| Real-time | ✅ Convex queries | Polling | Polling | Polling |
-| Self-hosted | ✅ | ✅ | ✅ | ✅ |
+
+| Feature       | @djpanda/convex-authz | OpenFGA    | Oso     | Cerbos  |
+| ------------- | --------------------- | ---------- | ------- | ------- |
+| RBAC          | ✅                     | ✅          | ✅       | ✅       |
+| ABAC          | ✅                     | ⚠️ Limited | ✅       | ✅       |
+| ReBAC         | ✅                     | ✅ Native   | ✅       | ⚠️      |
+| O(1) Lookups  | ✅                     | ✅          | ✅       | ✅       |
+| Convex Native | ✅                     | ❌          | ❌       | ❌       |
+| Type Safety   | ✅ TypeScript          | DSL        | Polar   | YAML    |
+| Real-time     | ✅ Convex queries      | Polling    | Polling | Polling |
+| Self-hosted   | ✅                     | ✅          | ✅       | ✅       |
+
 
 ---
 
@@ -1165,12 +1179,14 @@ Every table in the authz component includes a required `tenantId` field as the l
 
 ### tenantId vs scope
 
-| | `tenantId` | `scope` |
-|---|---|---|
-| **Purpose** | Data isolation boundary | Resource-level grouping |
-| **Enforcement** | Database-level (index prefix) | Application-level (query filter) |
-| **Required** | Always | Optional |
-| **Example** | `"acme-corp"` | `{ type: "project", id: "proj-123" }` |
+
+|                 | `tenantId`                    | `scope`                               |
+| --------------- | ----------------------------- | ------------------------------------- |
+| **Purpose**     | Data isolation boundary       | Resource-level grouping               |
+| **Enforcement** | Database-level (index prefix) | Application-level (query filter)      |
+| **Required**    | Always                        | Optional                              |
+| **Example**     | `"acme-corp"`                 | `{ type: "project", id: "proj-123" }` |
+
 
 - **tenantId** answers: "whose data is this?" — the organization/customer boundary
 - **scope** answers: "within this tenant, what resource does this apply to?" — e.g. admin of a specific project
@@ -1204,6 +1220,7 @@ await otherTenant.getUserRoles(ctx, userId);
 ### Compliance
 
 The `tenantId`-first index design satisfies SOC2 and HIPAA data isolation requirements:
+
 - All queries are partitioned by tenant at the database index level
 - Cross-tenant data access is structurally impossible through the standard API
 - `tenantId` is required in the constructor — it cannot be accidentally omitted
@@ -1247,6 +1264,7 @@ await authz.assignRole(ctx, userId, "contractor", undefined,
 ### 5. Always Use Audit Logging
 
 The audit log is invaluable for:
+
 - Compliance (SOC2, GDPR)
 - Debugging access issues
 - Security incident investigation
@@ -1271,10 +1289,12 @@ The job runs every 24 hours and cleans `roleAssignments`, `permissionOverrides`,
 
 To avoid unbounded growth of the audit log (compliance and cost), the same cron registration also schedules a **daily audit retention job**. Configure it with Convex environment variables (Dashboard or CLI):
 
-| Variable | Description |
-|----------|-------------|
-| `AUDIT_RETENTION_DAYS` | Delete entries older than this many days (e.g. `90`). Omit or `0` = do not prune by age. |
+
+| Variable                      | Description                                                                                                         |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `AUDIT_RETENTION_DAYS`        | Delete entries older than this many days (e.g. `90`). Omit or `0` = do not prune by age.                            |
 | `AUDIT_RETENTION_MAX_ENTRIES` | Cap total entries by deleting oldest until count ≤ this value (e.g. `100000`). Omit or `0` = do not prune by count. |
+
 
 Set at least one to enable retention. The job runs every 24 hours (same `ensureCleanupCronRegistered` flow). You can also run `components.authz.mutations.runAuditRetentionCleanup` manually with optional args `{ maxAgeDays?, maxEntries? }` to override env for that run.
 
@@ -1400,6 +1420,8 @@ graph LR
   Client -->|"import { authz }"| Billing["convex/billing.ts"]
   Client -->|"passed to makeTenantsAPI"| TenantsAPI["convex/tenants.ts"]
 ```
+
+
 
 ```typescript
 // convex/convex.config.ts — register both components
