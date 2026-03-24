@@ -12,6 +12,7 @@ import {
   definePermissions,
   defineRoles,
   definePolicies,
+  defineRelationPermissions,
 } from "@djpanda/convex-authz";
 import { v } from "convex/values";
 
@@ -70,6 +71,21 @@ const authzB = new Authz(components.authz, {
   permissions,
   roles,
   tenantId: "consumer-test-b",
+});
+
+// Tenant C (for ReBAC -> permission bridge tests)
+const relationPermissions = defineRelationPermissions({
+  "document:viewer": ["documents:read"],
+  "document:editor": ["documents:read", "documents:update"],
+  "document:owner": ["documents:read", "documents:update", "documents:delete"],
+  "team:member": ["documents:read"],
+});
+
+const authzWithRelPerms = new Authz(components.authz, {
+  permissions,
+  roles,
+  tenantId: "consumer-test-rebac",
+  relationPermissions,
 });
 
 // ---------------------------------------------------------------------------
@@ -518,5 +534,103 @@ export const canWithTenant = query({
     return await authz
       .withTenant(args.tenantId)
       .can(ctx, args.userId, args.permission);
+  },
+});
+
+// ---------------------------------------------------------------------------
+// ReBAC with permissions bridge
+// ---------------------------------------------------------------------------
+
+export const addRelationWithPerms = mutation({
+  args: {
+    subjectType: v.string(),
+    subjectId: v.string(),
+    relation: v.string(),
+    objectType: v.string(),
+    objectId: v.string(),
+  },
+  returns: v.string(),
+  handler: async (ctx, args) => {
+    return await authzWithRelPerms.addRelation(
+      ctx,
+      { type: args.subjectType, id: args.subjectId },
+      args.relation,
+      { type: args.objectType, id: args.objectId },
+    );
+  },
+});
+
+export const removeRelationWithPerms = mutation({
+  args: {
+    subjectType: v.string(),
+    subjectId: v.string(),
+    relation: v.string(),
+    objectType: v.string(),
+    objectId: v.string(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    return await authzWithRelPerms.removeRelation(
+      ctx,
+      { type: args.subjectType, id: args.subjectId },
+      args.relation,
+      { type: args.objectType, id: args.objectId },
+    );
+  },
+});
+
+export const canWithRelPerms = query({
+  args: {
+    userId: v.string(),
+    permission: v.string(),
+    scope: v.optional(v.object({ type: v.string(), id: v.string() })),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    return await authzWithRelPerms.can(
+      ctx,
+      args.userId,
+      args.permission,
+      args.scope,
+    );
+  },
+});
+
+export const hasRelationWithPerms = query({
+  args: {
+    subjectType: v.string(),
+    subjectId: v.string(),
+    relation: v.string(),
+    objectType: v.string(),
+    objectId: v.string(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    return await authzWithRelPerms.hasRelation(
+      ctx,
+      { type: args.subjectType, id: args.subjectId },
+      args.relation,
+      { type: args.objectType, id: args.objectId },
+    );
+  },
+});
+
+export const assignRoleInRebacTenant = mutation({
+  args: { userId: v.string(), role: v.string() },
+  returns: v.string(),
+  handler: async (ctx, args) => {
+    return await authzWithRelPerms.assignRole(
+      ctx,
+      args.userId,
+      args.role as keyof typeof roles,
+    );
+  },
+});
+
+export const deprovisionInRebacTenant = mutation({
+  args: { userId: v.string() },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    return await authzWithRelPerms.deprovisionUser(ctx, args.userId);
   },
 });
