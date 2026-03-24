@@ -43,7 +43,7 @@
     "preversion": "npm ci && npm run build:clean && run-p test lint typecheck",
     "alpha": "npm version prerelease --preid alpha && npm publish --tag alpha && git push --follow-tags",
     "release": "npm version patch && npm publish && git push --follow-tags",
-    "version": "bash scripts/changelog.sh && prettier -w CHANGELOG.md && git add CHANGELOG.md"
+    "version": "bash scripts/changelog.sh && prettier -w CHANGELOG.md && bash scripts/sync-skill.sh && git add CHANGELOG.md SKILL.md"
   },
   "files": [
     "dist",
