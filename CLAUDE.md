@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+<!-- v2.1.1 -->
+
 ## Package
 
 `@djpanda/convex-authz` — a Convex component providing RBAC/ABAC/ReBAC authorization with O(1) indexed lookups (inspired by Google Zanzibar). Published as a Convex component via `defineComponent("authz")`.
