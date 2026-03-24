@@ -1142,6 +1142,9 @@ export class Authz<
         | "permission_denied"
         | "attribute_set"
         | "attribute_removed"
+        | "relation_added"
+        | "relation_removed"
+        | "policy_evaluated"
         | undefined,
       limit: options?.limit,
       paginationOpts,
