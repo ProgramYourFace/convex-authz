@@ -1456,3 +1456,374 @@ describe("Consumer Integration Tests (Authz class -> real DB)", () => {
     expect(id1).toBe(id2);
   });
 });
+
+// =============================================================================
+// ReBAC -> Permission Bridge (via defineRelationPermissions)
+// =============================================================================
+describe("ReBAC -> Permission Bridge (via defineRelationPermissions)", () => {
+  test("addRelation with viewer grants documents:read scoped to document", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "rebac-perm-user",
+    });
+
+    await t.mutation(api.consumerTests.addRelationWithPerms, {
+      subjectType: "user",
+      subjectId: userId,
+      relation: "viewer",
+      objectType: "document",
+      objectId: "doc-1",
+    });
+
+    // can() with document scope -> allowed
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:read",
+        scope: { type: "document", id: "doc-1" },
+      }),
+    ).toBe(true);
+
+    // can() with different document -> denied
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:read",
+        scope: { type: "document", id: "doc-2" },
+      }),
+    ).toBe(false);
+
+    // can() globally -> denied
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:read",
+      }),
+    ).toBe(false);
+
+    // hasRelation still works
+    expect(
+      await t.query(api.consumerTests.hasRelationWithPerms, {
+        subjectType: "user",
+        subjectId: userId,
+        relation: "viewer",
+        objectType: "document",
+        objectId: "doc-1",
+      }),
+    ).toBe(true);
+  });
+
+  test("removeRelation revokes relation-derived permissions", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "rebac-revoke-user",
+    });
+
+    await t.mutation(api.consumerTests.addRelationWithPerms, {
+      subjectType: "user",
+      subjectId: userId,
+      relation: "editor",
+      objectType: "document",
+      objectId: "doc-1",
+    });
+
+    // editor grants read + update
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:read",
+        scope: { type: "document", id: "doc-1" },
+      }),
+    ).toBe(true);
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:update",
+        scope: { type: "document", id: "doc-1" },
+      }),
+    ).toBe(true);
+
+    // Remove relation
+    await t.mutation(api.consumerTests.removeRelationWithPerms, {
+      subjectType: "user",
+      subjectId: userId,
+      relation: "editor",
+      objectType: "document",
+      objectId: "doc-1",
+    });
+
+    // Both permissions revoked
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:read",
+        scope: { type: "document", id: "doc-1" },
+      }),
+    ).toBe(false);
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:update",
+        scope: { type: "document", id: "doc-1" },
+      }),
+    ).toBe(false);
+  });
+
+  test("owner relation grants read + update + delete", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "rebac-owner-user",
+    });
+
+    await t.mutation(api.consumerTests.addRelationWithPerms, {
+      subjectType: "user",
+      subjectId: userId,
+      relation: "owner",
+      objectType: "document",
+      objectId: "doc-1",
+    });
+
+    const scope = { type: "document", id: "doc-1" };
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:read",
+        scope,
+      }),
+    ).toBe(true);
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:update",
+        scope,
+      }),
+    ).toBe(true);
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:delete",
+        scope,
+      }),
+    ).toBe(true);
+
+    // But not settings:manage
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "settings:manage",
+        scope,
+      }),
+    ).toBe(false);
+  });
+
+  test("RBAC role + ReBAC relation work together", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "rebac-rbac-user",
+    });
+
+    // Assign global base role (grants documents:read globally)
+    await t.mutation(api.consumerTests.assignRoleInRebacTenant, {
+      userId,
+      role: "base",
+    });
+
+    // Add editor relation on doc-1 (grants documents:read + documents:update scoped)
+    await t.mutation(api.consumerTests.addRelationWithPerms, {
+      subjectType: "user",
+      subjectId: userId,
+      relation: "editor",
+      objectType: "document",
+      objectId: "doc-1",
+    });
+
+    // Global: documents:read from role
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:read",
+      }),
+    ).toBe(true);
+    // Global: documents:update NOT from role (base doesn't have it)
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:update",
+      }),
+    ).toBe(false);
+
+    // Scoped to doc-1: documents:update from relation
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:update",
+        scope: { type: "document", id: "doc-1" },
+      }),
+    ).toBe(true);
+
+    // Remove relation — scoped update goes away, global read stays
+    await t.mutation(api.consumerTests.removeRelationWithPerms, {
+      subjectType: "user",
+      subjectId: userId,
+      relation: "editor",
+      objectType: "document",
+      objectId: "doc-1",
+    });
+
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:read",
+      }),
+    ).toBe(true); // role still
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:update",
+        scope: { type: "document", id: "doc-1" },
+      }),
+    ).toBe(false); // relation gone
+  });
+
+  test("multiple relations on same document — removing one preserves the other's permissions", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "rebac-multi-user",
+    });
+
+    // viewer on doc-1 (grants read)
+    await t.mutation(api.consumerTests.addRelationWithPerms, {
+      subjectType: "user",
+      subjectId: userId,
+      relation: "viewer",
+      objectType: "document",
+      objectId: "doc-1",
+    });
+
+    // editor on doc-1 (grants read + update)
+    await t.mutation(api.consumerTests.addRelationWithPerms, {
+      subjectType: "user",
+      subjectId: userId,
+      relation: "editor",
+      objectType: "document",
+      objectId: "doc-1",
+    });
+
+    const scope = { type: "document", id: "doc-1" };
+
+    // Remove viewer — editor still grants read + update
+    await t.mutation(api.consumerTests.removeRelationWithPerms, {
+      subjectType: "user",
+      subjectId: userId,
+      relation: "viewer",
+      objectType: "document",
+      objectId: "doc-1",
+    });
+
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:read",
+        scope,
+      }),
+    ).toBe(true);
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:update",
+        scope,
+      }),
+    ).toBe(true);
+
+    // Remove editor — now everything gone
+    await t.mutation(api.consumerTests.removeRelationWithPerms, {
+      subjectType: "user",
+      subjectId: userId,
+      relation: "editor",
+      objectType: "document",
+      objectId: "doc-1",
+    });
+
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:read",
+        scope,
+      }),
+    ).toBe(false);
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:update",
+        scope,
+      }),
+    ).toBe(false);
+  });
+
+  test("team:member relation grants permission scoped to team", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "rebac-team-user",
+    });
+
+    await t.mutation(api.consumerTests.addRelationWithPerms, {
+      subjectType: "user",
+      subjectId: userId,
+      relation: "member",
+      objectType: "team",
+      objectId: "team-1",
+    });
+
+    // Scoped to team
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:read",
+        scope: { type: "team", id: "team-1" },
+      }),
+    ).toBe(true);
+
+    // Different team -> denied
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:read",
+        scope: { type: "team", id: "team-2" },
+      }),
+    ).toBe(false);
+  });
+
+  test("cross-tenant isolation for relation-derived permissions", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, {
+      name: "rebac-tenant-user",
+    });
+
+    // Add relation in rebac tenant
+    await t.mutation(api.consumerTests.addRelationWithPerms, {
+      subjectType: "user",
+      subjectId: userId,
+      relation: "viewer",
+      objectType: "document",
+      objectId: "doc-1",
+    });
+
+    // Allowed in rebac tenant
+    expect(
+      await t.query(api.consumerTests.canWithRelPerms, {
+        userId,
+        permission: "documents:read",
+        scope: { type: "document", id: "doc-1" },
+      }),
+    ).toBe(true);
+
+    // Denied in other tenant (consumer-test)
+    expect(
+      await t.query(api.consumerTests.can, {
+        userId,
+        permission: "documents:read",
+        scope: { type: "document", id: "doc-1" },
+      }),
+    ).toBe(false);
+  });
+});
