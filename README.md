@@ -251,10 +251,12 @@ const allowed = await otherTenantAuthz.can(ctx, userId, "documents:read");
 
 ### Migration guide: `IndexedAuthz` → `Authz`
 
+> **Note:** `IndexedAuthz` is no longer exported in v2. The import below will fail — just replace it with `Authz`.
+
 ```typescript
-// Before (v1)
-import { IndexedAuthz } from "@djpanda/convex-authz";
-const authz = new IndexedAuthz(components.authz, { permissions, roles, tenantId: "my-app" });
+// Before (v1) — this import no longer works in v2
+// import { IndexedAuthz } from "@djpanda/convex-authz";
+// const authz = new IndexedAuthz(components.authz, { permissions, roles, tenantId: "my-app" });
 
 // After (v2) — same constructor, just rename the class
 import { Authz } from "@djpanda/convex-authz";
