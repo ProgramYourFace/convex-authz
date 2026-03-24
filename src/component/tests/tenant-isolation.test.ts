@@ -12,10 +12,11 @@ describe("Cross-tenant role isolation", () => {
   it("role assigned in tenant A is not visible in tenant B", async () => {
     const t = convexTest(schema, modules);
 
-    await t.mutation(internal.mutations.assignRole, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT_A,
       userId: "user1",
       role: "admin",
+        rolePermissions: [],
     });
 
     const rolesA = await t.query(api.queries.getUserRoles, {
@@ -37,11 +38,12 @@ describe("Cross-tenant permission check isolation", () => {
   it("permission granted via role in tenant A is denied in tenant B", async () => {
     const t = convexTest(schema, modules);
 
-    await t.mutation(internal.mutations.assignRole, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT_A,
       userId: "user1",
       role: "admin",
-    });
+      rolePermissions: [],
+      });
 
     const resultA = await t.query(internal.queries.checkPermission, {
       tenantId: TENANT_A,
@@ -65,7 +67,7 @@ describe("Cross-tenant attribute isolation", () => {
   it("attribute set in tenant A is not visible in tenant B", async () => {
     const t = convexTest(schema, modules);
 
-    await t.mutation(internal.mutations.setAttribute, {
+    await t.mutation(api.unified.setAttributeWithRecompute, {
       tenantId: TENANT_A,
       userId: "user1",
       key: "dept",
@@ -92,7 +94,7 @@ describe("Cross-tenant permission override isolation", () => {
   it("permission override in tenant A is not visible in tenant B", async () => {
     const t = convexTest(schema, modules);
 
-    await t.mutation(internal.mutations.grantPermission, {
+    await t.mutation(api.unified.grantPermissionUnified, {
       tenantId: TENANT_A,
       userId: "user1",
       permission: "documents:read",
@@ -117,7 +119,7 @@ describe("Cross-tenant ReBAC isolation", () => {
   it("relation in tenant A is not visible in tenant B", async () => {
     const t = convexTest(schema, modules);
 
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT_A,
       subjectType: "user",
       subjectId: "user1",
@@ -152,7 +154,7 @@ describe("Cross-tenant indexed isolation", () => {
   it("indexed role/permission in tenant A is not visible in tenant B", async () => {
     const t = convexTest(schema, modules);
 
-    await t.mutation(internal.indexed.assignRoleWithCompute, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT_A,
       userId: "user1",
       role: "admin",
@@ -181,17 +183,19 @@ describe("Cleanup without tenantId cleans all", () => {
 
     const pastTime = Date.now() - 3600000;
 
-    await t.mutation(internal.mutations.assignRole, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT_A,
       userId: "user1",
       role: "expired-role-a",
       expiresAt: pastTime,
-    });
+      rolePermissions: [],
+      });
 
-    await t.mutation(internal.mutations.assignRole, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT_B,
       userId: "user1",
       role: "expired-role-b",
+        rolePermissions: [],
       expiresAt: pastTime,
     });
 
@@ -219,17 +223,19 @@ describe("Cleanup with tenantId scoped", () => {
 
     const pastTime = Date.now() - 3600000;
 
-    await t.mutation(internal.mutations.assignRole, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT_A,
       userId: "user1",
       role: "expired-role-a",
       expiresAt: pastTime,
-    });
+      rolePermissions: [],
+      });
 
-    await t.mutation(internal.mutations.assignRole, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT_B,
       userId: "user1",
       role: "expired-role-b",
+        rolePermissions: [],
       expiresAt: pastTime,
     });
 
@@ -250,7 +256,7 @@ describe("Cleanup with tenantId scoped", () => {
 
     const pastTime = Date.now() - 3600000;
 
-    await t.mutation(internal.indexed.assignRoleWithCompute, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT_A,
       userId: "user1",
       role: "admin",
@@ -258,7 +264,7 @@ describe("Cleanup with tenantId scoped", () => {
       expiresAt: pastTime,
     });
 
-    await t.mutation(internal.indexed.assignRoleWithCompute, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT_B,
       userId: "user1",
       role: "admin",
@@ -276,7 +282,7 @@ describe("Cleanup with tenantId scoped", () => {
 
     const pastTime = Date.now() - 3600000;
 
-    await t.mutation(internal.indexed.assignRoleWithCompute, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT_A,
       userId: "user1",
       role: "admin",
@@ -284,7 +290,7 @@ describe("Cleanup with tenantId scoped", () => {
       expiresAt: pastTime,
     });
 
-    await t.mutation(internal.indexed.assignRoleWithCompute, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT_B,
       userId: "user1",
       role: "admin",

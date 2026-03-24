@@ -9,7 +9,7 @@
 import { convexTest } from "convex-test";
 import { describe, test, expect } from "vitest";
 import schema from "../schema.js";
-import { api, internal } from "../_generated/api.js";
+import { api } from "../_generated/api.js";
 
 const modules = import.meta.glob("../**/*.ts");
 const TENANT = "test-tenant";
@@ -443,10 +443,11 @@ describe("Category 2: Interaction between operations", () => {
 
     // revokeAllRoles only deletes source roleAssignments, then recomputeUser
     // rebuilds effective tables (preserving direct grants/denies)
-    await t.mutation(internal.mutations.revokeAllRoles, {
+    await t.mutation(api.unified.revokeAllRolesUnified, {
       tenantId: TENANT,
       userId: "alice",
-    });
+      rolePermissionsMap: {},
+      });
 
     // Simulate what the client does: call recomputeUser after revokeAllRoles
     await t.mutation(api.unified.recomputeUser, {
@@ -482,7 +483,7 @@ describe("Category 3: Bulk operations -> effective tables sync", () => {
     const t = convexTest(schema, modules);
 
     // Use bulk assignRoles (the old mutations path)
-    await t.mutation(internal.mutations.assignRoles, {
+    await t.mutation(api.unified.assignRolesUnified, {
       tenantId: TENANT,
       userId: "alice",
       roles: [
@@ -490,7 +491,8 @@ describe("Category 3: Bulk operations -> effective tables sync", () => {
         { role: "editor" },
         { role: "viewer" },
       ],
-    });
+      rolePermissionsMap: {},
+      });
 
     // Client would call recomputeUser after bulk assign
     await t.mutation(api.unified.recomputeUser, {
@@ -550,14 +552,15 @@ describe("Category 3: Bulk operations -> effective tables sync", () => {
     });
 
     // Use bulk revokeRoles to revoke 2 of them
-    await t.mutation(internal.mutations.revokeRoles, {
+    await t.mutation(api.unified.revokeRolesUnified, {
       tenantId: TENANT,
       userId: "alice",
       roles: [
         { role: "admin" },
         { role: "editor" },
       ],
-    });
+      rolePermissionsMap: {},
+      });
 
     // Recompute effective tables
     await t.mutation(api.unified.recomputeUser, {
@@ -598,7 +601,7 @@ describe("Category 3: Bulk operations -> effective tables sync", () => {
     const t = convexTest(schema, modules);
 
     // Bulk assign 3 roles + recompute
-    await t.mutation(internal.mutations.assignRoles, {
+    await t.mutation(api.unified.assignRolesUnified, {
       tenantId: TENANT,
       userId: "alice",
       roles: [
@@ -606,7 +609,8 @@ describe("Category 3: Bulk operations -> effective tables sync", () => {
         { role: "editor" },
         { role: "viewer" },
       ],
-    });
+      rolePermissionsMap: {},
+      });
 
     await t.mutation(api.unified.recomputeUser, {
       tenantId: TENANT,
@@ -1034,10 +1038,11 @@ describe("Category 6: Cross-tenant isolation", () => {
     });
 
     // Revoke all in tenant A
-    await t.mutation(internal.mutations.revokeAllRoles, {
+    await t.mutation(api.unified.revokeAllRolesUnified, {
       tenantId: "tenant-a",
       userId: "alice",
-    });
+      rolePermissionsMap: {},
+      });
 
     // Recompute tenant A
     await t.mutation(api.unified.recomputeUser, {

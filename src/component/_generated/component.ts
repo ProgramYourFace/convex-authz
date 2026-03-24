@@ -214,7 +214,10 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             | "permission_granted"
             | "permission_denied"
             | "attribute_set"
-            | "attribute_removed";
+            | "attribute_removed"
+            | "relation_added"
+            | "relation_removed"
+            | "policy_evaluated";
           limit?: number;
           paginationOpts?: {
             cursor: string | null;

@@ -16,17 +16,19 @@ describe("queries - additional coverage", () => {
     it("should filter roles by scope", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         scope: { type: "team", id: "team_1" },
+        rolePermissions: [],
       });
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
+        rolePermissions: [],
       });
 
       const scopedRoles = await t.query(api.queries.getUserRoles, {
@@ -45,17 +47,19 @@ describe("queries - additional coverage", () => {
 
       const pastTime = Date.now() - 10000;
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         expiresAt: pastTime,
+        rolePermissions: [],
       });
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
+        rolePermissions: [],
       });
 
       const roles = await t.query(api.queries.getUserRoles, {
@@ -72,13 +76,13 @@ describe("queries - additional coverage", () => {
     it("should get all overrides for a user", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.grantPermission, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
 
-      await t.mutation(internal.mutations.denyPermission, {
+      await t.mutation(api.unified.denyPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -95,13 +99,13 @@ describe("queries - additional coverage", () => {
     it("should filter by permission", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.grantPermission, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
 
-      await t.mutation(internal.mutations.denyPermission, {
+      await t.mutation(api.unified.denyPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -123,14 +127,14 @@ describe("queries - additional coverage", () => {
 
       const pastTime = Date.now() - 10000;
 
-      await t.mutation(internal.mutations.grantPermission, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         expiresAt: pastTime,
       });
 
-      await t.mutation(internal.mutations.grantPermission, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:write",
@@ -152,7 +156,7 @@ describe("queries - additional coverage", () => {
 
       const pastTime = Date.now() - 10000;
 
-      await t.mutation(internal.mutations.grantPermission, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -174,11 +178,12 @@ describe("queries - additional coverage", () => {
 
       const pastTime = Date.now() - 10000;
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         expiresAt: pastTime,
+        rolePermissions: [],
       });
 
       const result = await t.query(internal.queries.checkPermission, {
@@ -196,11 +201,12 @@ describe("queries - additional coverage", () => {
     it("should handle scoped permission checks", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         scope: { type: "team", id: "team_1" },
+        rolePermissions: [],
       });
 
       const result = await t.query(internal.queries.checkPermission, {
@@ -219,10 +225,11 @@ describe("queries - additional coverage", () => {
     it("should deny when role has no matching permissions", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
+        rolePermissions: [],
       });
 
       const result = await t.query(internal.queries.checkPermission, {
@@ -243,7 +250,7 @@ describe("queries - additional coverage", () => {
     it("should allow when override is resource wildcard (documents:*)", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.grantPermission, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:*",
@@ -277,7 +284,7 @@ describe("queries - additional coverage", () => {
     it("should allow when override is action wildcard (*:read)", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.grantPermission, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "*:read",
@@ -311,7 +318,7 @@ describe("queries - additional coverage", () => {
     it("should allow when override is full wildcard (*)", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.grantPermission, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "*",
@@ -337,10 +344,11 @@ describe("queries - additional coverage", () => {
     it("should allow when role has wildcard permission (documents:*)", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "poweruser",
+        rolePermissions: [],
       });
 
       const result = await t.query(internal.queries.checkPermission, {
@@ -357,12 +365,13 @@ describe("queries - additional coverage", () => {
     it("should deny when deny override uses wildcard (documents:*)", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
+        rolePermissions: [],
       });
-      await t.mutation(internal.mutations.denyPermission, {
+      await t.mutation(api.unified.denyPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:*",
@@ -385,10 +394,11 @@ describe("queries - additional coverage", () => {
     it("should return allowed true when user has at least one permission", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
+        rolePermissions: [],
       });
 
       const result = await t.query(internal.queries.checkPermissions, {
@@ -407,10 +417,11 @@ describe("queries - additional coverage", () => {
     it("should return allowed false when user has none of the permissions", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
+        rolePermissions: [],
       });
 
       const result = await t.query(internal.queries.checkPermissions, {
@@ -429,12 +440,13 @@ describe("queries - additional coverage", () => {
     it("should respect deny override", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
+        rolePermissions: [],
       });
-      await t.mutation(internal.mutations.denyPermission, {
+      await t.mutation(api.unified.denyPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -489,14 +501,15 @@ describe("queries - additional coverage", () => {
     it("should combine role permissions and overrides with scope", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
+        rolePermissions: [],
         scope: { type: "team", id: "team_1" },
       });
 
-      await t.mutation(internal.mutations.grantPermission, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "special:access",
@@ -520,7 +533,7 @@ describe("queries - additional coverage", () => {
     it("should filter overrides by scope", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.grantPermission, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "special:access",
@@ -543,7 +556,7 @@ describe("queries - additional coverage", () => {
 
       const pastTime = Date.now() - 10000;
 
-      await t.mutation(internal.mutations.grantPermission, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "special:access",
@@ -564,22 +577,25 @@ describe("queries - additional coverage", () => {
     it("should get users with a specific role", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_1",
         role: "admin",
+        rolePermissions: [],
       });
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_2",
         role: "admin",
+        rolePermissions: [],
       });
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_3",
         role: "viewer",
+        rolePermissions: [],
       });
 
       const users = await t.query(api.queries.getUsersWithRole, {
@@ -595,17 +611,19 @@ describe("queries - additional coverage", () => {
     it("should filter by scope", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_1",
         role: "admin",
         scope: { type: "team", id: "team_1" },
+        rolePermissions: [],
       });
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_2",
         role: "admin",
+        rolePermissions: [],
         scope: { type: "team", id: "team_2" },
       });
 
@@ -624,17 +642,19 @@ describe("queries - additional coverage", () => {
 
       const pastTime = Date.now() - 10000;
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_1",
         role: "admin",
         expiresAt: pastTime,
+        rolePermissions: [],
       });
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_2",
         role: "admin",
+        rolePermissions: [],
       });
 
       const users = await t.query(api.queries.getUsersWithRole, {
@@ -651,14 +671,15 @@ describe("queries - additional coverage", () => {
     it("should filter by action", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
+        rolePermissions: [],
         enableAudit: true,
       });
 
-      await t.mutation(internal.mutations.grantPermission, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -677,14 +698,15 @@ describe("queries - additional coverage", () => {
     it("should get all logs without filter", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
+        rolePermissions: [],
         enableAudit: true,
       });
 
-      await t.mutation(internal.mutations.grantPermission, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -701,21 +723,23 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       // Create multiple audit entries
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         enableAudit: true,
+        rolePermissions: [],
       });
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
+        rolePermissions: [],
         enableAudit: true,
       });
 
-      await t.mutation(internal.mutations.grantPermission, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -734,19 +758,21 @@ describe("queries - additional coverage", () => {
     it("should return paginated result when paginationOpts provided", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         enableAudit: true,
+        rolePermissions: [],
       });
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
+        rolePermissions: [],
         enableAudit: true,
       });
-      await t.mutation(internal.mutations.grantPermission, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -781,10 +807,11 @@ describe("queries - additional coverage", () => {
     it("should support pagination with userId filter", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_paginated",
         role: "admin",
+        rolePermissions: [],
         enableAudit: true,
       });
 
@@ -806,10 +833,11 @@ describe("queries - additional coverage", () => {
 
       const pastTime = Date.now() - 10000;
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
+        rolePermissions: [],
         expiresAt: pastTime,
       });
 
@@ -828,10 +856,11 @@ describe("queries - additional coverage", () => {
       const t = convexTest(schema, modules);
 
       // Scoped role for team_1
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
+        rolePermissions: [],
         scope: { type: "team", id: "team_1" },
       });
 
@@ -850,7 +879,7 @@ describe("queries - additional coverage", () => {
     it("should use override reason when deny has a reason", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.denyPermission, {
+      await t.mutation(api.unified.denyPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -871,7 +900,7 @@ describe("queries - additional coverage", () => {
     it("should use default reason when deny has no reason", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.denyPermission, {
+      await t.mutation(api.unified.denyPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -891,7 +920,7 @@ describe("queries - additional coverage", () => {
     it("should use override reason when allow has a reason", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.grantPermission, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -912,7 +941,7 @@ describe("queries - additional coverage", () => {
     it("should use default reason when allow has no reason", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.mutations.grantPermission, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -936,17 +965,19 @@ describe("queries - additional coverage", () => {
 
       const pastTime = Date.now() - 10000;
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         expiresAt: pastTime,
+        rolePermissions: [],
       });
 
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
+        rolePermissions: [],
       });
 
       const result = await t.query(internal.queries.getEffectivePermissions, {

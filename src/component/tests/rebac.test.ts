@@ -5,7 +5,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 import schema from "../schema.js";
-import { api, internal } from "../_generated/api.js";
+import { api } from "../_generated/api.js";
 
 const modules = import.meta.glob("../**/*.ts");
 const TENANT = "test-tenant";
@@ -15,7 +15,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
     it("should add a relationship", async () => {
       const t = convexTest(schema, modules);
 
-      const relationId = await t.mutation(internal.rebac.addRelation, {
+      const relationId = await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -30,7 +30,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
     it("should return existing ID for duplicate relationship", async () => {
       const t = convexTest(schema, modules);
 
-      const id1 = await t.mutation(internal.rebac.addRelation, {
+      const id1 = await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -39,7 +39,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         objectId: "sales",
       });
 
-      const id2 = await t.mutation(internal.rebac.addRelation, {
+      const id2 = await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -54,7 +54,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
     it("should check a direct relationship", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -93,7 +93,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
     it("should remove a relationship", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -102,7 +102,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         objectId: "sales",
       });
 
-      const removed = await t.mutation(internal.rebac.removeRelation, {
+      const removed = await t.mutation(api.unified.removeRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -128,7 +128,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
     it("should return false when removing non-existent relationship", async () => {
       const t = convexTest(schema, modules);
 
-      const removed = await t.mutation(internal.rebac.removeRelation, {
+      const removed = await t.mutation(api.unified.removeRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -143,7 +143,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
     it("should add relation with createdBy", async () => {
       const t = convexTest(schema, modules);
 
-      const id = await t.mutation(internal.rebac.addRelation, {
+      const id = await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -159,7 +159,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
     it("should get all relationships for a subject", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -168,7 +168,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         objectId: "sales",
       });
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -189,7 +189,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
     it("should filter subject relations by objectType", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -198,7 +198,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         objectId: "sales",
       });
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -223,7 +223,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
     it("should get all subjects with relation to an object", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -232,7 +232,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         objectId: "sales",
       });
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "bob",
@@ -255,7 +255,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
     it("should filter object relations by relation type", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -264,7 +264,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         objectId: "sales",
       });
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "bob",
@@ -289,7 +289,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
     it("should traverse relationships with rules", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -298,7 +298,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         objectId: "sales",
       });
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "team",
         subjectId: "sales",
@@ -328,7 +328,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
     it("should fail traversal when path doesn't exist", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -337,7 +337,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         objectId: "marketing",
       });
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "team",
         subjectId: "sales",
@@ -384,7 +384,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
     it("should find direct relationship without traversal", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -410,7 +410,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
       const t = convexTest(schema, modules);
 
       // Create a deep chain: user -> team -> project -> account
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -419,7 +419,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         objectId: "sales",
       });
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "team",
         subjectId: "sales",
@@ -428,7 +428,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         objectId: "alpha",
       });
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "project",
         subjectId: "alpha",
@@ -463,7 +463,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
       const t = convexTest(schema, modules);
 
       // Chain: user -> team -> project -> account (need depth 3 to reach account)
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -471,7 +471,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         objectType: "team",
         objectId: "sales",
       });
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "team",
         subjectId: "sales",
@@ -479,7 +479,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         objectType: "project",
         objectId: "alpha",
       });
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "project",
         subjectId: "alpha",
@@ -548,7 +548,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
       const t = convexTest(schema, modules);
 
       // Setup: user -[member]-> team, team -[owner]-> account
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -557,7 +557,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         objectId: "sales",
       });
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "team",
         subjectId: "sales",
@@ -610,7 +610,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
     it("should list accessible objects", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -619,7 +619,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         objectId: "sales",
       });
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -628,7 +628,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         objectId: "marketing",
       });
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -666,7 +666,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
     it("should list users with access to an object", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -675,7 +675,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         objectId: "sales",
       });
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "bob",
@@ -685,7 +685,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
       });
 
       // This is not a user type, should be filtered out
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "team",
         subjectId: "eng",
@@ -730,7 +730,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
       // This forces the BFS to visit A, then B, then try A again (hitting visited check)
 
       // Setup: team -[parent]-> project, project -[parent]-> team (cycle)
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "team",
         subjectId: "alpha_team",
@@ -739,7 +739,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         objectId: "proj_x",
       });
 
-      await t.mutation(internal.rebac.addRelation, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "project",
         subjectId: "proj_x",

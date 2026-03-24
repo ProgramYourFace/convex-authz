@@ -104,18 +104,20 @@ describe("Scenario: Multi-Organization Isolation", () => {
     const t = convexTest(schema, modules);
 
     // Setup: Alice is admin of ACME
-    await t.mutation(internal.mutations.assignRole, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
       scope: { type: "org", id: ORGS.acme },
-    });
+      rolePermissions: [],
+      });
 
     // Setup: Diana is admin of BetaCo
-    await t.mutation(internal.mutations.assignRole, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT,
       userId: USERS.diana,
       role: "admin",
+        rolePermissions: [],
       scope: { type: "org", id: ORGS.betaco },
     });
 
@@ -160,17 +162,19 @@ describe("Scenario: Multi-Organization Isolation", () => {
     const t = convexTest(schema, modules);
 
     // Alice has global viewer role
-    await t.mutation(internal.mutations.assignRole, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "viewer",
-    });
+      rolePermissions: [],
+      });
 
     // Alice has scoped admin role for ACME only
-    await t.mutation(internal.mutations.assignRole, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
+        rolePermissions: [],
       scope: { type: "org", id: ORGS.acme },
     });
 
@@ -219,7 +223,7 @@ describe("Scenario: Team-Based Access Control", () => {
     const t = convexTest(schema, modules);
 
     // Setup: Alice is member of Engineering team
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
@@ -229,7 +233,7 @@ describe("Scenario: Team-Based Access Control", () => {
     });
 
     // Setup: Engineering team owns Project Alpha
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: TYPES.team,
       subjectId: TEAMS.acmeEng,
@@ -260,7 +264,7 @@ describe("Scenario: Team-Based Access Control", () => {
     const t = convexTest(schema, modules);
 
     // Setup: Charlie is member of Sales team (not Engineering)
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.charlie,
@@ -270,7 +274,7 @@ describe("Scenario: Team-Based Access Control", () => {
     });
 
     // Setup: Engineering team owns Project Alpha
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: TYPES.team,
       subjectId: TEAMS.acmeEng,
@@ -301,7 +305,7 @@ describe("Scenario: Team-Based Access Control", () => {
     const t = convexTest(schema, modules);
 
     // Setup: Alice is admin of Engineering team
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
@@ -311,7 +315,7 @@ describe("Scenario: Team-Based Access Control", () => {
     });
 
     // Setup: Bob is member of Engineering team
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.bob,
@@ -321,7 +325,7 @@ describe("Scenario: Team-Based Access Control", () => {
     });
 
     // Setup: Engineering team owns Project Alpha
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: TYPES.team,
       subjectId: TEAMS.acmeEng,
@@ -376,7 +380,7 @@ describe("Scenario: Nested Resource Hierarchy (Org → Team → Project → Docu
     // alice -> member -> acme-eng -> owner -> alpha -> contains -> a1
 
     // Alice is member of Engineering
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
@@ -386,7 +390,7 @@ describe("Scenario: Nested Resource Hierarchy (Org → Team → Project → Docu
     });
 
     // Engineering owns Project Alpha
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: TYPES.team,
       subjectId: TEAMS.acmeEng,
@@ -396,7 +400,7 @@ describe("Scenario: Nested Resource Hierarchy (Org → Team → Project → Docu
     });
 
     // Project Alpha contains Document A1
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: TYPES.project,
       subjectId: PROJECTS.alpha,
@@ -442,7 +446,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
     const t = convexTest(schema, modules);
 
     // Alice is admin with full access
-    await t.mutation(internal.indexed.assignRoleWithCompute, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
@@ -450,7 +454,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
     });
 
     // But specifically denied delete on a sensitive document
-    await t.mutation(internal.indexed.denyPermissionDirect, {
+    await t.mutation(api.unified.denyPermissionUnified, {
       tenantId: TENANT,
       userId: USERS.alice,
       permission: "documents:delete",
@@ -485,7 +489,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
     const oneHourLater = now + 3600000;
 
     // Grant temporary access that has already expired
-    await t.mutation(internal.indexed.grantPermissionDirect, {
+    await t.mutation(api.unified.grantPermissionUnified, {
       tenantId: TENANT,
       userId: USERS.eve,
       permission: "documents:read",
@@ -505,7 +509,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
     expect(canReadExpired).toBe(false);
 
     // Grant access that expires in the future
-    await t.mutation(internal.indexed.grantPermissionDirect, {
+    await t.mutation(api.unified.grantPermissionUnified, {
       tenantId: TENANT,
       userId: USERS.eve,
       permission: "documents:write",
@@ -531,7 +535,7 @@ describe("Scenario: Permission Overrides & Exceptions", () => {
     // Eve has no roles or org membership
     // But has specific grants for Project Alpha
 
-    await t.mutation(internal.indexed.grantPermissionDirect, {
+    await t.mutation(api.unified.grantPermissionUnified, {
       tenantId: TENANT,
       userId: USERS.eve,
       permission: "documents:read",
@@ -584,23 +588,26 @@ describe("Scenario: Users with Multiple Roles", () => {
     // - Admin of Team Engineering
     // - Member of Team Sales
 
-    await t.mutation(internal.mutations.assignRole, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "viewer",
-    });
+      rolePermissions: [],
+      });
 
-    await t.mutation(internal.mutations.assignRole, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
       scope: { type: TYPES.team, id: TEAMS.acmeEng },
-    });
+      rolePermissions: [],
+      });
 
-    await t.mutation(internal.mutations.assignRole, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "member",
+        rolePermissions: [],
       scope: { type: TYPES.team, id: TEAMS.acmeSales },
     });
 
@@ -635,7 +642,7 @@ describe("Scenario: Users with Multiple Roles", () => {
     const t = convexTest(schema, modules);
 
     // Alice has viewer role (read only)
-    await t.mutation(internal.indexed.assignRoleWithCompute, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "viewer",
@@ -643,7 +650,7 @@ describe("Scenario: Users with Multiple Roles", () => {
     });
 
     // Alice also has editor role (read + write)
-    await t.mutation(internal.indexed.assignRoleWithCompute, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "editor",
@@ -695,7 +702,7 @@ describe("Scenario: Security Boundaries", () => {
     const t = convexTest(schema, modules);
 
     // Alice is admin
-    await t.mutation(internal.indexed.assignRoleWithCompute, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
@@ -711,7 +718,7 @@ describe("Scenario: Security Boundaries", () => {
     expect(canDelete).toBe(true);
 
     // Revoke admin role
-    await t.mutation(internal.indexed.revokeRoleWithCompute, {
+    await t.mutation(api.unified.revokeRoleUnified, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
@@ -738,7 +745,7 @@ describe("Scenario: Security Boundaries", () => {
     const t = convexTest(schema, modules);
 
     // Setup: alice -> member -> acme-eng -> owner -> alpha
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
@@ -747,7 +754,7 @@ describe("Scenario: Security Boundaries", () => {
       objectId: TEAMS.acmeEng,
     });
 
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: TYPES.team,
       subjectId: TEAMS.acmeEng,
@@ -773,7 +780,7 @@ describe("Scenario: Security Boundaries", () => {
     expect(result.allowed).toBe(true);
 
     // Remove alice from team
-    await t.mutation(internal.rebac.removeRelation, {
+    await t.mutation(api.unified.removeRelationUnified, {
       tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
@@ -808,11 +815,12 @@ describe("Scenario: Wildcard & Super Admin", () => {
   it("super admin with *:* has all permissions", async () => {
     const t = convexTest(schema, modules);
 
-    await t.mutation(internal.mutations.assignRole, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "superadmin",
-    });
+      rolePermissions: [],
+      });
 
     const result = await t.query(internal.queries.checkPermission, {
       tenantId: TENANT,
@@ -829,10 +837,11 @@ describe("Scenario: Wildcard & Super Admin", () => {
   it("resource-level wildcard grants all actions on resource", async () => {
     const t = convexTest(schema, modules);
 
-    await t.mutation(internal.mutations.assignRole, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "doc_admin",
+        rolePermissions: [],
     });
 
     const rolePerms = {
@@ -875,25 +884,27 @@ describe("Scenario: Audit Trail", () => {
     const t = convexTest(schema, modules);
 
     // Assign role
-    await t.mutation(internal.mutations.assignRole, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
+        rolePermissions: [],
       assignedBy: "system",
       enableAudit: true,
     });
 
     // Revoke role
-    await t.mutation(internal.mutations.revokeRole, {
+    await t.mutation(api.unified.revokeRoleUnified, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
       revokedBy: "system",
       enableAudit: true,
-    });
+      rolePermissions: [],
+      });
 
     // Grant permission
-    await t.mutation(internal.mutations.grantPermission, {
+    await t.mutation(api.unified.grantPermissionUnified, {
       tenantId: TENANT,
       userId: USERS.alice,
       permission: "special:access",
@@ -926,7 +937,7 @@ describe("Scenario: Cross-Tenant Data Room (RBAC + Overrides + O(1) indexed)", (
     const t = convexTest(schema, modules);
 
     // Alice is admin on Project Alpha (full CRUD)
-    await t.mutation(internal.indexed.assignRoleWithCompute, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
@@ -939,7 +950,7 @@ describe("Scenario: Cross-Tenant Data Room (RBAC + Overrides + O(1) indexed)", (
     });
 
     // External contractor (Frank) gets explicit read but explicit deny for delete
-    await t.mutation(internal.indexed.grantPermissionDirect, {
+    await t.mutation(api.unified.grantPermissionUnified, {
       tenantId: TENANT,
       userId: USERS.frank,
       permission: "documents:read",
@@ -947,7 +958,7 @@ describe("Scenario: Cross-Tenant Data Room (RBAC + Overrides + O(1) indexed)", (
       reason: "Contractor read-only access",
     });
 
-    await t.mutation(internal.indexed.denyPermissionDirect, {
+    await t.mutation(api.unified.denyPermissionUnified, {
       tenantId: TENANT,
       userId: USERS.frank,
       permission: "documents:delete",
@@ -995,7 +1006,7 @@ describe("Scenario: ReBAC traversal with cycle protection", () => {
     const t = convexTest(schema, modules);
 
     // user -> team -> project
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: TYPES.user,
       subjectId: USERS.alice,
@@ -1004,7 +1015,7 @@ describe("Scenario: ReBAC traversal with cycle protection", () => {
       objectId: TEAMS.acmeEng,
     });
 
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: TYPES.team,
       subjectId: TEAMS.acmeEng,
@@ -1014,7 +1025,7 @@ describe("Scenario: ReBAC traversal with cycle protection", () => {
     });
 
     // Introduce a cycle: project references team as parent (synthetic example)
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: TYPES.project,
       subjectId: PROJECTS.alpha,
@@ -1070,7 +1081,7 @@ describe("Scenario: Google Drive-style sharing", () => {
 
     // Relations setup
     // file -> folder (parent)
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: "folder",
       subjectId: FOLDER,
@@ -1080,7 +1091,7 @@ describe("Scenario: Google Drive-style sharing", () => {
     });
 
     // folder -> account (parent)
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: "account",
       subjectId: ACCOUNT,
@@ -1090,7 +1101,7 @@ describe("Scenario: Google Drive-style sharing", () => {
     });
 
     // file -> account (account_global) for everyone in account
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: "account",
       subjectId: ACCOUNT,
@@ -1101,7 +1112,7 @@ describe("Scenario: Google Drive-style sharing", () => {
 
     // Direct access and roles
     // John: direct viewer on file
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: "user",
       subjectId: JOHN,
@@ -1111,7 +1122,7 @@ describe("Scenario: Google Drive-style sharing", () => {
     });
 
     // Jane: editor on folder
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: "user",
       subjectId: JANE,
@@ -1121,7 +1132,7 @@ describe("Scenario: Google Drive-style sharing", () => {
     });
 
     // Alice: admin on account
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: "user",
       subjectId: ALICE,
@@ -1131,7 +1142,7 @@ describe("Scenario: Google Drive-style sharing", () => {
     });
 
     // Bob: member on account (general access)
-    await t.mutation(internal.rebac.addRelation, {
+    await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: "user",
       subjectId: BOB,
@@ -1245,7 +1256,7 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
     const ORDER_BETA = "order:beta";
 
     // Base assignments (RBAC per order)
-    await t.mutation(internal.indexed.assignRoleWithCompute, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT,
       userId: USERS.diana, // customer
       role: "customer",
@@ -1253,7 +1264,7 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
       scope: { type: "order", id: ORDER_ALPHA },
     });
 
-    await t.mutation(internal.indexed.assignRoleWithCompute, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT,
       userId: USERS.bob, // vendor
       role: "vendor",
@@ -1262,7 +1273,7 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
     });
 
     // Admin (global)
-    await t.mutation(internal.indexed.assignRoleWithCompute, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "admin",
@@ -1270,14 +1281,14 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
     });
 
     // Make admin explicitly allowed on both orders (global may not cover scoped keys)
-    await t.mutation(internal.indexed.grantPermissionDirect, {
+    await t.mutation(api.unified.grantPermissionUnified, {
       tenantId: TENANT,
       userId: USERS.alice,
       permission: "orders:deliver",
       scope: { type: "order", id: ORDER_ALPHA },
       reason: "Admin global deliver",
     });
-    await t.mutation(internal.indexed.grantPermissionDirect, {
+    await t.mutation(api.unified.grantPermissionUnified, {
       tenantId: TENANT,
       userId: USERS.alice,
       permission: "orders:deliver",
@@ -1286,7 +1297,7 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
     });
 
     // Another order in a different scope (to prove isolation)
-    await t.mutation(internal.indexed.assignRoleWithCompute, {
+    await t.mutation(api.unified.assignRoleUnified, {
       tenantId: TENANT,
       userId: USERS.bob,
       role: "vendor",
@@ -1325,13 +1336,13 @@ describe("Scenario: Food Delivery - riders need enough rides, roles scoped per o
     expect(riderDeliverInitial).toBe(false);
 
     // After rider reaches threshold, grant deliver explicitly
-    await t.mutation(internal.mutations.setAttribute, {
+    await t.mutation(api.unified.setAttributeWithRecompute, {
       tenantId: TENANT,
       userId: USERS.charlie,
       key: "rides",
       value: 600,
     });
-    await t.mutation(internal.indexed.grantPermissionDirect, {
+    await t.mutation(api.unified.grantPermissionUnified, {
       tenantId: TENANT,
       userId: USERS.charlie,
       permission: "orders:deliver",

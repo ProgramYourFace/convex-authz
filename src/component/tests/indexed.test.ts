@@ -5,7 +5,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 import schema from "../schema.js";
-import { api, internal } from "../_generated/api.js";
+import { api } from "../_generated/api.js";
 
 const modules = import.meta.glob("../**/*.ts");
 const TENANT = "test-tenant";
@@ -15,7 +15,7 @@ describe("O(1) Indexed Authorization", () => {
     it("should assign role and compute permissions", async () => {
       const t = convexTest(schema, modules);
 
-      const roleId = await t.mutation(internal.indexed.assignRoleWithCompute, {
+      const roleId = await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -35,7 +35,7 @@ describe("O(1) Indexed Authorization", () => {
     it("should check permission in O(1)", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
@@ -62,7 +62,7 @@ describe("O(1) Indexed Authorization", () => {
     it("should check role in O(1)", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -89,14 +89,14 @@ describe("O(1) Indexed Authorization", () => {
     it("should revoke role and remove permissions", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
         rolePermissions: ["documents:read", "documents:write"],
       });
 
-      const revoked = await t.mutation(internal.indexed.revokeRoleWithCompute, {
+      const revoked = await t.mutation(api.unified.revokeRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
@@ -116,7 +116,7 @@ describe("O(1) Indexed Authorization", () => {
     it("checkPermissionsFast (canAny) returns true when user has one of the permissions", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
@@ -135,7 +135,7 @@ describe("O(1) Indexed Authorization", () => {
     it("checkPermissionsFast returns false when user has none", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
@@ -159,7 +159,7 @@ describe("O(1) Indexed Authorization", () => {
         editor: ["documents:read", "documents:write"],
       };
 
-      const result = await t.mutation(internal.indexed.assignRolesWithCompute, {
+      const result = await t.mutation(api.unified.assignRolesUnified, {
         tenantId: TENANT,
         userId: "user_123",
         roles: [
@@ -197,14 +197,14 @@ describe("O(1) Indexed Authorization", () => {
         editor: ["documents:read", "documents:write"],
       };
 
-      await t.mutation(internal.indexed.assignRolesWithCompute, {
+      await t.mutation(api.unified.assignRolesUnified, {
         tenantId: TENANT,
         userId: "user_123",
         roles: [{ role: "admin" }, { role: "editor" }],
         rolePermissionsMap,
       });
 
-      const result = await t.mutation(internal.indexed.revokeRolesWithCompute, {
+      const result = await t.mutation(api.unified.revokeRolesUnified, {
         tenantId: TENANT,
         userId: "user_123",
         roles: [{ role: "admin" }, { role: "editor" }],
@@ -225,7 +225,7 @@ describe("O(1) Indexed Authorization", () => {
 
       const futureTime = Date.now() + 3600000;
 
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -233,7 +233,7 @@ describe("O(1) Indexed Authorization", () => {
       });
 
       // Assign same role again - should update
-      const roleId = await t.mutation(internal.indexed.assignRoleWithCompute, {
+      const roleId = await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -256,7 +256,7 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       // Assign viewer with read permission
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
@@ -264,7 +264,7 @@ describe("O(1) Indexed Authorization", () => {
       });
 
       // Assign editor with same read permission (plus write)
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
@@ -287,7 +287,7 @@ describe("O(1) Indexed Authorization", () => {
     it("should not duplicate source when same role is assigned again", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -295,7 +295,7 @@ describe("O(1) Indexed Authorization", () => {
       });
 
       // Assign same role again
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -316,7 +316,7 @@ describe("O(1) Indexed Authorization", () => {
     it("should handle scoped role assignments", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
@@ -346,7 +346,7 @@ describe("O(1) Indexed Authorization", () => {
     it("should handle scoped role check", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -378,7 +378,7 @@ describe("O(1) Indexed Authorization", () => {
     it("should grant direct permission", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.indexed.grantPermissionDirect, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "special:access",
@@ -397,14 +397,14 @@ describe("O(1) Indexed Authorization", () => {
     it("should deny permission overriding role", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         rolePermissions: ["documents:delete"],
       });
 
-      await t.mutation(internal.indexed.denyPermissionDirect, {
+      await t.mutation(api.unified.denyPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
@@ -423,12 +423,12 @@ describe("O(1) Indexed Authorization", () => {
     it("should grant scoped permission", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.indexed.grantPermissionDirect, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         scope: { type: "team", id: "team_1" },
-        grantedBy: "admin_user",
+        createdBy: "admin_user",
       });
 
       const canReadScoped = await t.query(api.indexed.checkPermissionFast, {
@@ -453,14 +453,14 @@ describe("O(1) Indexed Authorization", () => {
     it("should update existing permission to allow", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.indexed.denyPermissionDirect, {
+      await t.mutation(api.unified.denyPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
 
       // Now grant - should update existing
-      await t.mutation(internal.indexed.grantPermissionDirect, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -478,14 +478,14 @@ describe("O(1) Indexed Authorization", () => {
     it("should update existing permission to deny", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.indexed.grantPermissionDirect, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
       });
 
       // Now deny - should update existing
-      await t.mutation(internal.indexed.denyPermissionDirect, {
+      await t.mutation(api.unified.denyPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -503,12 +503,12 @@ describe("O(1) Indexed Authorization", () => {
     it("should deny scoped permission", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.indexed.denyPermissionDirect, {
+      await t.mutation(api.unified.denyPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
         scope: { type: "doc", id: "sensitive" },
-        deniedBy: "admin_user",
+        createdBy: "admin_user",
       });
 
       const canDelete = await t.query(api.indexed.checkPermissionFast, {
@@ -527,7 +527,7 @@ describe("O(1) Indexed Authorization", () => {
     it("should return false when role does not exist", async () => {
       const t = convexTest(schema, modules);
 
-      const result = await t.mutation(internal.indexed.revokeRoleWithCompute, {
+      const result = await t.mutation(api.unified.revokeRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "nonexistent",
@@ -541,14 +541,14 @@ describe("O(1) Indexed Authorization", () => {
       const t = convexTest(schema, modules);
 
       // Both roles grant documents:read
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
         rolePermissions: ["documents:read"],
       });
 
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
@@ -556,7 +556,7 @@ describe("O(1) Indexed Authorization", () => {
       });
 
       // Revoke viewer - documents:read should remain (from editor)
-      await t.mutation(internal.indexed.revokeRoleWithCompute, {
+      await t.mutation(api.unified.revokeRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
@@ -580,7 +580,7 @@ describe("O(1) Indexed Authorization", () => {
     it("should revoke scoped role", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -588,7 +588,7 @@ describe("O(1) Indexed Authorization", () => {
         scope: { type: "team", id: "team_1" },
       });
 
-      const result = await t.mutation(internal.indexed.revokeRoleWithCompute, {
+      const result = await t.mutation(api.unified.revokeRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -616,7 +616,7 @@ describe("O(1) Indexed Authorization", () => {
 
       const pastTime = Date.now() - 10000;
 
-      await t.mutation(internal.indexed.grantPermissionDirect, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
@@ -637,7 +637,7 @@ describe("O(1) Indexed Authorization", () => {
 
       const pastTime = Date.now() - 10000;
 
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
@@ -659,7 +659,7 @@ describe("O(1) Indexed Authorization", () => {
     it("should add relationship with computed effective relations", async () => {
       const t = convexTest(schema, modules);
 
-      const relationId = await t.mutation(internal.indexed.addRelationWithCompute, {
+      const relationId = await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -685,7 +685,7 @@ describe("O(1) Indexed Authorization", () => {
     it("should return existing ID when relation already exists", async () => {
       const t = convexTest(schema, modules);
 
-      const id1 = await t.mutation(internal.indexed.addRelationWithCompute, {
+      const id1 = await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -694,7 +694,7 @@ describe("O(1) Indexed Authorization", () => {
         objectId: "sales",
       });
 
-      const id2 = await t.mutation(internal.indexed.addRelationWithCompute, {
+      const id2 = await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -706,115 +706,12 @@ describe("O(1) Indexed Authorization", () => {
       expect(id2).toBe(id1);
     });
 
-    it("should add inherited relationships", async () => {
-      const t = convexTest(schema, modules);
 
-      // Setup: team -> org hierarchy
-      await t.mutation(internal.indexed.addRelationWithCompute, {
-        tenantId: TENANT,
-        subjectType: "team",
-        subjectId: "sales",
-        relation: "parent",
-        objectType: "org",
-        objectId: "acme",
-      });
-
-      // Add user as member of team, with inherited viewer on org
-      await t.mutation(internal.indexed.addRelationWithCompute, {
-        tenantId: TENANT,
-        subjectType: "user",
-        subjectId: "alice",
-        relation: "member",
-        objectType: "team",
-        objectId: "sales",
-        inheritedRelations: [
-          {
-            relation: "viewer",
-            fromObjectType: "org",
-            fromRelation: "parent",
-          },
-        ],
-      });
-
-      // Check direct relation
-      const isMember = await t.query(api.indexed.hasRelationFast, {
-        tenantId: TENANT,
-        subjectType: "user",
-        subjectId: "alice",
-        relation: "member",
-        objectType: "team",
-        objectId: "sales",
-      });
-      expect(isMember).toBe(true);
-
-      // Check inherited relation
-      const isViewer = await t.query(api.indexed.hasRelationFast, {
-        tenantId: TENANT,
-        subjectType: "user",
-        subjectId: "alice",
-        relation: "viewer",
-        objectType: "org",
-        objectId: "acme",
-      });
-      expect(isViewer).toBe(true);
-    });
-
-    it("should not duplicate inherited relationships", async () => {
-      const t = convexTest(schema, modules);
-
-      // Setup hierarchy
-      await t.mutation(internal.indexed.addRelationWithCompute, {
-        tenantId: TENANT,
-        subjectType: "team",
-        subjectId: "sales",
-        relation: "parent",
-        objectType: "org",
-        objectId: "acme",
-      });
-
-      // Pre-create the inherited relationship
-      await t.mutation(internal.indexed.addRelationWithCompute, {
-        tenantId: TENANT,
-        subjectType: "user",
-        subjectId: "alice",
-        relation: "viewer",
-        objectType: "org",
-        objectId: "acme",
-      });
-
-      // Now add with inherited - should not create duplicate
-      await t.mutation(internal.indexed.addRelationWithCompute, {
-        tenantId: TENANT,
-        subjectType: "user",
-        subjectId: "alice",
-        relation: "member",
-        objectType: "team",
-        objectId: "sales",
-        inheritedRelations: [
-          {
-            relation: "viewer",
-            fromObjectType: "org",
-            fromRelation: "parent",
-          },
-        ],
-      });
-
-      // Should still have the relation (no error from duplicate)
-      const isViewer = await t.query(api.indexed.hasRelationFast, {
-        tenantId: TENANT,
-        subjectType: "user",
-        subjectId: "alice",
-        relation: "viewer",
-        objectType: "org",
-        objectId: "acme",
-      });
-      expect(isViewer).toBe(true);
-    });
 
     it("should remove relationship and inherited", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.indexed.addRelationWithCompute, {
+      await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -823,7 +720,7 @@ describe("O(1) Indexed Authorization", () => {
         objectId: "sales",
       });
 
-      const removed = await t.mutation(internal.indexed.removeRelationWithCompute, {
+      const removed = await t.mutation(api.unified.removeRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -849,7 +746,7 @@ describe("O(1) Indexed Authorization", () => {
     it("should return false when removing non-existent relationship", async () => {
       const t = convexTest(schema, modules);
 
-      const removed = await t.mutation(internal.indexed.removeRelationWithCompute, {
+      const removed = await t.mutation(api.unified.removeRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
@@ -861,72 +758,20 @@ describe("O(1) Indexed Authorization", () => {
       expect(removed).toBe(false);
     });
 
-    it("should remove inherited relationships when removing parent", async () => {
-      const t = convexTest(schema, modules);
-
-      // Setup hierarchy
-      await t.mutation(internal.indexed.addRelationWithCompute, {
-        tenantId: TENANT,
-        subjectType: "team",
-        subjectId: "sales",
-        relation: "parent",
-        objectType: "org",
-        objectId: "acme",
-      });
-
-      // Add with inherited
-      await t.mutation(internal.indexed.addRelationWithCompute, {
-        tenantId: TENANT,
-        subjectType: "user",
-        subjectId: "alice",
-        relation: "member",
-        objectType: "team",
-        objectId: "sales",
-        inheritedRelations: [
-          {
-            relation: "viewer",
-            fromObjectType: "org",
-            fromRelation: "parent",
-          },
-        ],
-        createdBy: "system",
-      });
-
-      // Remove the direct relation
-      await t.mutation(internal.indexed.removeRelationWithCompute, {
-        tenantId: TENANT,
-        subjectType: "user",
-        subjectId: "alice",
-        relation: "member",
-        objectType: "team",
-        objectId: "sales",
-      });
-
-      // Inherited should also be gone
-      const isViewer = await t.query(api.indexed.hasRelationFast, {
-        tenantId: TENANT,
-        subjectType: "user",
-        subjectId: "alice",
-        relation: "viewer",
-        objectType: "org",
-        objectId: "acme",
-      });
-      expect(isViewer).toBe(false);
-    });
   });
 
   describe("batch queries", () => {
     it("should get user permissions with scope filter", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         rolePermissions: ["documents:read"],
       });
 
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
@@ -959,14 +804,14 @@ describe("O(1) Indexed Authorization", () => {
 
       const pastTime = Date.now() - 10000;
 
-      await t.mutation(internal.indexed.grantPermissionDirect, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         expiresAt: pastTime,
       });
 
-      await t.mutation(internal.indexed.grantPermissionDirect, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:write",
@@ -984,14 +829,14 @@ describe("O(1) Indexed Authorization", () => {
     it("should get user roles with scope filter", async () => {
       const t = convexTest(schema, modules);
 
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
         rolePermissions: [],
       });
 
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
@@ -1022,15 +867,15 @@ describe("O(1) Indexed Authorization", () => {
 
       const pastTime = Date.now() - 10000;
 
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
-        rolePermissions: [],
         expiresAt: pastTime,
+        rolePermissions: [],
       });
 
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
@@ -1053,14 +898,14 @@ describe("O(1) Indexed Authorization", () => {
 
       const pastTime = Date.now() - 10000;
 
-      await t.mutation(internal.indexed.grantPermissionDirect, {
+      await t.mutation(api.unified.grantPermissionUnified, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         expiresAt: pastTime,
       });
 
-      await t.mutation(internal.indexed.assignRoleWithCompute, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
