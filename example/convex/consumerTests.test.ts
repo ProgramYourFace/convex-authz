@@ -1827,3 +1827,106 @@ describe("ReBAC -> Permission Bridge (via defineRelationPermissions)", () => {
     ).toBe(false);
   });
 });
+
+// ==========================================================================
+// Wildcard Patterns (README section: "Wildcard and pattern-matching permissions")
+// ==========================================================================
+
+describe("Wildcard Patterns (via Authz class)", () => {
+  test("grantPermission with 'documents:*' grants documents:read and documents:update", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, { name: "wildcard-user-1" });
+
+    await t.mutation(api.consumerTests.grantPermission, {
+      userId,
+      permission: "documents:*",
+    });
+
+    expect(await t.query(api.consumerTests.can, { userId, permission: "documents:read" })).toBe(true);
+    expect(await t.query(api.consumerTests.can, { userId, permission: "documents:update" })).toBe(true);
+    expect(await t.query(api.consumerTests.can, { userId, permission: "documents:delete" })).toBe(true);
+    // Different resource → denied
+    expect(await t.query(api.consumerTests.can, { userId, permission: "settings:view" })).toBe(false);
+  });
+
+  test("grantPermission with '*:read' grants documents:read and settings:read", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, { name: "wildcard-user-2" });
+
+    await t.mutation(api.consumerTests.grantPermission, {
+      userId,
+      permission: "*:read",
+    });
+
+    expect(await t.query(api.consumerTests.can, { userId, permission: "documents:read" })).toBe(true);
+    expect(await t.query(api.consumerTests.can, { userId, permission: "settings:read" })).toBe(true); // *:read matches ANY resource:read
+    expect(await t.query(api.consumerTests.can, { userId, permission: "billing:read" })).toBe(true);
+    // Different action → denied
+    expect(await t.query(api.consumerTests.can, { userId, permission: "documents:write" })).toBe(false);
+  });
+
+  test("grantPermission with '*' grants any permission", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, { name: "wildcard-user-3" });
+
+    await t.mutation(api.consumerTests.grantPermission, {
+      userId,
+      permission: "*",
+    });
+
+    expect(await t.query(api.consumerTests.can, { userId, permission: "documents:read" })).toBe(true);
+    expect(await t.query(api.consumerTests.can, { userId, permission: "settings:manage" })).toBe(true);
+    expect(await t.query(api.consumerTests.can, { userId, permission: "anything:anything" })).toBe(true);
+  });
+
+  test("denyPermission with 'documents:*' blocks all document actions even with role", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, { name: "wildcard-user-4" });
+
+    // Assign admin role (grants all document permissions)
+    await t.mutation(api.consumerTests.assignRole, { userId, role: "admin" });
+    expect(await t.query(api.consumerTests.can, { userId, permission: "documents:read" })).toBe(true);
+
+    // Deny all document actions via wildcard
+    await t.mutation(api.consumerTests.denyPermission, {
+      userId,
+      permission: "documents:*",
+    });
+
+    // All document actions blocked
+    expect(await t.query(api.consumerTests.can, { userId, permission: "documents:read" })).toBe(false);
+    expect(await t.query(api.consumerTests.can, { userId, permission: "documents:create" })).toBe(false);
+    expect(await t.query(api.consumerTests.can, { userId, permission: "documents:delete" })).toBe(false);
+
+    // Non-document permissions still work
+    expect(await t.query(api.consumerTests.can, { userId, permission: "settings:view" })).toBe(true);
+  });
+
+  test("wildcard grant scoped to a resource", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, { name: "wildcard-user-5" });
+
+    await t.mutation(api.consumerTests.grantPermission, {
+      userId,
+      permission: "documents:*",
+      scope: { type: "project", id: "p1" },
+    });
+
+    // Allowed in scope
+    expect(await t.query(api.consumerTests.can, {
+      userId,
+      permission: "documents:read",
+      scope: { type: "project", id: "p1" },
+    })).toBe(true);
+
+    // Denied globally
+    expect(await t.query(api.consumerTests.can, { userId, permission: "documents:read" })).toBe(false);
+
+    // Denied in different scope
+    expect(await t.query(api.consumerTests.can, {
+      userId,
+      permission: "documents:read",
+      scope: { type: "project", id: "p2" },
+    })).toBe(false);
+  });
+});
