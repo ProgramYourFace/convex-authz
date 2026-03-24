@@ -1480,6 +1480,38 @@ This way every part of your app — your own functions and third-party component
 
 ---
 
+<!-- SKILL-EXCLUDE-START -->
+
+## Using with AI Coding Agents
+
+`@djpanda/convex-authz` is available as an [agent skill](https://vercel.com/docs/agent-resources/skills) that gives AI coding agents deep knowledge of this library's API, patterns, and best practices.
+
+### Install the skill
+
+```bash
+npx skills add dbjpanda/convex-authz
+```
+
+This works with **18+ AI agents** including Claude Code, Cursor, GitHub Copilot, Cline, Windsurf, and others. Once installed, your agent will automatically know how to:
+
+- Set up the component and define permissions/roles
+- Use RBAC, ABAC, and ReBAC patterns correctly
+- Write O(1) permission checks
+- Configure multi-tenant isolation
+- Follow Convex conventions
+
+### Browse more skills
+
+```bash
+npx skills find convex
+```
+
+Or visit [skills.sh](https://skills.sh) to discover community skills.
+
+<!-- SKILL-EXCLUDE-END -->
+
+---
+
 ## Development
 
 ```bash
