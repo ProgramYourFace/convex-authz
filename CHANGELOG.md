@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.1.0
+
+### New features
+
+- **Type-safe permission strings**: `can()`, `require()`, `canAny()`, `grantPermission()`, and `denyPermission()` now accept `PermissionArg<P>` instead of `string`. TypeScript catches typos like `"documets:read"` or `"documents:archive"` at compile time. Wildcards (`"documents:*"`, `"*:read"`, `"*"`) are also type-checked against defined resources and actions. New exported types: `PermissionString<P>`, `PermissionArg<P>`.
+
+### Tests
+
+- 7 new audit log consumer tests covering every action type: `role_revoked`, `permission_denied`, `attribute_set`, `relation_added`, `relation_removed`, action filtering, and entry detail verification. 663 total tests.
+
+---
+
 ## v2.0.0
 
 ### BREAKING CHANGES
