@@ -1,7 +1,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 import schema from "../schema.js";
-import { api, internal } from "../_generated/api.js";
+import { api } from "../_generated/api.js";
 
 const modules = import.meta.glob("../**/*.ts");
 
@@ -42,22 +42,20 @@ describe("Cross-tenant permission check isolation", () => {
       tenantId: TENANT_A,
       userId: "user1",
       role: "admin",
-      rolePermissions: [],
-      });
+      rolePermissions: ["documents:read", "documents:write"],
+    });
 
-    const resultA = await t.query(internal.queries.checkPermission, {
+    const resultA = await t.query(api.unified.checkPermission, {
       tenantId: TENANT_A,
       userId: "user1",
       permission: "documents:read",
-      rolePermissions: { admin: ["documents:read", "documents:write"] },
     });
     expect(resultA.allowed).toBe(true);
 
-    const resultB = await t.query(internal.queries.checkPermission, {
+    const resultB = await t.query(api.unified.checkPermission, {
       tenantId: TENANT_B,
       userId: "user1",
       permission: "documents:read",
-      rolePermissions: { admin: ["documents:read", "documents:write"] },
     });
     expect(resultB.allowed).toBe(false);
   });

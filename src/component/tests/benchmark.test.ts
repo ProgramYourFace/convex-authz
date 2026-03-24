@@ -10,7 +10,7 @@
  */
 import { convexTest } from "convex-test";
 import schema from "../schema.js";
-import { api, internal } from "../_generated/api.js";
+import { api } from "../_generated/api.js";
 import { describe, test, expect } from "vitest";
 
 const TENANT = "bench-tenant";
@@ -99,30 +99,11 @@ describe("Performance Benchmarks", () => {
     const times: number[] = [];
     for (let i = 0; i < ITERATIONS; i++) {
       const start = performance.now();
-      try {
-        // Dev branch: unified path
-        await t.query(api.unified.checkPermission, {
-          tenantId: TENANT,
-          userId: "bench-user",
-          permission: "resource0:action0",
-        });
-      } catch {
-        // Main branch: queries path (with rolePermissions map)
-        await t.query(internal.queries.checkPermission, {
-          tenantId: TENANT,
-          userId: "bench-user",
-          permission: "resource0:action0",
-          rolePermissions: Object.fromEntries(
-            roles.map((r) => [
-              r,
-              Array.from(
-                { length: permissionsPerRole },
-                (_, i) => `resource${i}:action${i}`,
-              ),
-            ]),
-          ),
-        });
-      }
+      await t.query(api.unified.checkPermission, {
+        tenantId: TENANT,
+        userId: "bench-user",
+        permission: "resource0:action0",
+      });
       times.push(performance.now() - start);
     }
 
@@ -133,28 +114,11 @@ describe("Performance Benchmarks", () => {
     const timesMiss: number[] = [];
     for (let i = 0; i < ITERATIONS; i++) {
       const start = performance.now();
-      try {
-        await t.query(api.unified.checkPermission, {
-          tenantId: TENANT,
-          userId: "bench-user",
-          permission: "nonexistent:permission",
-        });
-      } catch {
-        await t.query(internal.queries.checkPermission, {
-          tenantId: TENANT,
-          userId: "bench-user",
-          permission: "nonexistent:permission",
-          rolePermissions: Object.fromEntries(
-            roles.map((r) => [
-              r,
-              Array.from(
-                { length: permissionsPerRole },
-                (_, i) => `resource${i}:action${i}`,
-              ),
-            ]),
-          ),
-        });
-      }
+      await t.query(api.unified.checkPermission, {
+        tenantId: TENANT,
+        userId: "bench-user",
+        permission: "nonexistent:permission",
+      });
       timesMiss.push(performance.now() - start);
     }
 
@@ -287,24 +251,11 @@ describe("Performance Benchmarks", () => {
     const times: number[] = [];
     for (let i = 0; i < ITERATIONS; i++) {
       const start = performance.now();
-      try {
-        await t.query(api.unified.checkPermission, {
-          tenantId: TENANT,
-          userId: "user-50",
-          permission: "docs:read",
-        });
-      } catch {
-        await t.query(internal.queries.checkPermission, {
-          tenantId: TENANT,
-          userId: "user-50",
-          permission: "docs:read",
-          rolePermissions: {
-            viewer: perms,
-            editor: perms,
-            admin: perms,
-          },
-        });
-      }
+      await t.query(api.unified.checkPermission, {
+        tenantId: TENANT,
+        userId: "user-50",
+        permission: "docs:read",
+      });
       times.push(performance.now() - start);
     }
 

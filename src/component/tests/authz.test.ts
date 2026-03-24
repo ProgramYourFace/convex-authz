@@ -1,7 +1,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 import schema from "../schema.js";
-import { api, internal } from "../_generated/api.js";
+import { api } from "../_generated/api.js";
 
 const modules = import.meta.glob("../**/*.ts");
 const TENANT = "test-tenant";
@@ -157,21 +157,16 @@ describe("authz component", () => {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
-        rolePermissions: [],
+        rolePermissions: ["documents:read", "documents:write", "documents:delete"],
       });
 
-      const result = await t.query(internal.queries.checkPermission, {
+      const result = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
-        rolePermissions: {
-          admin: ["documents:read", "documents:write", "documents:delete"],
-          viewer: ["documents:read"],
-        },
       });
 
       expect(result.allowed).toBe(true);
-      expect(result.matchedRole).toBe("admin");
     });
 
     it("should deny permission when user has no matching role", async () => {
@@ -181,17 +176,13 @@ describe("authz component", () => {
         tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
-        rolePermissions: [],
+        rolePermissions: ["documents:read"],
       });
 
-      const result = await t.query(internal.queries.checkPermission, {
+      const result = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
-        rolePermissions: {
-          admin: ["documents:read", "documents:write", "documents:delete"],
-          viewer: ["documents:read"],
-        },
       });
 
       expect(result.allowed).toBe(false);
@@ -204,16 +195,13 @@ describe("authz component", () => {
         tenantId: TENANT,
         userId: "user_123",
         role: "superadmin",
-        rolePermissions: [],
+        rolePermissions: ["*:*"],
       });
 
-      const result = await t.query(internal.queries.checkPermission, {
+      const result = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
-        rolePermissions: {
-          superadmin: ["*:*"], // All permissions
-        },
       });
 
       expect(result.allowed).toBe(true);
@@ -231,15 +219,13 @@ describe("authz component", () => {
         reason: "Temporary access",
       });
 
-      const result = await t.query(internal.queries.checkPermission, {
+      const result = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
-        rolePermissions: {},
       });
 
       expect(result.allowed).toBe(true);
-      expect(result.matchedOverride).toBeDefined();
     });
 
     it("should deny permission explicitly", async () => {
@@ -250,7 +236,7 @@ describe("authz component", () => {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
-        rolePermissions: [],
+        rolePermissions: ["documents:read", "documents:write", "documents:delete"],
       });
 
       // Then deny specific permission
@@ -261,13 +247,10 @@ describe("authz component", () => {
         reason: "Access revoked",
       });
 
-      const result = await t.query(internal.queries.checkPermission, {
+      const result = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
-        rolePermissions: {
-          admin: ["documents:read", "documents:write", "documents:delete"],
-        },
       });
 
       // Deny override should take precedence
@@ -356,21 +339,17 @@ describe("authz component", () => {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
-        rolePermissions: [],
+        rolePermissions: ["documents:read", "documents:write"],
       });
 
-      const result = await t.query(internal.queries.getEffectivePermissions, {
+      const permissions = await t.query(api.indexed.getUserPermissionsFast, {
         tenantId: TENANT,
         userId: "user_123",
-        rolePermissions: {
-          editor: ["documents:read", "documents:write"],
-          viewer: ["documents:read"],
-        },
       });
 
-      expect(result.permissions).toContain("documents:read");
-      expect(result.permissions).toContain("documents:write");
-      expect(result.roles).toContain("editor");
+      const permNames = permissions.map((p) => p.permission);
+      expect(permNames).toContain("documents:read");
+      expect(permNames).toContain("documents:write");
     });
 
     it("should track denied permissions", async () => {
@@ -380,7 +359,7 @@ describe("authz component", () => {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
-        rolePermissions: [],
+        rolePermissions: ["documents:read", "documents:write", "documents:delete"],
       });
 
       await t.mutation(api.unified.denyPermissionUnified, {
@@ -389,16 +368,20 @@ describe("authz component", () => {
         permission: "documents:delete",
       });
 
-      const result = await t.query(internal.queries.getEffectivePermissions, {
+      const permissions = await t.query(api.indexed.getUserPermissionsFast, {
         tenantId: TENANT,
         userId: "user_123",
-        rolePermissions: {
-          admin: ["documents:read", "documents:write", "documents:delete"],
-        },
       });
 
-      expect(result.permissions).not.toContain("documents:delete");
-      expect(result.deniedPermissions).toContain("documents:delete");
+      const allowedNames = permissions
+        .filter((p) => p.effect === "allow")
+        .map((p) => p.permission);
+      const deniedNames = permissions
+        .filter((p) => p.effect === "deny")
+        .map((p) => p.permission);
+
+      expect(allowedNames).not.toContain("documents:delete");
+      expect(deniedNames).toContain("documents:delete");
     });
   });
 
