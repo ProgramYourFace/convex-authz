@@ -15,7 +15,7 @@ import {
   defineRoles,
   type PermissionString,
   type PermissionArg,
-  type PermissionDefinition,
+
 } from "./index.js";
 import type { ComponentApi } from "../component/_generated/component.js";
 
@@ -113,20 +113,20 @@ describe("Type-safe permission strings", () => {
     } as any;
 
     // These should compile:
-    authz.can(ctx, "user1", "documents:read");
-    authz.can(ctx, "user1", "settings:manage");
-    authz.can(ctx, "user1", "documents:*");
-    authz.can(ctx, "user1", "*:read");
-    authz.can(ctx, "user1", "*");
+    void authz.can(ctx, "user1", "documents:read");
+    void authz.can(ctx, "user1", "settings:manage");
+    void authz.can(ctx, "user1", "documents:*");
+    void authz.can(ctx, "user1", "*:read");
+    void authz.can(ctx, "user1", "*");
 
     // @ts-expect-error — typo
-    authz.can(ctx, "user1", "documets:read");
+    void authz.can(ctx, "user1", "documets:read");
 
     // @ts-expect-error — non-existent action
-    authz.can(ctx, "user1", "documents:archive");
+    void authz.can(ctx, "user1", "documents:archive");
 
     // @ts-expect-error — non-existent resource
-    authz.can(ctx, "user1", "users:read");
+    void authz.can(ctx, "user1", "users:read");
 
     expect(true).toBe(true);
   });
@@ -139,11 +139,11 @@ describe("Type-safe permission strings", () => {
     } as any;
 
     // These should compile:
-    authz.require(ctx, "user1", "documents:read");
-    authz.require(ctx, "user1", "billing:manage");
+    void authz.require(ctx, "user1", "documents:read");
+    void authz.require(ctx, "user1", "billing:manage");
 
     // @ts-expect-error — typo
-    authz.require(ctx, "user1", "documets:read");
+    void authz.require(ctx, "user1", "documets:read");
 
     expect(true).toBe(true);
   });
@@ -156,11 +156,11 @@ describe("Type-safe permission strings", () => {
     } as any;
 
     // These should compile:
-    authz.canAny(ctx, "user1", ["documents:read", "settings:view"]);
-    authz.canAny(ctx, "user1", ["documents:*", "*:read"]);
+    void authz.canAny(ctx, "user1", ["documents:read", "settings:view"]);
+    void authz.canAny(ctx, "user1", ["documents:*", "*:read"]);
 
     // @ts-expect-error — invalid permission in array
-    authz.canAny(ctx, "user1", ["documents:read", "typo:action"]);
+    void authz.canAny(ctx, "user1", ["documents:read", "typo:action"]);
 
     expect(true).toBe(true);
   });
@@ -174,11 +174,11 @@ describe("Type-safe permission strings", () => {
     } as any;
 
     // These should compile:
-    authz.grantPermission(ctx, "user1", "documents:read");
-    authz.grantPermission(ctx, "user1", "documents:*");
+    void authz.grantPermission(ctx, "user1", "documents:read");
+    void authz.grantPermission(ctx, "user1", "documents:*");
 
     // @ts-expect-error — invalid permission
-    authz.grantPermission(ctx, "user1", "nonexistent:perm");
+    void authz.grantPermission(ctx, "user1", "nonexistent:perm");
 
     expect(true).toBe(true);
   });
@@ -192,11 +192,11 @@ describe("Type-safe permission strings", () => {
     } as any;
 
     // These should compile:
-    authz.denyPermission(ctx, "user1", "documents:delete");
-    authz.denyPermission(ctx, "user1", "*:manage");
+    void authz.denyPermission(ctx, "user1", "documents:delete");
+    void authz.denyPermission(ctx, "user1", "*:manage");
 
     // @ts-expect-error — invalid permission
-    authz.denyPermission(ctx, "user1", "bad:permission");
+    void authz.denyPermission(ctx, "user1", "bad:permission");
 
     expect(true).toBe(true);
   });
