@@ -426,6 +426,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           objectId: string;
           objectType: string;
           relation: string;
+          relationPermissions?: Record<string, Array<string>>;
           subjectId: string;
           subjectType: string;
           tenantId: string;
@@ -544,6 +545,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           objectId: string;
           objectType: string;
           relation: string;
+          relationPermissions?: Record<string, Array<string>>;
           removedBy?: string;
           subjectId: string;
           subjectType: string;

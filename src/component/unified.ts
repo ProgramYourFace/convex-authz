@@ -811,6 +811,7 @@ export const addRelationUnified = mutation({
     caveatContext: v.optional(v.any()),
     createdBy: v.optional(v.string()),
     enableAudit: v.optional(v.boolean()),
+    relationPermissions: v.optional(v.record(v.string(), v.array(v.string()))),
   },
   returns: v.string(), // relation ID
   handler: async (ctx, args) => {
@@ -892,7 +893,47 @@ export const addRelationUnified = mutation({
       depth: 0,
     });
 
-    // 4. Audit log
+    // 4. Bridge: write relation-derived permissions to effectivePermissions
+    if (args.relationPermissions) {
+      const relationKey = `${args.objectType}:${args.relation}`;
+      const permissions = args.relationPermissions[relationKey] ?? [];
+      const scopeKey = `${args.objectType}:${args.objectId}`;
+      const scope = { type: args.objectType, id: args.objectId };
+      const sourceLabel = `relation:${args.relation}`;
+
+      for (const permission of permissions) {
+        const existingPerm = await ctx.db
+          .query("effectivePermissions")
+          .withIndex("by_tenant_user_permission_scope", (q) =>
+            q.eq("tenantId", args.tenantId)
+              .eq("userId", args.subjectType === "user" ? args.subjectId : `${args.subjectType}:${args.subjectId}`)
+              .eq("permission", permission)
+              .eq("scopeKey", scopeKey),
+          )
+          .unique();
+
+        if (existingPerm) {
+          const sources = existingPerm.sources.includes(sourceLabel)
+            ? existingPerm.sources
+            : [...existingPerm.sources, sourceLabel];
+          await ctx.db.patch(existingPerm._id, { sources, updatedAt: now });
+        } else {
+          await ctx.db.insert("effectivePermissions", {
+            tenantId: args.tenantId,
+            userId: args.subjectType === "user" ? args.subjectId : `${args.subjectType}:${args.subjectId}`,
+            permission,
+            scopeKey,
+            scope,
+            effect: "allow",
+            sources: [sourceLabel],
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+      }
+    }
+
+    // 5. Audit log
     if (args.enableAudit) {
       await ctx.db.insert("auditLog", {
         tenantId: args.tenantId,
@@ -908,7 +949,7 @@ export const addRelationUnified = mutation({
       });
     }
 
-    // 5. Return relation ID
+    // 6. Return relation ID
     return relationId;
   },
 });
@@ -930,6 +971,7 @@ export const removeRelationUnified = mutation({
     objectId: v.string(),
     removedBy: v.optional(v.string()),
     enableAudit: v.optional(v.boolean()),
+    relationPermissions: v.optional(v.record(v.string(), v.array(v.string()))),
   },
   returns: v.boolean(), // true if found and removed
   handler: async (ctx, args) => {
@@ -989,7 +1031,37 @@ export const removeRelationUnified = mutation({
       await ctx.db.delete(row._id);
     }
 
-    // 5. Audit log
+    // 5. Bridge: remove relation-derived permissions from effectivePermissions
+    if (args.relationPermissions) {
+      const relationKey = `${args.objectType}:${args.relation}`;
+      const permissions = args.relationPermissions[relationKey] ?? [];
+      const scopeKey = `${args.objectType}:${args.objectId}`;
+      const sourceLabel = `relation:${args.relation}`;
+
+      for (const permission of permissions) {
+        const effectivePerm = await ctx.db
+          .query("effectivePermissions")
+          .withIndex("by_tenant_user_permission_scope", (q) =>
+            q.eq("tenantId", args.tenantId)
+              .eq("userId", args.subjectType === "user" ? args.subjectId : `${args.subjectType}:${args.subjectId}`)
+              .eq("permission", permission)
+              .eq("scopeKey", scopeKey),
+          )
+          .unique();
+
+        if (!effectivePerm) continue;
+
+        const updatedSources = effectivePerm.sources.filter((s) => s !== sourceLabel);
+
+        if (updatedSources.length === 0 && !effectivePerm.directGrant && !effectivePerm.directDeny) {
+          await ctx.db.delete(effectivePerm._id);
+        } else if (updatedSources.length !== effectivePerm.sources.length) {
+          await ctx.db.patch(effectivePerm._id, { sources: updatedSources, updatedAt: now });
+        }
+      }
+    }
+
+    // 6. Audit log
     if (args.enableAudit) {
       await ctx.db.insert("auditLog", {
         tenantId: args.tenantId,
@@ -1005,7 +1077,7 @@ export const removeRelationUnified = mutation({
       });
     }
 
-    // 6. Return true
+    // 7. Return true
     return true;
   },
 });
