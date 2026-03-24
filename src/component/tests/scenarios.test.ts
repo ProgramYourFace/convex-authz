@@ -13,7 +13,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 import schema from "../schema.js";
-import { api, internal } from "../_generated/api.js";
+import { api } from "../_generated/api.js";
 
 const modules = import.meta.glob("../**/*.ts");
 const TENANT = "test-tenant";
@@ -684,15 +684,10 @@ describe("Scenario: Security Boundaries", () => {
     const t = convexTest(schema, modules);
 
     // Frank has no roles, no relationships, no grants
-    const canRead = await t.query(internal.queries.checkPermission, {
+    const canRead = await t.query(api.unified.checkPermission, {
       tenantId: TENANT,
       userId: USERS.frank,
       permission: "documents:read",
-      rolePermissions: {
-        admin: ["documents:read", "documents:write", "documents:delete"],
-        editor: ["documents:read", "documents:write"],
-        viewer: ["documents:read"],
-      },
     });
 
     expect(canRead.allowed).toBe(false);
@@ -819,16 +814,13 @@ describe("Scenario: Wildcard & Super Admin", () => {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "superadmin",
-      rolePermissions: [],
-      });
+      rolePermissions: ["*:*"],
+    });
 
-    const result = await t.query(internal.queries.checkPermission, {
+    const result = await t.query(api.unified.checkPermission, {
       tenantId: TENANT,
       userId: USERS.alice,
       permission: "anything:action",
-      rolePermissions: {
-        superadmin: ["*:*"],
-      },
     });
 
     expect(result.allowed).toBe(true);
@@ -841,35 +833,28 @@ describe("Scenario: Wildcard & Super Admin", () => {
       tenantId: TENANT,
       userId: USERS.alice,
       role: "doc_admin",
-        rolePermissions: [],
+      rolePermissions: ["documents:*"],
     });
 
-    const rolePerms = {
-      doc_admin: ["documents:*"], // All document actions
-    };
-
-    const canRead = await t.query(internal.queries.checkPermission, {
+    const canRead = await t.query(api.unified.checkPermission, {
       tenantId: TENANT,
       userId: USERS.alice,
       permission: "documents:read",
-      rolePermissions: rolePerms,
     });
     expect(canRead.allowed).toBe(true);
 
-    const canDelete = await t.query(internal.queries.checkPermission, {
+    const canDelete = await t.query(api.unified.checkPermission, {
       tenantId: TENANT,
       userId: USERS.alice,
       permission: "documents:delete",
-      rolePermissions: rolePerms,
     });
     expect(canDelete.allowed).toBe(true);
 
     // But not other resources
-    const canReadProjects = await t.query(internal.queries.checkPermission, {
+    const canReadProjects = await t.query(api.unified.checkPermission, {
       tenantId: TENANT,
       userId: USERS.alice,
       permission: "projects:read",
-      rolePermissions: rolePerms,
     });
     expect(canReadProjects.allowed).toBe(false);
   });

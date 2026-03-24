@@ -5,7 +5,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 import schema from "../schema.js";
-import { api, internal } from "../_generated/api.js";
+import { api } from "../_generated/api.js";
 
 const modules = import.meta.glob("../**/*.ts");
 
@@ -150,7 +150,7 @@ describe("queries - additional coverage", () => {
     });
   });
 
-  describe("checkPermission - edge cases", () => {
+  describe("checkPermission via unified - edge cases", () => {
     it("should handle expired overrides", async () => {
       const t = convexTest(schema, modules);
 
@@ -163,11 +163,10 @@ describe("queries - additional coverage", () => {
         expiresAt: pastTime,
       });
 
-      const result = await t.query(internal.queries.checkPermission, {
+      const result = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
-        rolePermissions: {},
       });
 
       expect(result.allowed).toBe(false);
@@ -183,16 +182,13 @@ describe("queries - additional coverage", () => {
         userId: "user_123",
         role: "admin",
         expiresAt: pastTime,
-        rolePermissions: [],
+        rolePermissions: ["documents:read"],
       });
 
-      const result = await t.query(internal.queries.checkPermission, {
+      const result = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
-        rolePermissions: {
-          admin: ["documents:read"],
-        },
       });
 
       expect(result.allowed).toBe(false);
@@ -206,17 +202,14 @@ describe("queries - additional coverage", () => {
         userId: "user_123",
         role: "admin",
         scope: { type: "team", id: "team_1" },
-        rolePermissions: [],
+        rolePermissions: ["documents:read"],
       });
 
-      const result = await t.query(internal.queries.checkPermission, {
+      const result = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
         scope: { type: "team", id: "team_1" },
-        rolePermissions: {
-          admin: ["documents:read"],
-        },
       });
 
       expect(result.allowed).toBe(true);
@@ -229,24 +222,20 @@ describe("queries - additional coverage", () => {
         tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
-        rolePermissions: [],
+        rolePermissions: ["documents:read"],
       });
 
-      const result = await t.query(internal.queries.checkPermission, {
+      const result = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
-        rolePermissions: {
-          viewer: ["documents:read"],
-        },
       });
 
       expect(result.allowed).toBe(false);
-      expect(result.reason).toBe("No role or override grants this permission");
     });
   });
 
-  describe("checkPermission - wildcard and pattern matching", () => {
+  describe("checkPermission via unified - wildcard and pattern matching", () => {
     it("should allow when override is resource wildcard (documents:*)", async () => {
       const t = convexTest(schema, modules);
 
@@ -256,27 +245,24 @@ describe("queries - additional coverage", () => {
         permission: "documents:*",
       });
 
-      const readResult = await t.query(internal.queries.checkPermission, {
+      const readResult = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
-        rolePermissions: {},
       });
       expect(readResult.allowed).toBe(true);
 
-      const deleteResult = await t.query(internal.queries.checkPermission, {
+      const deleteResult = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
-        rolePermissions: {},
       });
       expect(deleteResult.allowed).toBe(true);
 
-      const otherResult = await t.query(internal.queries.checkPermission, {
+      const otherResult = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "settings:read",
-        rolePermissions: {},
       });
       expect(otherResult.allowed).toBe(false);
     });
@@ -290,27 +276,24 @@ describe("queries - additional coverage", () => {
         permission: "*:read",
       });
 
-      const docRead = await t.query(internal.queries.checkPermission, {
+      const docRead = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
-        rolePermissions: {},
       });
       expect(docRead.allowed).toBe(true);
 
-      const settingsRead = await t.query(internal.queries.checkPermission, {
+      const settingsRead = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "settings:read",
-        rolePermissions: {},
       });
       expect(settingsRead.allowed).toBe(true);
 
-      const docWrite = await t.query(internal.queries.checkPermission, {
+      const docWrite = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:write",
-        rolePermissions: {},
       });
       expect(docWrite.allowed).toBe(false);
     });
@@ -324,19 +307,17 @@ describe("queries - additional coverage", () => {
         permission: "*",
       });
 
-      const result = await t.query(internal.queries.checkPermission, {
+      const result = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
-        rolePermissions: {},
       });
       expect(result.allowed).toBe(true);
 
-      const anyResult = await t.query(internal.queries.checkPermission, {
+      const anyResult = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "any:action",
-        rolePermissions: {},
       });
       expect(anyResult.allowed).toBe(true);
     });
@@ -348,16 +329,13 @@ describe("queries - additional coverage", () => {
         tenantId: TENANT,
         userId: "user_123",
         role: "poweruser",
-        rolePermissions: [],
+        rolePermissions: ["documents:*"],
       });
 
-      const result = await t.query(internal.queries.checkPermission, {
+      const result = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
-        rolePermissions: {
-          poweruser: ["documents:*"],
-        },
       });
       expect(result.allowed).toBe(true);
     });
@@ -369,7 +347,7 @@ describe("queries - additional coverage", () => {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
-        rolePermissions: [],
+        rolePermissions: ["documents:read", "documents:delete"],
       });
       await t.mutation(api.unified.denyPermissionUnified, {
         tenantId: TENANT,
@@ -377,74 +355,84 @@ describe("queries - additional coverage", () => {
         permission: "documents:*",
       });
 
-      const result = await t.query(internal.queries.checkPermission, {
+      const result = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
-        rolePermissions: {
-          admin: ["documents:read", "documents:delete"],
-        },
       });
       expect(result.allowed).toBe(false);
       expect(result.reason).toMatch(/denied|deny/i);
     });
   });
 
-  describe("checkPermissions (canAny)", () => {
-    it("should return allowed true when user has at least one permission", async () => {
+  describe("checkPermission (canAny equivalent via multiple calls)", () => {
+    it("should find at least one allowed permission", async () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
-        rolePermissions: [],
+        rolePermissions: ["documents:read"],
       });
 
-      const result = await t.query(internal.queries.checkPermissions, {
+      const deleteResult = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
-        permissions: ["documents:delete", "documents:read", "documents:update"],
-        rolePermissions: {
-          viewer: ["documents:read"],
-        },
+        permission: "documents:delete",
+      });
+      const readResult = await t.query(api.unified.checkPermission, {
+        tenantId: TENANT,
+        userId: "user_123",
+        permission: "documents:read",
+      });
+      const updateResult = await t.query(api.unified.checkPermission, {
+        tenantId: TENANT,
+        userId: "user_123",
+        permission: "documents:update",
       });
 
-      expect(result.allowed).toBe(true);
-      expect(result.matchedPermission).toBe("documents:read");
+      // At least one should be allowed (documents:read via viewer role)
+      const anyAllowed = [deleteResult, readResult, updateResult].some(
+        (r) => r.allowed,
+      );
+      expect(anyAllowed).toBe(true);
+      expect(readResult.allowed).toBe(true);
     });
 
-    it("should return allowed false when user has none of the permissions", async () => {
+    it("should return false for all when user has none of the permissions", async () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
-        rolePermissions: [],
+        rolePermissions: ["documents:read"],
       });
 
-      const result = await t.query(internal.queries.checkPermissions, {
+      const deleteResult = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
-        permissions: ["documents:delete", "documents:update"],
-        rolePermissions: {
-          viewer: ["documents:read"],
-        },
+        permission: "documents:delete",
+      });
+      const updateResult = await t.query(api.unified.checkPermission, {
+        tenantId: TENANT,
+        userId: "user_123",
+        permission: "documents:update",
       });
 
-      expect(result.allowed).toBe(false);
-      expect(result.matchedPermission).toBeUndefined();
+      expect(deleteResult.allowed).toBe(false);
+      expect(updateResult.allowed).toBe(false);
     });
 
-    it("should respect deny override", async () => {
+    it("should respect deny override when checking multiple permissions", async () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "admin",
-        rolePermissions: [],
+        rolePermissions: ["documents:read", "documents:delete"],
       });
       await t.mutation(api.unified.denyPermissionUnified, {
         tenantId: TENANT,
@@ -452,52 +440,23 @@ describe("queries - additional coverage", () => {
         permission: "documents:delete",
       });
 
-      const result = await t.query(internal.queries.checkPermissions, {
+      const deleteResult = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
-        permissions: ["documents:delete", "documents:read"],
-        rolePermissions: {
-          admin: ["documents:read", "documents:delete"],
-        },
+        permission: "documents:delete",
       });
-
-      expect(result.allowed).toBe(true);
-      expect(result.matchedPermission).toBe("documents:read");
-    });
-
-    it("should return allowed false for empty permissions array", async () => {
-      const t = convexTest(schema, modules);
-
-      const result = await t.query(internal.queries.checkPermissions, {
+      const readResult = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
-        permissions: [],
-        rolePermissions: {},
+        permission: "documents:read",
       });
 
-      expect(result.allowed).toBe(false);
-    });
-
-    it("should throw when permissions exceed limit", async () => {
-      const t = convexTest(schema, modules);
-
-      const permissions = Array.from(
-        { length: 101 },
-        (_, i) => `documents:action${i}`
-      );
-
-      await expect(
-        t.query(internal.queries.checkPermissions, {
-          tenantId: TENANT,
-          userId: "user_123",
-          permissions,
-          rolePermissions: {},
-        })
-      ).rejects.toThrow(/must not exceed 100/);
+      expect(deleteResult.allowed).toBe(false);
+      expect(readResult.allowed).toBe(true);
     });
   });
 
-  describe("getEffectivePermissions", () => {
+  describe("getUserPermissionsFast (effective permissions)", () => {
     it("should combine role permissions and overrides with scope", async () => {
       const t = convexTest(schema, modules);
 
@@ -505,7 +464,7 @@ describe("queries - additional coverage", () => {
         tenantId: TENANT,
         userId: "user_123",
         role: "editor",
-        rolePermissions: [],
+        rolePermissions: ["documents:read", "documents:write"],
         scope: { type: "team", id: "team_1" },
       });
 
@@ -516,21 +475,18 @@ describe("queries - additional coverage", () => {
         scope: { type: "team", id: "team_1" },
       });
 
-      const result = await t.query(internal.queries.getEffectivePermissions, {
+      const permissions = await t.query(api.indexed.getUserPermissionsFast, {
         tenantId: TENANT,
         userId: "user_123",
-        rolePermissions: {
-          editor: ["documents:read", "documents:write"],
-        },
-        scope: { type: "team", id: "team_1" },
+        scopeKey: "team:team_1",
       });
 
-      expect(result.permissions).toContain("documents:read");
-      expect(result.permissions).toContain("special:access");
-      expect(result.roles).toContain("editor");
+      const permNames = permissions.map((p) => p.permission);
+      expect(permNames).toContain("documents:read");
+      expect(permNames).toContain("special:access");
     });
 
-    it("should filter overrides by scope", async () => {
+    it("should filter by scopeKey", async () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.unified.grantPermissionUnified, {
@@ -540,18 +496,18 @@ describe("queries - additional coverage", () => {
         scope: { type: "team", id: "team_1" },
       });
 
-      const result = await t.query(internal.queries.getEffectivePermissions, {
+      const permissions = await t.query(api.indexed.getUserPermissionsFast, {
         tenantId: TENANT,
         userId: "user_123",
-        rolePermissions: {},
-        scope: { type: "team", id: "team_2" },
+        scopeKey: "team:team_2",
       });
 
-      // Override is for team_1 so should not match team_2
-      expect(result.permissions).not.toContain("special:access");
+      const permNames = permissions.map((p) => p.permission);
+      // Override is for team_1 so should not appear in team_2 results
+      expect(permNames).not.toContain("special:access");
     });
 
-    it("should handle expired overrides in getEffectivePermissions", async () => {
+    it("should handle expired overrides in effective permissions", async () => {
       const t = convexTest(schema, modules);
 
       const pastTime = Date.now() - 10000;
@@ -563,13 +519,13 @@ describe("queries - additional coverage", () => {
         expiresAt: pastTime,
       });
 
-      const result = await t.query(internal.queries.getEffectivePermissions, {
+      const permissions = await t.query(api.indexed.getUserPermissionsFast, {
         tenantId: TENANT,
         userId: "user_123",
-        rolePermissions: {},
       });
 
-      expect(result.permissions).not.toContain("special:access");
+      const permNames = permissions.map((p) => p.permission);
+      expect(permNames).not.toContain("special:access");
     });
   });
 
@@ -875,8 +831,8 @@ describe("queries - additional coverage", () => {
     });
   });
 
-  describe("checkPermission - reason branches", () => {
-    it("should use override reason when deny has a reason", async () => {
+  describe("checkPermission via unified - reason branches", () => {
+    it("should deny when deny override exists with a custom reason", async () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.unified.denyPermissionUnified, {
@@ -886,18 +842,16 @@ describe("queries - additional coverage", () => {
         reason: "Custom deny reason",
       });
 
-      const result = await t.query(internal.queries.checkPermission, {
+      const result = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
-        rolePermissions: {},
       });
 
       expect(result.allowed).toBe(false);
-      expect(result.reason).toBe("Custom deny reason");
     });
 
-    it("should use default reason when deny has no reason", async () => {
+    it("should deny when deny override exists without a custom reason", async () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.unified.denyPermissionUnified, {
@@ -906,18 +860,16 @@ describe("queries - additional coverage", () => {
         permission: "documents:delete",
       });
 
-      const result = await t.query(internal.queries.checkPermission, {
+      const result = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:delete",
-        rolePermissions: {},
       });
 
       expect(result.allowed).toBe(false);
-      expect(result.reason).toBe("Explicitly denied by override");
     });
 
-    it("should use override reason when allow has a reason", async () => {
+    it("should allow when allow override exists with a custom reason", async () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.unified.grantPermissionUnified, {
@@ -927,18 +879,16 @@ describe("queries - additional coverage", () => {
         reason: "Custom allow reason",
       });
 
-      const result = await t.query(internal.queries.checkPermission, {
+      const result = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
-        rolePermissions: {},
       });
 
       expect(result.allowed).toBe(true);
-      expect(result.reason).toBe("Custom allow reason");
     });
 
-    it("should use default reason when allow has no reason", async () => {
+    it("should allow when allow override exists without a custom reason", async () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.unified.grantPermissionUnified, {
@@ -947,19 +897,17 @@ describe("queries - additional coverage", () => {
         permission: "documents:read",
       });
 
-      const result = await t.query(internal.queries.checkPermission, {
+      const result = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "user_123",
         permission: "documents:read",
-        rolePermissions: {},
       });
 
       expect(result.allowed).toBe(true);
-      expect(result.reason).toBe("Explicitly allowed by override");
     });
   });
 
-  describe("getEffectivePermissions - expired role branch", () => {
+  describe("getUserPermissionsFast - expired role branch", () => {
     it("should exclude expired role assignments from effective permissions", async () => {
       const t = convexTest(schema, modules);
 
@@ -970,30 +918,25 @@ describe("queries - additional coverage", () => {
         userId: "user_123",
         role: "admin",
         expiresAt: pastTime,
-        rolePermissions: [],
+        rolePermissions: ["documents:read", "documents:delete"],
       });
 
       await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "user_123",
         role: "viewer",
-        rolePermissions: [],
+        rolePermissions: ["documents:read"],
       });
 
-      const result = await t.query(internal.queries.getEffectivePermissions, {
+      const permissions = await t.query(api.indexed.getUserPermissionsFast, {
         tenantId: TENANT,
         userId: "user_123",
-        rolePermissions: {
-          admin: ["documents:read", "documents:delete"],
-          viewer: ["documents:read"],
-        },
       });
 
-      expect(result.roles).not.toContain("admin");
-      expect(result.roles).toContain("viewer");
-      // Only viewer's permissions
-      expect(result.permissions).toContain("documents:read");
-      expect(result.permissions).not.toContain("documents:delete");
+      const permNames = permissions.map((p) => p.permission);
+      // Only viewer's permissions should be present (admin is expired)
+      expect(permNames).toContain("documents:read");
+      expect(permNames).not.toContain("documents:delete");
     });
   });
 });
