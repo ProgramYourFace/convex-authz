@@ -808,7 +808,7 @@ const canEdit = await authz.can(ctx, userId, "documents:update");
 const isAdmin = await authz.hasRole(ctx, userId, "admin");
 
 // O(1) relationship check
-const isMember = await authz.hasRelation(ctx, "user", userId, "member", "team", "sales");
+const isMember = await authz.hasRelation(ctx, { type: "user", id: userId }, "member", { type: "team", id: "sales" });
 ```
 
 ### How It Works
