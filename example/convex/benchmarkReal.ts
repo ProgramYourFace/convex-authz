@@ -366,7 +366,7 @@ export const checkPermissionDirect = query({
   returns: v.boolean(),
   handler: async (ctx, args) => {
     const scope = args.orgId ? { type: "org", id: String(args.orgId) } : undefined;
-    return await authz.can(ctx, args.userId, args.permission, scope);
+    return await authz.can(ctx, args.userId, args.permission as any, scope);
   },
 });
 
@@ -386,7 +386,7 @@ export const checkAllPermsDirect = query({
     ];
     const results: Record<string, boolean> = {};
     for (const p of perms) {
-      results[p] = await authz.can(ctx, args.userId, p, scope);
+      results[p] = await authz.can(ctx, args.userId, p as any, scope);
     }
     return results;
   },
@@ -432,7 +432,7 @@ export const grantPermissionDirect = mutation({
   returns: v.string(),
   handler: async (ctx, args) => {
     return await authz.grantPermission(
-      ctx, args.userId, args.permission,
+      ctx, args.userId, args.permission as any,
       { type: "org", id: String(args.orgId) },
     );
   },
@@ -443,7 +443,7 @@ export const denyPermissionDirect = mutation({
   returns: v.string(),
   handler: async (ctx, args) => {
     return await authz.denyPermission(
-      ctx, args.userId, args.permission,
+      ctx, args.userId, args.permission as any,
       { type: "org", id: String(args.orgId) },
     );
   },
