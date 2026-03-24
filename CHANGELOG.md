@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.1.1
+
+- Fix merge conflict markers in README badge section
+
 ## v2.1.0
 
 ### New features
