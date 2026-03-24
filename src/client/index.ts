@@ -56,6 +56,46 @@ import {
  */
 export type PermissionDefinition = Record<string, Record<string, boolean>>;
 
+/**
+ * Derive all valid "resource:action" permission strings from a PermissionDefinition.
+ * E.g., `{ documents: { read: true, write: true } }` → `"documents:read" | "documents:write"`
+ */
+export type PermissionString<P extends PermissionDefinition> = {
+  [R in keyof P & string]: {
+    [A in keyof P[R] & string]: `${R}:${A}`;
+  }[keyof P[R] & string];
+}[keyof P & string];
+
+/**
+ * Extract all action names across all resources.
+ * E.g., `{ documents: { read, write }, settings: { view } }` → `"read" | "write" | "view"`
+ */
+type AllActions<P extends PermissionDefinition> = {
+  [R in keyof P]: keyof P[R] & string;
+}[keyof P];
+
+/**
+ * Valid wildcard patterns derived from a PermissionDefinition.
+ * - `"documents:*"` — all actions on a defined resource
+ * - `"*:read"` — a defined action on all resources
+ * - `"*"` — everything
+ * - `"*:*"` — everything (alternative)
+ */
+type WildcardPermission<P extends PermissionDefinition> =
+  | `${keyof P & string}:*`
+  | `*:${AllActions<P>}`
+  | "*"
+  | "*:*";
+
+/**
+ * Type-safe permission argument: accepts concrete "resource:action" strings
+ * from the permission definition, plus wildcard patterns.
+ * Catches typos like "documets:read" or "documents:reed" at compile time.
+ */
+export type PermissionArg<P extends PermissionDefinition> =
+  | PermissionString<P>
+  | WildcardPermission<P>;
+
 /** Reserved keys in role definitions; do not use as permission resource names. */
 const RESERVED_ROLE_KEYS = ["inherits", "includes"] as const;
 
@@ -506,7 +546,7 @@ export class Authz<
   async can(
     ctx: QueryCtx | ActionCtx,
     userId: string,
-    permission: string,
+    permission: PermissionArg<P>,
     scope?: Scope
   ): Promise<boolean> {
     const result = await this._checkPermission(ctx, userId, permission, scope);
@@ -527,7 +567,7 @@ export class Authz<
   async canWithContext(
     ctx: QueryCtx | ActionCtx,
     userId: string,
-    permission: string,
+    permission: PermissionArg<P>,
     scope?: Scope,
     requestContext?: Record<string, unknown>,
   ): Promise<boolean> {
@@ -547,7 +587,7 @@ export class Authz<
   async require(
     ctx: QueryCtx | ActionCtx,
     userId: string,
-    permission: string,
+    permission: PermissionArg<P>,
     scope?: Scope
   ): Promise<void> {
     const allowed = await this.can(ctx, userId, permission, scope);
@@ -566,11 +606,11 @@ export class Authz<
   async canAny(
     ctx: QueryCtx | ActionCtx,
     userId: string,
-    permissions: string[],
+    permissions: PermissionArg<P>[],
     scope?: Scope
   ): Promise<boolean> {
     validateUserId(userId);
-    validatePermissions(permissions);
+    validatePermissions(permissions as string[]);
     validateScope(scope);
     for (const perm of permissions) {
       if (await this.can(ctx, userId, perm, scope)) {
@@ -937,7 +977,7 @@ export class Authz<
   async grantPermission(
     ctx: MutationCtx | ActionCtx,
     userId: string,
-    permission: string,
+    permission: PermissionArg<P>,
     scope?: Scope,
     reason?: string,
     expiresAt?: number,
@@ -967,7 +1007,7 @@ export class Authz<
   async denyPermission(
     ctx: MutationCtx | ActionCtx,
     userId: string,
-    permission: string,
+    permission: PermissionArg<P>,
     scope?: Scope,
     reason?: string,
     expiresAt?: number,
