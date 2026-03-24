@@ -1909,13 +1909,13 @@ describe("input validation", () => {
         runQuery: vi.fn().mockResolvedValue({ allowed: false, reason: "ok" }),
       };
 
-      await expect(authz.can(ctx, "user_1", "read")).rejects.toThrow(
+      await expect(authz.can(ctx, "user_1", "read" as any)).rejects.toThrow(
         'Invalid permission format: "read". Expected "resource:action"'
       );
-      await expect(authz.can(ctx, "user_1", "a:b:c")).rejects.toThrow(
+      await expect(authz.can(ctx, "user_1", "a:b:c" as any)).rejects.toThrow(
         'Invalid permission format: "a:b:c". Expected "resource:action"'
       );
-      await expect(authz.can(ctx, "user_1", "")).rejects.toThrow(
+      await expect(authz.can(ctx, "user_1", "" as any)).rejects.toThrow(
         'Invalid permission format: "". Expected "resource:action"'
       );
     });
@@ -2020,7 +2020,7 @@ describe("input validation", () => {
       await expect(authz.can(ctx, "", "documents:read")).rejects.toThrow(
         "userId must be a non-empty string"
       );
-      await expect(authz.can(ctx, "user_1", "read")).rejects.toThrow(
+      await expect(authz.can(ctx, "user_1", "read" as any)).rejects.toThrow(
         'Invalid permission format: "read". Expected "resource:action"'
       );
     });
@@ -3099,14 +3099,8 @@ describe("v2 constructor options and definition helpers", () => {
 
   it("Authz accepts v2 constructor options", () => {
     const component = {} as unknown as ComponentApi;
-    const traversalRules = defineTraversalRules({
-      user: [{ through: "member", via: "group", inherit: "viewer" }],
-    });
     const relationPermissions = defineRelationPermissions({
       owner: ["documents:read", "documents:write"],
-    });
-    const caveats = defineCaveats({
-      isOwner: ({ subject, object }) => subject.id === object.id,
     });
 
     expect(
@@ -3115,9 +3109,7 @@ describe("v2 constructor options and definition helpers", () => {
           permissions,
           roles,
           tenantId: "my-tenant",
-          traversalRules,
           relationPermissions,
-          caveats,
         })
     ).not.toThrow();
   });
