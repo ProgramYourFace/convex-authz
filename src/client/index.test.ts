@@ -6,7 +6,6 @@ import {
   evaluatePolicyCondition,
   flattenRolePermissions,
   Authz,
-  IndexedAuthz,
   matchesPermissionPattern,
   parsePermission,
   buildPermission,
@@ -481,7 +480,7 @@ describe("wildcard and pattern matching", () => {
     });
   });
 
-  describe("IndexedAuthz (alias) grant/deny accept wildcard patterns", () => {
+  describe("Authz (alias) grant/deny accept wildcard patterns", () => {
     function createMockComponent() {
       return {
         queries: {
@@ -514,7 +513,7 @@ describe("wildcard and pattern matching", () => {
 
     it("grantPermission accepts documents:* and passes it to unified mutation", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("override_id"),
       };
@@ -527,7 +526,7 @@ describe("wildcard and pattern matching", () => {
 
     it("denyPermission accepts *:read and passes it to unified mutation", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("override_id"),
       };
@@ -2010,10 +2009,10 @@ describe("input validation", () => {
     });
   });
 
-  describe("IndexedAuthz (alias)", () => {
+  describe("Authz (alias)", () => {
     it("throws for empty userId and invalid permission", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = {
         runQuery: vi.fn().mockResolvedValue({ allowed: true, reason: "ok", tier: "cached" }),
       };
@@ -2028,7 +2027,7 @@ describe("input validation", () => {
 
     it("throws for unknown role and invalid scope", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = {
         runQuery: vi.fn().mockResolvedValue([]),
         runMutation: vi.fn().mockResolvedValue("id"),
@@ -2045,7 +2044,7 @@ describe("input validation", () => {
 
     it("validates relation args client-side", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
       const ctx = {
         runQuery: vi.fn().mockResolvedValue(false),
         runMutation: vi.fn().mockResolvedValue("id"),
@@ -2064,11 +2063,11 @@ describe("input validation", () => {
 });
 
 // ============================================================================
-// IndexedAuthz alias tests (uses Authz under the hood)
+// Authz alias tests (uses Authz under the hood)
 // ============================================================================
 
-describe("IndexedAuthz alias (via Authz)", () => {
-  // Since IndexedAuthz is now just Authz, we use the Authz-compatible mock
+describe("Authz alias (via Authz)", () => {
+  // Since Authz is now just Authz, we use the Authz-compatible mock
   function createMockComponent() {
     return {
       queries: {
@@ -2124,14 +2123,10 @@ describe("IndexedAuthz alias (via Authz)", () => {
     viewer: { documents: ["read"] },
   });
 
-  it("IndexedAuthz is the same as Authz", () => {
-    expect(IndexedAuthz).toBe(Authz);
-  });
-
   describe("can", () => {
     it("should check permission via unified.checkPermission", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue({ allowed: true, reason: "Cached", tier: "cached" }),
@@ -2151,7 +2146,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
 
     it("should pass scope when provided", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue({ allowed: false, reason: "Denied", tier: "cached" }),
@@ -2174,7 +2169,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
   describe("require", () => {
     it("should not throw when permission is allowed", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue({ allowed: true, reason: "Cached", tier: "cached" }),
@@ -2187,7 +2182,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
 
     it("should throw when permission is denied", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue({ allowed: false, reason: "Denied", tier: "cached" }),
@@ -2200,7 +2195,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
 
     it("should include scope in error message", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue({ allowed: false, reason: "Denied", tier: "cached" }),
@@ -2218,7 +2213,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
   describe("hasRole", () => {
     it("should check role via indexed.hasRoleFast", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue(true),
@@ -2240,7 +2235,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
 
     it("should pass scope", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue(false),
@@ -2264,7 +2259,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
   describe("hasRelation", () => {
     it("should check relation via indexed.hasRelationFast", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue(true),
@@ -2294,7 +2289,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
   describe("getUserPermissions", () => {
     it("should get permissions without scope", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue([]),
@@ -2309,7 +2304,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
 
     it("should get permissions with scope", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue([]),
@@ -2329,7 +2324,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
   describe("getUserRoles", () => {
     it("should get roles without scope", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue([]),
@@ -2344,7 +2339,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
 
     it("should get roles with scope", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn().mockResolvedValue([]),
@@ -2364,7 +2359,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
   describe("assignRole", () => {
     it("should assign role via unified.assignRoleUnified", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("role_id"),
@@ -2390,7 +2385,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
 
     it("should pass scope and expiresAt", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("role_id"),
@@ -2408,7 +2403,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
 
     it("should use assignedBy when provided", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("role_id"),
@@ -2430,7 +2425,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
 
     it("should use defaultActorId", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, {
+      const authz = new Authz(component, {
         permissions,
         roles,
         defaultActorId: "default_actor",
@@ -2452,7 +2447,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
   describe("revokeRole", () => {
     it("should revoke role via unified.revokeRoleUnified", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue(true),
@@ -2478,7 +2473,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
 
     it("should pass scope", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue(true),
@@ -2501,7 +2496,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
   describe("canAny", () => {
     it("should call can() for each permission and return true if any allowed", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runQuery: vi.fn()
@@ -2529,7 +2524,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
   describe("assignRoles", () => {
     it("should call runMutation with assignRolesUnified", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue({
@@ -2558,7 +2553,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
   describe("revokeRoles", () => {
     it("should call runMutation with revokeRolesUnified", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue({ revoked: 2 }),
@@ -2584,7 +2579,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
   describe("revokeAllRoles", () => {
     it("should call revokeAllRolesUnified mutation", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue(3),
@@ -2607,7 +2602,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
   describe("offboardUser", () => {
     it("should call runMutation with offboardUser", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue({
@@ -2635,7 +2630,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
   describe("grantPermission", () => {
     it("should grant permission via unified.grantPermissionUnified", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("perm_id"),
@@ -2651,7 +2646,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
 
     it("should pass all optional parameters", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("perm_id"),
@@ -2683,7 +2678,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
 
     it("should use defaultActorId", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, {
+      const authz = new Authz(component, {
         permissions,
         roles,
         defaultActorId: "default_actor",
@@ -2705,7 +2700,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
   describe("denyPermission", () => {
     it("should deny permission via unified.denyPermissionUnified", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("perm_id"),
@@ -2721,7 +2716,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
 
     it("should pass all optional parameters", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("perm_id"),
@@ -2753,7 +2748,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
 
     it("should use defaultActorId", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, {
+      const authz = new Authz(component, {
         permissions,
         roles,
         defaultActorId: "default_actor",
@@ -2775,7 +2770,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
   describe("addRelation", () => {
     it("should add relation via unified.addRelationUnified", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue("rel_id"),
@@ -2803,7 +2798,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
 
     it("should pass caveat and createdBy options", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, {
+      const authz = new Authz(component, {
         permissions,
         roles,
         defaultActorId: "default",
@@ -2833,7 +2828,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
 
     it("should use defaultActorId when no createdBy", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, {
+      const authz = new Authz(component, {
         permissions,
         roles,
         defaultActorId: "default_actor",
@@ -2860,7 +2855,7 @@ describe("IndexedAuthz alias (via Authz)", () => {
   describe("removeRelation", () => {
     it("should remove relation via unified.removeRelationUnified", async () => {
       const component = createMockComponent();
-      const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "test-tenant" });
+      const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
 
       const ctx = {
         runMutation: vi.fn().mockResolvedValue(true),
@@ -3000,7 +2995,7 @@ describe("Authz constructor validation", () => {
   });
 });
 
-describe("IndexedAuthz (alias) withTenant()", () => {
+describe("Authz (alias) withTenant()", () => {
   function createMockComponent() {
     return {
       queries: {
@@ -3036,7 +3031,7 @@ describe("IndexedAuthz (alias) withTenant()", () => {
 
   it("should return a new instance scoped to a different tenant", async () => {
     const component = createMockComponent();
-    const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "tenant-a" });
+    const authz = new Authz(component, { permissions, roles, tenantId: "tenant-a" });
     const other = authz.withTenant("tenant-b");
 
     const ctx = {
@@ -3052,7 +3047,7 @@ describe("IndexedAuthz (alias) withTenant()", () => {
 
   it("should not modify the original instance", async () => {
     const component = createMockComponent();
-    const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "tenant-a" });
+    const authz = new Authz(component, { permissions, roles, tenantId: "tenant-a" });
     authz.withTenant("tenant-b");
 
     const ctx = {
@@ -3068,28 +3063,28 @@ describe("IndexedAuthz (alias) withTenant()", () => {
 
   it("should throw for empty tenantId", () => {
     const component = createMockComponent();
-    const authz = new IndexedAuthz(component, { permissions, roles, tenantId: "tenant-a" });
+    const authz = new Authz(component, { permissions, roles, tenantId: "tenant-a" });
 
     expect(() => authz.withTenant("")).toThrow("tenantId must be a non-empty string");
     expect(() => authz.withTenant("   ")).toThrow("tenantId must be a non-empty string");
   });
 });
 
-describe("IndexedAuthz (alias) constructor validation", () => {
+describe("Authz (alias) constructor validation", () => {
   const permissions = definePermissions({ documents: { read: true } });
   const roles = defineRoles(permissions, { viewer: { documents: ["read"] } });
 
   it("should throw for missing tenantId", () => {
     const component = {} as unknown as ComponentApi;
     expect(
-      () => new IndexedAuthz(component, { permissions, roles, tenantId: "" })
+      () => new Authz(component, { permissions, roles, tenantId: "" })
     ).toThrow("tenantId must be a non-empty string");
   });
 
   it("should accept a valid tenantId", () => {
     const component = {} as unknown as ComponentApi;
     expect(
-      () => new IndexedAuthz(component, { permissions, roles, tenantId: "my-tenant" })
+      () => new Authz(component, { permissions, roles, tenantId: "my-tenant" })
     ).not.toThrow();
   });
 });

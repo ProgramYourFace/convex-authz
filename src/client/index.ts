@@ -1204,19 +1204,6 @@ export function defineCaveats(
   return caveats;
 }
 
-/**
- * @deprecated Use `Authz` instead. `IndexedAuthz` is now unified into `Authz`.
- * All O(1) indexed lookups, ReBAC, and ABAC are now available in the `Authz` class.
- * Will be removed in v2.1.
- */
-export const IndexedAuthz = Authz;
-/** @deprecated Use `Authz` instead. */
-export type IndexedAuthz<
-  P extends PermissionDefinition = PermissionDefinition,
-  R extends RoleDefinition<P> = RoleDefinition<P>,
-  Policy extends PolicyDefinition = Record<string, never>,
-> = Authz<P, R, Policy>;
-
 // ============================================================================
 // Re-exports
 // ============================================================================

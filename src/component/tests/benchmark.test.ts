@@ -69,11 +69,12 @@ describe("Performance Benchmarks", () => {
         });
       } catch {
         // Main branch: use mutations.assignRole (source only)
-        await t.mutation(internal.mutations.assignRole, {
+        await t.mutation(api.unified.assignRoleUnified, {
           tenantId: TENANT,
           userId: "bench-user",
           role,
-        });
+          rolePermissions: [],
+      });
       }
     }
 
@@ -86,7 +87,7 @@ describe("Performance Benchmarks", () => {
           permission: `override${i}:read`,
         });
       } catch {
-        await t.mutation(internal.mutations.grantPermission, {
+        await t.mutation(api.unified.grantPermissionUnified, {
           tenantId: TENANT,
           userId: "bench-user",
           permission: `override${i}:read`,
@@ -189,11 +190,12 @@ describe("Performance Benchmarks", () => {
           ],
         });
       } catch {
-        await t.mutation(internal.mutations.assignRole, {
+        await t.mutation(api.unified.assignRoleUnified, {
           tenantId: TENANT,
           userId: `user-${i}`,
           role: "editor",
-        });
+          rolePermissions: [],
+      });
       }
       times.push(performance.now() - start);
     }
@@ -219,10 +221,11 @@ describe("Performance Benchmarks", () => {
         rolePermissions: ["all:manage"],
       });
     } catch {
-      await t.mutation(internal.mutations.assignRole, {
+      await t.mutation(api.unified.assignRoleUnified, {
         tenantId: TENANT,
         userId: "bench-user",
         role: "admin",
+        rolePermissions: [],
       });
     }
 
@@ -270,11 +273,12 @@ describe("Performance Benchmarks", () => {
             rolePermissions: perms,
           });
         } catch {
-          await t.mutation(internal.mutations.assignRole, {
+          await t.mutation(api.unified.assignRoleUnified, {
             tenantId: TENANT,
             userId: `user-${u}`,
             role,
-          });
+            rolePermissions: [],
+      });
         }
       }
     }
