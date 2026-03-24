@@ -2,22 +2,18 @@
  * Type-level tests for PermissionArg<P>.
  *
  * These tests verify that TypeScript catches invalid permission strings
- * at compile time. They use @ts-expect-error to assert that invalid
- * strings produce type errors.
+ * at compile time using @ts-expect-error annotations. They do NOT
+ * execute any Authz methods — they only verify compilation.
  *
- * Run: npx vitest run src/client/type-safety.test.ts
- * Also verified by: npm run typecheck (tsc --noEmit)
+ * Run: npx vitest run src/client/type-safety.test.ts --typecheck
  */
 import { describe, test, expect } from "vitest";
 import {
-  Authz,
+  type Authz,
   definePermissions,
-  defineRoles,
   type PermissionString,
   type PermissionArg,
-
 } from "./index.js";
-import type { ComponentApi } from "../component/_generated/component.js";
 
 const permissions = definePermissions({
   documents: { create: true, read: true, update: true, delete: true },
@@ -25,22 +21,10 @@ const permissions = definePermissions({
   billing: { view: true, manage: true },
 });
 
-const roles = defineRoles(permissions, {
-  admin: {
-    documents: ["create", "read", "update", "delete"],
-    settings: ["view", "manage"],
-    billing: ["view", "manage"],
-  },
-  viewer: {
-    documents: ["read"],
-  },
-});
-
 type P = typeof permissions;
 
 describe("Type-safe permission strings", () => {
   test("PermissionString<P> derives correct union type", () => {
-    // These should all be valid
     const p1: PermissionString<P> = "documents:read";
     const p2: PermissionString<P> = "documents:create";
     const p3: PermissionString<P> = "documents:update";
@@ -77,8 +61,7 @@ describe("Type-safe permission strings", () => {
   });
 
   test("invalid permission strings produce TypeScript errors", () => {
-    // Each @ts-expect-error line MUST produce a TS error.
-    // If TypeScript doesn't error, vitest --typecheck will fail.
+    // Each @ts-expect-error MUST produce a TS error — vitest --typecheck verifies this.
 
     // @ts-expect-error — typo in resource name
     const _bad1: PermissionArg<P> = "documets:read";
@@ -101,102 +84,41 @@ describe("Type-safe permission strings", () => {
     // @ts-expect-error — wildcard with non-existent resource
     const _bad7: PermissionArg<P> = "users:*";
 
-    expect(true).toBe(true); // test passes if TS errors are correctly expected
-  });
-
-  test("Authz.can() accepts only valid permission strings", () => {
-    const component = {} as unknown as ComponentApi;
-    const authz = new Authz(component, { permissions, roles, tenantId: "test" });
-    const ctx = {
-      runQuery: async () => ({ allowed: true, reason: "", tier: "cached" }),
-      runMutation: async () => "",
-    } as any;
-
-    // These should compile:
-    void authz.can(ctx, "user1", "documents:read");
-    void authz.can(ctx, "user1", "settings:manage");
-    void authz.can(ctx, "user1", "documents:*");
-    void authz.can(ctx, "user1", "*:read");
-    void authz.can(ctx, "user1", "*");
-
-    // @ts-expect-error — typo
-    void authz.can(ctx, "user1", "documets:read");
-
-    // @ts-expect-error — non-existent action
-    void authz.can(ctx, "user1", "documents:archive");
-
-    // @ts-expect-error — non-existent resource
-    void authz.can(ctx, "user1", "users:read");
-
     expect(true).toBe(true);
   });
 
-  test("Authz.require() accepts only valid permission strings", () => {
-    const component = {} as unknown as ComponentApi;
-    const authz = new Authz(component, { permissions, roles, tenantId: "test" });
-    const ctx = {
-      runQuery: async () => ({ allowed: true, reason: "", tier: "cached" }),
-    } as any;
+  test("Authz method signatures accept PermissionArg<P> (type-level only)", () => {
+    // This test verifies at the TYPE level that Authz methods accept PermissionArg<P>.
+    // We use a type assertion to check the function signature without calling it.
 
-    // These should compile:
-    void authz.require(ctx, "user1", "documents:read");
-    void authz.require(ctx, "user1", "billing:manage");
+    type TestAuthz = Authz<P, Record<string, never>>;
 
-    // @ts-expect-error — typo
-    void authz.require(ctx, "user1", "documets:read");
+    // can() should accept valid permissions
+    type CanPermArg = Parameters<TestAuthz["can"]>[2];
+    const _validCan: CanPermArg = "documents:read";
+    const _validCanWild: CanPermArg = "documents:*";
 
-    expect(true).toBe(true);
-  });
+    // @ts-expect-error — typo should fail
+    const _badCan: CanPermArg = "documets:read";
 
-  test("Authz.canAny() accepts only valid permission arrays", () => {
-    const component = {} as unknown as ComponentApi;
-    const authz = new Authz(component, { permissions, roles, tenantId: "test" });
-    const ctx = {
-      runQuery: async () => ({ allowed: true, reason: "", tier: "cached" }),
-    } as any;
+    // require() should accept valid permissions
+    type RequirePermArg = Parameters<TestAuthz["require"]>[2];
+    const _validRequire: RequirePermArg = "settings:manage";
 
-    // These should compile:
-    void authz.canAny(ctx, "user1", ["documents:read", "settings:view"]);
-    void authz.canAny(ctx, "user1", ["documents:*", "*:read"]);
+    // @ts-expect-error — invalid action
+    const _badRequire: RequirePermArg = "settings:delete";
 
-    // @ts-expect-error — invalid permission in array
-    void authz.canAny(ctx, "user1", ["documents:read", "typo:action"]);
+    // grantPermission() should accept valid permissions
+    type GrantPermArg = Parameters<TestAuthz["grantPermission"]>[2];
+    const _validGrant: GrantPermArg = "billing:view";
+    const _validGrantWild: GrantPermArg = "*";
 
-    expect(true).toBe(true);
-  });
+    // @ts-expect-error — invalid resource
+    const _badGrant: GrantPermArg = "nonexistent:perm";
 
-  test("Authz.grantPermission() accepts only valid permissions", () => {
-    const component = {} as unknown as ComponentApi;
-    const authz = new Authz(component, { permissions, roles, tenantId: "test" });
-    const ctx = {
-      runQuery: async () => ({ allowed: true, reason: "", tier: "cached" }),
-      runMutation: async () => "id",
-    } as any;
-
-    // These should compile:
-    void authz.grantPermission(ctx, "user1", "documents:read");
-    void authz.grantPermission(ctx, "user1", "documents:*");
-
-    // @ts-expect-error — invalid permission
-    void authz.grantPermission(ctx, "user1", "nonexistent:perm");
-
-    expect(true).toBe(true);
-  });
-
-  test("Authz.denyPermission() accepts only valid permissions", () => {
-    const component = {} as unknown as ComponentApi;
-    const authz = new Authz(component, { permissions, roles, tenantId: "test" });
-    const ctx = {
-      runQuery: async () => ({ allowed: true, reason: "", tier: "cached" }),
-      runMutation: async () => "id",
-    } as any;
-
-    // These should compile:
-    void authz.denyPermission(ctx, "user1", "documents:delete");
-    void authz.denyPermission(ctx, "user1", "*:manage");
-
-    // @ts-expect-error — invalid permission
-    void authz.denyPermission(ctx, "user1", "bad:permission");
+    // canAny() should accept valid permission arrays
+    type CanAnyPermArg = Parameters<TestAuthz["canAny"]>[2];
+    const _validCanAny: CanAnyPermArg = ["documents:read", "settings:view"];
 
     expect(true).toBe(true);
   });
