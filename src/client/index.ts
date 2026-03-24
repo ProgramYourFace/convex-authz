@@ -400,9 +400,7 @@ export class Authz<
       defaultActorId?: string;
       tenantId: string;
       // v2:
-      traversalRules?: TraversalRules;
       relationPermissions?: RelationPermissionMap;
-      caveats?: Record<string, CaveatFunction>;
     }
   ) {
     validateTenantId(options.tenantId);
