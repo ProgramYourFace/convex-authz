@@ -166,7 +166,7 @@ v2 consolidates everything into a single `Authz` class. If you previously used `
 
 - **One class**: `Authz` replaces both the original `Authz` and `IndexedAuthz`. O(1) reads via pre-computed effective tables are now the default.
 - **ReBAC on `Authz`**: `hasRelation`, `addRelation`, and `removeRelation` are available directly on every `Authz` instance.
-- **ABAC policy types**: Policies are now classified as `"static"` (evaluated at write-time and stored in the effective-permissions table) or `"deferred"` (evaluated at read-time with live request context).
+- **ABAC policy types**: Policies accept a `type` field (`"static"` or `"deferred"`). In the current implementation, both types are evaluated at read-time when `can()` is called — Convex mutations cannot call queries, so write-time evaluation is not possible. The `type` field is reserved for future optimization but currently has no behavioral difference.
 - **`canWithContext()`**: Check deferred ABAC policies that need runtime context (e.g. IP address, time of day).
 - **`recomputeUser()`**: Rebuild a user's effective-permissions table on demand — useful after a schema change or post-deploy migration.
 - **`withTenant()`**: Get a scoped copy of the client bound to a different tenant for cross-tenant admin operations.
@@ -210,18 +210,18 @@ const canUpdate = await authz.can(ctx, userId, "documents:update", { type: "docu
 await authz.removeRelation(ctx, { type: "user", id: userId }, "editor", { type: "document", id: docId });
 ```
 
-### Deferred ABAC example
+### ABAC example
 
 ```typescript
-// In definePolicies, mark policies that need request context as "deferred"
+// Policies are always evaluated at read-time when can() is called.
+// The optional type field ("static" | "deferred") is reserved for future use
+// and currently has no behavioral effect.
 const policies = definePolicies({
   "documents:read": {
-    type: "deferred",
     condition: (ctx) => ctx.getAttribute("verified") === true,
     message: "Only verified users can read documents",
   },
   "billing:export": {
-    type: "deferred",
     condition: (ctx) => {
       const hour = new Date().getUTCHours();
       return hour >= 9 && hour <= 17;
@@ -699,38 +699,23 @@ account:acme ──parent──► deal:big_deal
 ### Adding Relationships
 
 ```typescript
-import { components } from "./_generated/api";
-
+// Use the Authz client — NOT direct component calls
 // User is member of team
-await ctx.runMutation(components.authz.rebac.addRelation, {
-  subjectType: "user",
-  subjectId: "alice",
-  relation: "member",
-  objectType: "team",
-  objectId: "sales",
-});
+await authz.addRelation(ctx, { type: "user", id: "alice" }, "member", { type: "team", id: "sales" });
 
 // Team owns account
-await ctx.runMutation(components.authz.rebac.addRelation, {
-  subjectType: "team",
-  subjectId: "sales",
-  relation: "owner",
-  objectType: "account",
-  objectId: "acme",
-});
+await authz.addRelation(ctx, { type: "team", id: "sales" }, "owner", { type: "account", id: "acme" });
 ```
 
 ### Checking Direct Relationships
 
 ```typescript
-const isMember = await ctx.runQuery(components.authz.rebac.hasDirectRelation, {
-  subjectType: "user",
-  subjectId: "alice",
-  relation: "member",
-  objectType: "team",
-  objectId: "sales",
-});
+// Use the Authz client — NOT direct component calls
+const isMember = await authz.hasRelation(ctx, { type: "user", id: "alice" }, "member", { type: "team", id: "sales" });
 // Returns: true
+
+// To remove a relationship
+await authz.removeRelation(ctx, { type: "user", id: "alice" }, "member", { type: "team", id: "sales" });
 ```
 
 ### Relationship Traversal (Inherited Access)
@@ -750,6 +735,7 @@ const traversalRules = {
   ],
 };
 
+// Graph traversal is available via the component query directly
 // Check: Can alice view big_deal?
 const result = await ctx.runQuery(components.authz.rebac.checkRelationWithTraversal, {
   subjectType: "user",
@@ -778,17 +764,17 @@ Traversal uses a **maxDepth** limit (default 5) and tracks visited `(objectType,
 ### CRM Example
 
 ```typescript
-// Setup CRM hierarchy
+// Setup CRM hierarchy using the Authz client
 const setupCRM = async (ctx) => {
   // Sales rep Alice is on sales team
-  await addRelation(ctx, "user", "alice", "member", "team", "sales");
-  
+  await authz.addRelation(ctx, { type: "user", id: "alice" }, "member", { type: "team", id: "sales" });
+
   // Sales team owns Acme Corp account
-  await addRelation(ctx, "team", "sales", "owner", "account", "acme_corp");
-  
+  await authz.addRelation(ctx, { type: "team", id: "sales" }, "owner", { type: "account", id: "acme_corp" });
+
   // Acme Corp has a big deal
-  await addRelation(ctx, "account", "acme_corp", "parent", "deal", "big_deal");
-  
+  await authz.addRelation(ctx, { type: "account", id: "acme_corp" }, "parent", { type: "deal", id: "big_deal" });
+
   // Now Alice can access the deal through the relationship chain!
 };
 ```
