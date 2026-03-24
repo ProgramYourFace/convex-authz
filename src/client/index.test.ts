@@ -3099,14 +3099,8 @@ describe("v2 constructor options and definition helpers", () => {
 
   it("Authz accepts v2 constructor options", () => {
     const component = {} as unknown as ComponentApi;
-    const traversalRules = defineTraversalRules({
-      user: [{ through: "member", via: "group", inherit: "viewer" }],
-    });
     const relationPermissions = defineRelationPermissions({
       owner: ["documents:read", "documents:write"],
-    });
-    const caveats = defineCaveats({
-      isOwner: ({ subject, object }) => subject.id === object.id,
     });
 
     expect(
@@ -3115,9 +3109,7 @@ describe("v2 constructor options and definition helpers", () => {
           permissions,
           roles,
           tenantId: "my-tenant",
-          traversalRules,
           relationPermissions,
-          caveats,
         })
     ).not.toThrow();
   });
