@@ -209,7 +209,7 @@ export const checkPermission = query({
     const scope = args.orgId
       ? { type: "org", id: String(args.orgId) }
       : undefined;
-    return await authz.can(ctx, String(args.userId), args.permission, scope);
+    return await authz.can(ctx, String(args.userId), args.permission as any, scope);
   },
 });
 
@@ -222,7 +222,7 @@ export const checkPermissionScoped = query({
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    return await authz.can(ctx, args.userId, args.permission, args.scope);
+    return await authz.can(ctx, args.userId, args.permission as any, args.scope);
   },
 });
 
@@ -338,7 +338,7 @@ export const grantPermission = mutation({
     return await authz.grantPermission(
       ctx,
       String(args.userId),
-      args.permission,
+      args.permission as any,
       scope
     );
   },
@@ -358,7 +358,7 @@ export const denyPermission = mutation({
     return await authz.denyPermission(
       ctx,
       String(args.userId),
-      args.permission,
+      args.permission as any,
       scope
     );
   },

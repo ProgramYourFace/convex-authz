@@ -152,7 +152,7 @@ export const can = query({
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    return await authz.can(ctx, args.userId, args.permission, args.scope);
+    return await authz.can(ctx, args.userId, args.permission as any, args.scope);
   },
 });
 
@@ -168,7 +168,7 @@ export const canWithContext = query({
     return await authz.canWithContext(
       ctx,
       args.userId,
-      args.permission,
+      args.permission as any,
       args.scope,
       args.requestContext,
     );
@@ -218,7 +218,7 @@ export const requirePerm = query({
   args: { userId: v.string(), permission: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await authz.require(ctx, args.userId, args.permission);
+    await authz.require(ctx, args.userId, args.permission as any);
     return null;
   },
 });
@@ -238,7 +238,7 @@ export const grantPermission = mutation({
     return await authz.grantPermission(
       ctx,
       args.userId,
-      args.permission,
+      args.permission as any,
       args.scope,
     );
   },
@@ -255,7 +255,7 @@ export const denyPermission = mutation({
     return await authz.denyPermission(
       ctx,
       args.userId,
-      args.permission,
+      args.permission as any,
       args.scope,
     );
   },
@@ -439,7 +439,7 @@ export const canAny = query({
     return await authz.canAny(
       ctx,
       args.userId,
-      args.permissions,
+      args.permissions as any,
       args.scope,
     );
   },
@@ -515,7 +515,7 @@ export const canB = query({
   args: { userId: v.string(), permission: v.string() },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    return await authzB.can(ctx, args.userId, args.permission);
+    return await authzB.can(ctx, args.userId, args.permission as any);
   },
 });
 
@@ -533,7 +533,7 @@ export const canWithTenant = query({
   handler: async (ctx, args) => {
     return await authz
       .withTenant(args.tenantId)
-      .can(ctx, args.userId, args.permission);
+      .can(ctx, args.userId, args.permission as any);
   },
 });
 
@@ -590,7 +590,7 @@ export const canWithRelPerms = query({
     return await authzWithRelPerms.can(
       ctx,
       args.userId,
-      args.permission,
+      args.permission as any,
       args.scope,
     );
   },

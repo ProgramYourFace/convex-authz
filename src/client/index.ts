@@ -91,6 +91,10 @@ type WildcardPermission<P extends PermissionDefinition> =
  * Type-safe permission argument: accepts concrete "resource:action" strings
  * from the permission definition, plus wildcard patterns.
  * Catches typos like "documets:read" or "documents:reed" at compile time.
+ *
+ * Also accepts `string & {}` as a fallback for dynamic permission strings
+ * (e.g., from Convex function args). This preserves autocomplete for
+ * literal strings while allowing runtime-determined values.
  */
 export type PermissionArg<P extends PermissionDefinition> =
   | PermissionString<P>
