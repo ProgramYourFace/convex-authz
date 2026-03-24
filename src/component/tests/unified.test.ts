@@ -1164,3 +1164,164 @@ describe("denyPermissionUnified", () => {
     });
   });
 });
+
+describe("ReBAC → permission bridge", () => {
+  it("addRelationUnified with relationPermissions writes to effectivePermissions", async () => {
+    const t = convexTest(schema, modules);
+
+    await t.mutation(api.unified.addRelationUnified, {
+      tenantId: TENANT,
+      subjectType: "user",
+      subjectId: "alice",
+      relation: "viewer",
+      objectType: "document",
+      objectId: "doc1",
+      relationPermissions: {
+        "document:viewer": ["documents:read"],
+        "document:editor": ["documents:read", "documents:update"],
+      },
+    });
+
+    // alice should now have documents:read scoped to document:doc1
+    const result = await t.query(api.unified.checkPermission, {
+      tenantId: TENANT,
+      userId: "alice",
+      permission: "documents:read",
+      scope: { type: "document", id: "doc1" },
+    });
+    expect(result.allowed).toBe(true);
+
+    // Not in a different scope
+    const result2 = await t.query(api.unified.checkPermission, {
+      tenantId: TENANT,
+      userId: "alice",
+      permission: "documents:read",
+      scope: { type: "document", id: "doc2" },
+    });
+    expect(result2.allowed).toBe(false);
+  });
+
+  it("removeRelationUnified cleans up relation-derived permissions", async () => {
+    const t = convexTest(schema, modules);
+
+    const relPerms = {
+      "document:viewer": ["documents:read"],
+    };
+
+    await t.mutation(api.unified.addRelationUnified, {
+      tenantId: TENANT,
+      subjectType: "user",
+      subjectId: "alice",
+      relation: "viewer",
+      objectType: "document",
+      objectId: "doc1",
+      relationPermissions: relPerms,
+    });
+
+    // Verify permission exists
+    const before = await t.query(api.unified.checkPermission, {
+      tenantId: TENANT,
+      userId: "alice",
+      permission: "documents:read",
+      scope: { type: "document", id: "doc1" },
+    });
+    expect(before.allowed).toBe(true);
+
+    // Remove relation
+    await t.mutation(api.unified.removeRelationUnified, {
+      tenantId: TENANT,
+      subjectType: "user",
+      subjectId: "alice",
+      relation: "viewer",
+      objectType: "document",
+      objectId: "doc1",
+      relationPermissions: relPerms,
+    });
+
+    // Permission should be gone
+    const after = await t.query(api.unified.checkPermission, {
+      tenantId: TENANT,
+      userId: "alice",
+      permission: "documents:read",
+      scope: { type: "document", id: "doc1" },
+    });
+    expect(after.allowed).toBe(false);
+  });
+
+  it("relation + role both grant same permission — removing relation preserves role grant", async () => {
+    const t = convexTest(schema, modules);
+
+    // Assign role that grants documents:read globally
+    await t.mutation(api.unified.assignRoleUnified, {
+      tenantId: TENANT,
+      userId: "alice",
+      role: "viewer",
+      rolePermissions: ["documents:read"],
+    });
+
+    // Add relation that also grants documents:read scoped to doc1
+    await t.mutation(api.unified.addRelationUnified, {
+      tenantId: TENANT,
+      subjectType: "user",
+      subjectId: "alice",
+      relation: "viewer",
+      objectType: "document",
+      objectId: "doc1",
+      relationPermissions: { "document:viewer": ["documents:read"] },
+    });
+
+    // Remove the relation
+    await t.mutation(api.unified.removeRelationUnified, {
+      tenantId: TENANT,
+      subjectType: "user",
+      subjectId: "alice",
+      relation: "viewer",
+      objectType: "document",
+      objectId: "doc1",
+      relationPermissions: { "document:viewer": ["documents:read"] },
+    });
+
+    // Global role-based permission should still work
+    const global = await t.query(api.unified.checkPermission, {
+      tenantId: TENANT,
+      userId: "alice",
+      permission: "documents:read",
+    });
+    expect(global.allowed).toBe(true);
+  });
+
+  it("editor relation grants multiple permissions", async () => {
+    const t = convexTest(schema, modules);
+
+    await t.mutation(api.unified.addRelationUnified, {
+      tenantId: TENANT,
+      subjectType: "user",
+      subjectId: "bob",
+      relation: "editor",
+      objectType: "document",
+      objectId: "doc1",
+      relationPermissions: {
+        "document:editor": ["documents:read", "documents:update", "documents:delete"],
+      },
+    });
+
+    // All three permissions should be granted
+    for (const perm of ["documents:read", "documents:update", "documents:delete"]) {
+      const result = await t.query(api.unified.checkPermission, {
+        tenantId: TENANT,
+        userId: "bob",
+        permission: perm,
+        scope: { type: "document", id: "doc1" },
+      });
+      expect(result.allowed).toBe(true);
+    }
+
+    // Not granted globally
+    const global = await t.query(api.unified.checkPermission, {
+      tenantId: TENANT,
+      userId: "bob",
+      permission: "documents:read",
+    });
+    expect(global.allowed).toBe(false);
+  });
+});

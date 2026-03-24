@@ -1032,6 +1032,7 @@ export class Authz<
       createdBy: options?.createdBy ?? this.options.defaultActorId,
       enableAudit: true,
       tenantId: this.options.tenantId,
+      relationPermissions: this.options.relationPermissions,
     });
   }
 
@@ -1055,6 +1056,7 @@ export class Authz<
       removedBy: actorId ?? this.options.defaultActorId,
       enableAudit: true,
       tenantId: this.options.tenantId,
+      relationPermissions: this.options.relationPermissions,
     });
   }
 
