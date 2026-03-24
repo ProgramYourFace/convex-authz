@@ -184,26 +184,50 @@ const isMember = await authz.hasRelation(ctx, { type: "user", id: userId }, "mem
 await authz.removeRelation(ctx, { type: "user", id: userId }, "member", { type: "team", id: teamId });
 ```
 
+### ReBAC → Permission Bridge
+
+Use `defineRelationPermissions` to automatically grant permissions when relationships are created:
+
+```typescript
+import { defineRelationPermissions } from "@djpanda/convex-authz";
+
+const authz = new Authz(components.authz, {
+  permissions, roles, tenantId: "my-app",
+  relationPermissions: defineRelationPermissions({
+    "document:viewer": ["documents:read"],
+    "document:editor": ["documents:read", "documents:update"],
+    "document:owner": ["documents:read", "documents:update", "documents:delete"],
+  }),
+});
+
+// Adding a relation automatically grants scoped permissions
+await authz.addRelation(ctx, { type: "user", id: userId }, "editor", { type: "document", id: docId });
+
+// can() now checks relation-derived permissions — no separate hasRelation() needed
+const canUpdate = await authz.can(ctx, userId, "documents:update", { type: "document", id: docId }); // true
+
+// Removing the relation revokes the permissions
+await authz.removeRelation(ctx, { type: "user", id: userId }, "editor", { type: "document", id: docId });
+```
+
 ### Deferred ABAC example
 
 ```typescript
 // In definePolicies, mark policies that need request context as "deferred"
-const policies = definePolicies(permissions, {
-  "documents:read": [
-    {
-      type: "static",
-      condition: async (ctx, userId) => {
-        const user = await ctx.db.get(userId);
-        return user?.active === true;
-      },
+const policies = definePolicies({
+  "documents:read": {
+    type: "deferred",
+    condition: (ctx) => ctx.getAttribute("verified") === true,
+    message: "Only verified users can read documents",
+  },
+  "billing:export": {
+    type: "deferred",
+    condition: (ctx) => {
+      const hour = new Date().getUTCHours();
+      return hour >= 9 && hour <= 17;
     },
-    {
-      type: "deferred",
-      condition: async (ctx, userId, requestContext) => {
-        return requestContext?.ipAllowlisted === true;
-      },
-    },
-  ],
+    message: "Billing exports only during business hours",
+  },
 });
 
 // Use canWithContext() when request context is available
@@ -478,20 +502,20 @@ matchesPermissionPattern("documents:read", "*:read");      // true
 matchesPermissionPattern("settings:read", "documents:*"); // false
 ```
 
-The same wildcard behavior applies to **IndexedAuthz** (grant/deny and can/require).
+The same wildcard behavior applies to all permission checks.
 
 ### Getting User Roles
 
 ```typescript
 const roles = await authz.getUserRoles(ctx, userId);
-// Returns: [{ role: "admin", scope: undefined }, { role: "editor", scope: { type: "team", id: "123" } }]
+// Returns: [{ role: "admin", scopeKey: "global" }, { role: "editor", scopeKey: "team:123", scope: { type: "team", id: "123" } }]
 ```
 
 ---
 
 ## Bulk operations and offboarding
 
-For large-scale or enterprise workflows, the API supports bulk permission checks and role updates in a single call (up to 100 items per call).
+For large-scale or enterprise workflows, the API supports bulk permission checks (up to 100 permissions) and role updates (up to 20 roles) in a single call.
 
 ### Bulk permission check (canAny)
 
@@ -511,14 +535,14 @@ const allowed = await authz.canAny(ctx, userId, [
 Assign or revoke multiple roles for one user in a **single transaction**:
 
 ```typescript
-// Assign multiple roles at once (max 100 per call)
+// Assign multiple roles at once (max 20 per call)
 const { assigned, assignmentIds } = await authz.assignRoles(ctx, userId, [
   { role: "admin" },
   { role: "editor", scope: { type: "team", id: "team_1" } },
   { role: "viewer", scope: { type: "org", id: "org_1" }, expiresAt: Date.now() + 86400000 },
 ], actorId);
 
-// Revoke multiple roles at once (max 100 per call)
+// Revoke multiple roles at once (max 20 per call)
 const { revoked } = await authz.revokeRoles(ctx, userId, [
   { role: "editor", scope: { type: "team", id: "team_1" } },
   { role: "viewer" },
@@ -563,7 +587,7 @@ const result = await authz.deprovisionUser(ctx, userId, {
 // result: { rolesRevoked, overridesRemoved, attributesRemoved, relationshipsRemoved, effectiveRolesRemoved, effectivePermissionsRemoved, effectiveRelationshipsRemoved }
 ```
 
-Bulk arrays (permissions in `canAny`, roles in `assignRoles` / `revokeRoles`) are limited to **100 items** per call; the client and component validate and throw a clear error if exceeded.
+Bulk arrays are limited per call: permissions in `canAny` up to **100 items**, roles in `assignRoles` / `revokeRoles` up to **20 items**. The client and component validate and throw a clear error if exceeded.
 
 ---
 
@@ -644,6 +668,13 @@ interface PolicyContext {
     [key: string]: unknown; // Resource data
   };
   action: string; // The permission being checked
+  environment?: {
+    timestamp: number;
+    ip?: string;
+  };
+  hasRole: (role: string) => boolean;
+  hasAttribute: (key: string) => boolean;
+  getAttribute: <T = unknown>(key: string, defaultValue?: T) => T | undefined;
 }
 ```
 
@@ -771,10 +802,10 @@ For high-performance production use, the indexed system pre-computes permissions
 ### Using the Indexed API
 
 ```typescript
-import { IndexedAuthz } from "@djpanda/convex-authz";
+import { Authz } from "@djpanda/convex-authz";
 import { components } from "./_generated/api";
 
-const authz = new IndexedAuthz(components.authz, { permissions, roles, tenantId: "my-app" });
+const authz = new Authz(components.authz, { permissions, roles, tenantId: "my-app" });
 
 // O(1) permission check - single index lookup
 const canEdit = await authz.can(ctx, userId, "documents:update");
@@ -969,13 +1000,13 @@ class Authz<P, R, Policy> {
   // Role management
   hasRole(ctx, userId, role, scope?): Promise<boolean>
   assignRole(ctx, userId, role, scope?, expiresAt?, actorId?): Promise<string>
-  assignRoles(ctx, userId, roles: RoleAssignItem[], actorId?): Promise<{ assigned: number; assignmentIds: string[] }>  // bulk, max 100
+  assignRoles(ctx, userId, roles: RoleAssignItem[], actorId?): Promise<{ assigned: number; assignmentIds: string[] }>  // bulk, max 20
   revokeRole(ctx, userId, role, scope?, actorId?): Promise<boolean>
-  revokeRoles(ctx, userId, roles: RoleScopeItem[], actorId?): Promise<{ revoked: number }>  // bulk, max 100
+  revokeRoles(ctx, userId, roles: RoleScopeItem[], actorId?): Promise<{ revoked: number }>  // bulk, max 20
   revokeAllRoles(ctx, userId, scope?, actorId?): Promise<number>
   getUserRoles(ctx, userId, scope?): Promise<Role[]>
   getUserPermissions(ctx, userId, scope?): Promise<PermissionResult>
-  
+
   // Offboarding
   offboardUser(ctx, userId, options?: { scope?, actorId?, removeAttributes?, removeOverrides?, removeRelationships? }): Promise<OffboardResult>
   deprovisionUser(ctx, userId, options?: { actorId?, enableAudit? }): Promise<OffboardResult>  // full wipe: roles, overrides, attributes, relationships
@@ -994,41 +1025,9 @@ class Authz<P, R, Policy> {
 }
 ```
 
-### IndexedAuthz Client (O(1))
-
-```typescript
-class IndexedAuthz<P, R> {
-  // O(1) checks
-  can(ctx, userId, permission, scope?): Promise<boolean>
-  canAny(ctx, userId, permissions: string[], scope?): Promise<boolean>   // bulk permission check (max 100)
-  require(ctx, userId, permission, scope?): Promise<void>
-  hasRole(ctx, userId, role, scope?): Promise<boolean>
-  hasRelation(ctx, subjectType, subjectId, relation, objectType, objectId): Promise<boolean>
-  
-  // Batch queries
-  getUserPermissions(ctx, userId, scope?): Promise<Permission[]>
-  getUserRoles(ctx, userId, scope?): Promise<Role[]>
-  
-  // Mutations (compute on write)
-  assignRole(ctx, userId, role, scope?, expiresAt?, assignedBy?): Promise<string>
-  assignRoles(ctx, userId, roles: RoleAssignItem[], actorId?): Promise<{ assigned: number; assignmentIds: string[] }>  // bulk, max 100
-  revokeRole(ctx, userId, role, scope?): Promise<boolean>
-  revokeRoles(ctx, userId, roles: RoleScopeItem[], actorId?): Promise<{ revoked: number }>  // bulk, max 100
-  revokeAllRoles(ctx, userId, scope?, actorId?): Promise<number>
-  offboardUser(ctx, userId, options?): Promise<OffboardResult>
-  deprovisionUser(ctx, userId, options?: { actorId?, enableAudit? }): Promise<OffboardResult>
-  grantPermission(ctx, userId, permission, scope?, reason?, expiresAt?, grantedBy?): Promise<string>
-  denyPermission(ctx, userId, permission, scope?, reason?, expiresAt?, deniedBy?): Promise<string>
-  
-  // ReBAC
-  addRelation(ctx, subjectType, subjectId, relation, objectType, objectId, inheritedRelations?, createdBy?): Promise<string>
-  removeRelation(ctx, subjectType, subjectId, relation, objectType, objectId): Promise<boolean>
-}
-```
-
 ### Argument validation
 
-All public methods on `Authz` and `IndexedAuthz` validate their arguments before calling the component. Invalid inputs throw an `Error` with a clear message so you can fail fast and fix call sites.
+All public methods on `Authz` validate their arguments before calling the component. Invalid inputs throw an `Error` with a clear message so you can fail fast and fix call sites.
 
 | Argument | Rule | Example error |
 |----------|------|----------------|
@@ -1042,7 +1041,7 @@ All public methods on `Authz` and `IndexedAuthz` validate their arguments before
 | `getAuditLog` `numItems` | When provided (pagination), positive integer 1–1000 | same as `limit` |
 | Relation args | `subjectType`, `subjectId`, `relation`, `objectType`, `objectId` must be non-empty strings | `"subjectType must be a non-empty string"` |
 | `canAny` `permissions` | Non-empty array, each element valid `resource:action`, length ≤ 100 | `"permissions must not exceed 100 items"` |
-| `assignRoles` / `revokeRoles` `roles` | Non-empty array, each role valid, length ≤ 100 | `"roles must not exceed 100 items"` |
+| `assignRoles` / `revokeRoles` `roles` | Non-empty array, each role valid, length ≤ 20 | `"roles must not exceed 20 items"` |
 
 Optional parameters are only validated when present (e.g. omitting `scope` is valid; passing `scope: { type: "", id: "x" }` throws).
 
@@ -1235,14 +1234,11 @@ await authz.assignRole(ctx, userId, "admin");
 await authz.assignRole(ctx, userId, "admin", { type: "org", id: orgId });
 ```
 
-### 2. Prefer O(1) Indexed API for Production
+### 2. Use the Authz Client for Production
 
 ```typescript
-// Development: Standard API (simpler)
+// Authz uses O(1) indexed lookups by default — no separate class needed
 const authz = new Authz(components.authz, { permissions, roles, tenantId: "my-app" });
-
-// Production: Indexed API (faster)
-const authz = new IndexedAuthz(components.authz, { permissions, roles, tenantId: "my-app" });
 ```
 
 ### 3. Use ReBAC for Complex Hierarchies
@@ -1503,7 +1499,7 @@ packages/authz/
 ├── README.md             # This documentation
 ├── src/
 │   ├── client/
-│   │   ├── index.ts      # Main exports (Authz, IndexedAuthz, helpers)
+│   │   ├── index.ts      # Main exports (Authz, helpers)
 │   │   └── index.test.ts # Client tests
 │   ├── component/
 │   │   ├── convex.config.ts  # Component registration
