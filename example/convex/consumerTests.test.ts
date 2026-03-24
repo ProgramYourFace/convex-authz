@@ -1206,6 +1206,134 @@ describe("Consumer Integration Tests (Authz class -> real DB)", () => {
   });
 
   // =========================================================================
+  // 34a. audit log captures role_revoked event
+  // =========================================================================
+  test("audit log captures role_revoked event", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, { name: "audit-revoke" });
+
+    await t.mutation(api.consumerTests.assignRole, { userId, role: "editor" });
+    await t.mutation(api.consumerTests.revokeRole, { userId, role: "editor" });
+
+    const logs = await t.query(api.consumerTests.getAuditLog, { userId });
+    const logArray = Array.isArray(logs) ? logs : (logs as any).page;
+    expect(logArray.some((e: any) => e.action === "role_revoked")).toBe(true);
+  });
+
+  // =========================================================================
+  // 34b. audit log captures permission_denied event
+  // =========================================================================
+  test("audit log captures permission_denied event", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, { name: "audit-deny" });
+
+    await t.mutation(api.consumerTests.denyPermission, { userId, permission: "documents:delete" });
+
+    const logs = await t.query(api.consumerTests.getAuditLog, { userId });
+    const logArray = Array.isArray(logs) ? logs : (logs as any).page;
+    expect(logArray.some((e: any) => e.action === "permission_denied")).toBe(true);
+  });
+
+  // =========================================================================
+  // 34c. audit log captures attribute_set event
+  // =========================================================================
+  test("audit log captures attribute_set event", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, { name: "audit-attr" });
+
+    await t.mutation(api.consumerTests.setAttribute, { userId, key: "dept", value: "eng" });
+
+    const logs = await t.query(api.consumerTests.getAuditLog, { userId });
+    const logArray = Array.isArray(logs) ? logs : (logs as any).page;
+    expect(logArray.some((e: any) => e.action === "attribute_set")).toBe(true);
+  });
+
+  // =========================================================================
+  // 34d. audit log captures relation_added event
+  // =========================================================================
+  test("audit log captures relation_added event", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, { name: "audit-rel" });
+
+    await t.mutation(api.consumerTests.addRelation, {
+      subjectType: "user", subjectId: userId,
+      relation: "member", objectType: "team", objectId: "team-audit",
+    });
+
+    const logs = await t.query(api.consumerTests.getAuditLog, { userId });
+    const logArray = Array.isArray(logs) ? logs : (logs as any).page;
+    expect(logArray.some((e: any) => e.action === "relation_added")).toBe(true);
+  });
+
+  // =========================================================================
+  // 34e. audit log captures relation_removed event
+  // =========================================================================
+  test("audit log captures relation_removed event", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, { name: "audit-relrem" });
+
+    await t.mutation(api.consumerTests.addRelation, {
+      subjectType: "user", subjectId: userId,
+      relation: "member", objectType: "team", objectId: "team-audit2",
+    });
+    await t.mutation(api.consumerTests.removeRelation, {
+      subjectType: "user", subjectId: userId,
+      relation: "member", objectType: "team", objectId: "team-audit2",
+    });
+
+    const logs = await t.query(api.consumerTests.getAuditLog, { userId });
+    const logArray = Array.isArray(logs) ? logs : (logs as any).page;
+    expect(logArray.some((e: any) => e.action === "relation_removed")).toBe(true);
+  });
+
+  // =========================================================================
+  // 34f. audit log filtered by action type
+  // =========================================================================
+  test("audit log can filter by action type", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, { name: "audit-filter" });
+
+    // Create multiple audit events
+    await t.mutation(api.consumerTests.assignRole, { userId, role: "admin" });
+    await t.mutation(api.consumerTests.grantPermission, { userId, permission: "billing:view" });
+    await t.mutation(api.consumerTests.revokeRole, { userId, role: "admin" });
+
+    // Fetch all — should have at least 3 entries
+    const allLogs = await t.query(api.consumerTests.getAuditLog, { userId });
+    const allArray = Array.isArray(allLogs) ? allLogs : (allLogs as any).page;
+    expect(allArray.length).toBeGreaterThanOrEqual(3);
+
+    // Verify different action types present
+    const actions = allArray.map((e: any) => e.action);
+    expect(actions).toContain("role_assigned");
+    expect(actions).toContain("permission_granted");
+    expect(actions).toContain("role_revoked");
+  });
+
+  // =========================================================================
+  // 34g. audit log entry has correct details
+  // =========================================================================
+  test("audit log entry contains correct role details", async () => {
+    const t = setup();
+    const userId = await t.mutation(api.consumerTests.createUser, { name: "audit-details" });
+
+    await t.mutation(api.consumerTests.assignRole, {
+      userId,
+      role: "editor",
+      scope: { type: "project", id: "p1" },
+    });
+
+    const logs = await t.query(api.consumerTests.getAuditLog, { userId });
+    const logArray = Array.isArray(logs) ? logs : (logs as any).page;
+    const entry = logArray.find((e: any) => e.action === "role_assigned");
+
+    expect(entry).toBeDefined();
+    expect(entry.details.role).toBe("editor");
+    expect(entry.details.scope).toEqual({ type: "project", id: "p1" });
+    expect(entry.userId).toBe(userId);
+  });
+
+  // =========================================================================
   // 35. same role in two different scopes -> revoke one preserves other
   // =========================================================================
   test("same role in two different scopes -> revoke one preserves other", async () => {
