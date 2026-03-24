@@ -4,7 +4,7 @@
 # Called automatically by the npm "version" lifecycle hook.
 set -euo pipefail
 
-SKILL_FILE="SKILL.md"
+SKILL_FILE="skills/convex-authz/SKILL.md"
 README_FILE="README.md"
 
 if [ ! -f "$README_FILE" ]; then
