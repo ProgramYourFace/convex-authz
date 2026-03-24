@@ -1155,7 +1155,7 @@ describe("Category 9: ReBAC", () => {
     const t = convexTest(schema, modules);
 
     // Add a direct relation
-    const relId = await t.mutation(api.unified.addRelationUnified, {
+    const _relId = await t.mutation(api.unified.addRelationUnified, {
       tenantId: TENANT,
       subjectType: "user",
       subjectId: "alice",

@@ -6,13 +6,12 @@
  * Each test returns PASS/FAIL with details. No test framework needed —
  * just assertions inside Convex actions.
  */
-import { action, mutation, query } from "./_generated/server.js";
+import { action, mutation } from "./_generated/server.js";
 import { api, components } from "./_generated/api.js";
 import {
   Authz,
   definePermissions,
   defineRoles,
-  definePolicies,
 } from "@djpanda/convex-authz";
 import { v } from "convex/values";
 
@@ -868,7 +867,7 @@ export const testRequireMethod = action({
       try {
         await authz.require(ctx, userId, "documents:read");
         requirePassed = true;
-      } catch (_e) {
+      } catch {
         requirePassed = false;
       }
       assert(requirePassed === true, "require should not throw for allowed permission");
@@ -881,7 +880,7 @@ export const testRequireMethod = action({
       try {
         await authz.require(ctx, userId, "documents:read");
         requireThrew = false;
-      } catch (_e) {
+      } catch {
         requireThrew = true;
       }
       assert(requireThrew === true, "require should throw for denied permission");

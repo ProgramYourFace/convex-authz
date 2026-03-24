@@ -60,7 +60,7 @@ describe("Large-Scale Benchmarks (500 users, 10 tenants)", () => {
     // ── Phase 1: Seed data ──────────────────────────────────────────
     console.log("\n🌱 Seeding large-scale data...");
 
-    const permissions = {
+    const _permissions = {
       admin: ["documents:create", "documents:read", "documents:update", "documents:delete",
               "settings:view", "settings:manage", "users:invite", "users:remove",
               "users:manage", "billing:view", "billing:manage"],
@@ -95,7 +95,7 @@ describe("Large-Scale Benchmarks (500 users, 10 tenants)", () => {
 
         // Assign role: distribute across roles
         const role = ROLES[i % ROLES.length];
-        const scope = { type: "org", id: String(orgIds[tenant]) };
+        const _scope = { type: "org", id: String(orgIds[tenant]) };
 
         await t.mutation(api.app.assignRole, {
           userId: userId as any,
@@ -111,7 +111,7 @@ describe("Large-Scale Benchmarks (500 users, 10 tenants)", () => {
     let overrideCount = 0;
     for (const tenant of TENANTS.slice(0, 5)) {
       for (let i = 0; i < 10; i++) {
-        const userId = usersByTenant[tenant][i];
+        const _userId = usersByTenant[tenant][i];
         await t.mutation(api.app.grantPermission, {
           userId: usersByTenant[tenant][i] as any,
           permission: "documents:delete",
@@ -152,7 +152,7 @@ describe("Large-Scale Benchmarks (500 users, 10 tenants)", () => {
     const missTimes: number[] = [];
     for (let i = 0; i < BENCH_ITERATIONS; i++) {
       const start = performance.now();
-      const result = await t.query(api.app.checkPermission, {
+      const _result = await t.query(api.app.checkPermission, {
         userId: targetUser,
         permission: "billing:manage",
         orgId: targetOrg,
@@ -181,7 +181,7 @@ describe("Large-Scale Benchmarks (500 users, 10 tenants)", () => {
     const allPermsTimes: number[] = [];
     for (let i = 0; i < BENCH_ITERATIONS; i++) {
       const start = performance.now();
-      const results = await t.query(api.app.checkAllPermissions, {
+      const _results = await t.query(api.app.checkAllPermissions, {
         userId: targetUser,
         orgId: targetOrg,
       });
