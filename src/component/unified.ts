@@ -123,7 +123,7 @@ async function updatePermissionsForRelation(
 
       const patchData: any = { sources, updatedAt: now };
 
-      if (allHaveCaveats) {
+      if (allHaveCaveats && !existingPerm.directGrant) {
         if (existingPerm.policyResult !== "deferred") {
           patchData.policyResult = "deferred";
           patchData.policyName = "$relation_caveats";
@@ -1200,37 +1200,42 @@ export const addRelationUnified = mutation({
             rule.inherit === current.relation &&
             rule.through === current.objectType
           ) {
-            // Find direct relations to extend with
-            const directPaths = await ctx.db
-              .query("relationships")
+            // Find effective relations to extend with
+            const effectiveViaPaths = await ctx.db
+              .query("effectiveRelationships")
               .withIndex("by_tenant_subject_relation_object", (q) =>
                 q
                   .eq("tenantId", args.tenantId)
-                  .eq("subjectType", current.objectType)
-                  .eq("subjectId", current.objectId)
-                  .eq("relation", rule.via)
-                  .eq("objectType", targetType),
+                  .eq("subjectKey", `${current.objectType}:${current.objectId}`)
+                  .eq("relation", rule.via),
               )
               .take(100);
 
-            for (const dp of directPaths) {
-              if (current.path.includes(dp._id)) continue; // cycle detection
+            for (const ep of effectiveViaPaths) {
+              if (ep.objectType !== targetType) continue;
 
-              const newCaveats = dp.caveat
-                ? [{ caveatName: dp.caveat, caveatContext: dp.caveatContext }]
-                : [];
-              queue.push({
-                subjectType: current.subjectType,
-                subjectId: current.subjectId,
-                relation: targetRelation,
-                objectType: targetType,
-                objectId: dp.objectId,
-                directRelationId: dp._id,
-                baseEffectiveId: effectiveId,
-                path: [...current.path, dp._id],
-                caveats: [...current.caveats, ...newCaveats],
-                depth: current.depth + 1,
-              });
+              for (const viaPath of ep.paths) {
+                // cycle detection: check if any relation ID in viaPath.path is already in current.path
+                if (
+                  current.path.some((id: any) => viaPath.path?.includes(id))
+                ) {
+                  continue;
+                }
+
+                const newCaveats = viaPath.caveats || [];
+                queue.push({
+                  subjectType: current.subjectType,
+                  subjectId: current.subjectId,
+                  relation: targetRelation,
+                  objectType: targetType,
+                  objectId: ep.objectId,
+                  directRelationId: viaPath.directRelationId,
+                  baseEffectiveId: effectiveId,
+                  path: [...current.path, ...(viaPath.path || [])],
+                  caveats: [...current.caveats, ...newCaveats],
+                  depth: current.depth + (viaPath.depth || 1),
+                });
+              }
             }
           }
         }
@@ -1360,14 +1365,7 @@ export const removeRelationUnified = mutation({
         currentPaths = currentPaths.filter(
           (p: any) =>
             p.directRelationId !== existing._id &&
-            !p.path?.includes(existing._id) &&
-            // Also filter out if baseEffectiveId was in this very row and that path was just removed
-            !(
-              de._id === p.baseEffectiveId &&
-              !currentPaths.some(
-                (cp: any) => cp.directRelationId === p.baseEffectiveId,
-              )
-            ),
+            !p.path?.includes(existing._id),
         );
 
         if (currentPaths.length === prevLength) break;
