@@ -43,7 +43,7 @@ One `Authz` class provides O(1) reads, ABAC policy support, and ReBAC — all in
 
 **ABAC policy classification:**
 - **Static** (`type: "static"`) — evaluated at write time, result stored in `effectivePermissions.policyResult`
-- **Deferred** (`type: "deferred"`) — evaluated at read time via `canWithContext()`
+- **Deferred** (`type: "deferred"`) — evaluated at read time via `can()`
 
 **Three authorization models** (RBAC, ABAC, ReBAC) all available on the single `Authz` class. `IndexedAuthz` is a deprecated alias.
 

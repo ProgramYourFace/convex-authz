@@ -1564,7 +1564,7 @@ describe("Authz class", () => {
     });
   });
 
-  describe("canWithContext", () => {
+  describe("can", () => {
     it("should return true for cached allowed permission (no deferred policy)", async () => {
       const component = createMockComponent();
       const authz = new Authz(component, { permissions, roles, tenantId: "test-tenant" });
@@ -1573,7 +1573,7 @@ describe("Authz class", () => {
         runQuery: vi.fn().mockResolvedValue({ allowed: true, reason: "Cached", tier: "cached" }),
       };
 
-      const result = await authz.canWithContext(ctx, "user_123", "documents:read");
+      const result = await authz.can(ctx, "user_123", "documents:read");
       expect(result).toBe(true);
     });
 
@@ -1585,7 +1585,7 @@ describe("Authz class", () => {
         runQuery: vi.fn().mockResolvedValue({ allowed: false, reason: "Denied", tier: "cached" }),
       };
 
-      const result = await authz.canWithContext(ctx, "user_123", "documents:delete");
+      const result = await authz.can(ctx, "user_123", "documents:delete");
       expect(result).toBe(false);
     });
 
@@ -1606,7 +1606,7 @@ describe("Authz class", () => {
           .mockResolvedValueOnce([{ role: "admin" }]), // getUserRoles
       };
 
-      const result = await authz.canWithContext(
+      const result = await authz.can(
         ctx,
         "user_123",
         "documents:update",
@@ -1633,7 +1633,7 @@ describe("Authz class", () => {
           .mockResolvedValueOnce([]), // getUserRoles
       };
 
-      const result = await authz.canWithContext(
+      const result = await authz.can(
         ctx,
         "user_123",
         "documents:update",

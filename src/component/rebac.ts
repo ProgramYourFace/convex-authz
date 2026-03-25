@@ -209,7 +209,7 @@ export const checkRelationWithTraversal = query({
       // So if a path has caveats, we return that it exists, but the client must verify it.
       // Note: `checkRelationWithTraversal` is a legacy/direct API method. If users call this
       // directly, we assume they just want to know if the edge exists in the graph.
-      // We will return true here, and the Authz client handles the context evaluation via listAccessibleObjects/canWithContext.
+      // We will return true here, and the Authz client handles the context evaluation via listAccessibleObjects/can.
 
       // If we want to strictly follow the expert's advice, we return true if the path exists.
     }

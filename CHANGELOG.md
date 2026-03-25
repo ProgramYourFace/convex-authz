@@ -88,7 +88,7 @@
 
 #### ABAC deferred policies
 
-- `canWithContext(ctx, userId, permission, scope?, requestContext?)` evaluates
+- `can(ctx, userId, permission, scope?, requestContext?)` evaluates
   policies that depend on runtime context (IP address, time of day, request
   headers).
 - `definePolicies()` accepts a `type` field (`"static"` or `"deferred"`). Both

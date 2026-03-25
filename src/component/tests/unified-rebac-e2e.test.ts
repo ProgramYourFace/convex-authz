@@ -35,7 +35,7 @@ const caveats = defineCaveats({
 });
 
 describe("ReBAC Transitive Closures and Caveats", () => {
-  it("should evaluate a transitive relationship and properly handle caveats during .canWithContext", async () => {
+  it("should evaluate a transitive relationship and properly handle caveats during .can", async () => {
     const t = convexTest(schema, modules);
 
     // Pass traversalRules and relationPermissions to mock client methods
@@ -88,7 +88,7 @@ describe("ReBAC Transitive Closures and Caveats", () => {
     expect(canReadWithoutContext).toBe(false);
 
     // Check with caveatContext matching
-    const canReadWithContext = await authz.canWithContext(
+    const canReadWithContext = await authz.can(
       ctx as any,
       "user_1",
       "documents:read",
@@ -98,7 +98,7 @@ describe("ReBAC Transitive Closures and Caveats", () => {
     expect(canReadWithContext).toBe(true);
 
     // Check with caveatContext failing
-    const canReadWithWrongContext = await authz.canWithContext(
+    const canReadWithWrongContext = await authz.can(
       ctx as any,
       "user_1",
       "documents:read",
@@ -235,7 +235,7 @@ describe("ReBAC Transitive Closures and Caveats", () => {
 
     // User can read doc_3 if work hours
     expect(
-      await authz.canWithContext(
+      await authz.can(
         ctx as any,
         "user_3",
         "documents:read",
@@ -244,7 +244,7 @@ describe("ReBAC Transitive Closures and Caveats", () => {
       ),
     ).toBe(true);
     expect(
-      await authz.canWithContext(
+      await authz.can(
         ctx as any,
         "user_3",
         "documents:read",
@@ -313,7 +313,7 @@ describe("ReBAC Transitive Closures and Caveats", () => {
       }),
     ).toBe(false);
     expect(
-      await authz.canWithContext(
+      await authz.can(
         ctx as any,
         "user_3",
         "documents:read",
@@ -336,7 +336,7 @@ describe("ReBAC Transitive Closures and Caveats", () => {
 
     // User should have no access at all
     expect(
-      await authz.canWithContext(
+      await authz.can(
         ctx as any,
         "user_3",
         "documents:read",
@@ -457,7 +457,7 @@ describe("ReBAC Transitive Closures and Caveats", () => {
 
     // Can access with A, B, or C
     expect(
-      await authz.canWithContext(
+      await authz.can(
         ctx as any,
         "user_4",
         "documents:read",
@@ -466,7 +466,7 @@ describe("ReBAC Transitive Closures and Caveats", () => {
       ),
     ).toBe(true);
     expect(
-      await authz.canWithContext(
+      await authz.can(
         ctx as any,
         "user_4",
         "documents:read",
@@ -475,7 +475,7 @@ describe("ReBAC Transitive Closures and Caveats", () => {
       ),
     ).toBe(true);
     expect(
-      await authz.canWithContext(
+      await authz.can(
         ctx as any,
         "user_4",
         "documents:read",
@@ -484,7 +484,7 @@ describe("ReBAC Transitive Closures and Caveats", () => {
       ),
     ).toBe(true);
     expect(
-      await authz.canWithContext(
+      await authz.can(
         ctx as any,
         "user_4",
         "documents:read",
@@ -507,7 +507,7 @@ describe("ReBAC Transitive Closures and Caveats", () => {
 
     // A is no longer valid, B and C are
     expect(
-      await authz.canWithContext(
+      await authz.can(
         ctx as any,
         "user_4",
         "documents:read",
@@ -516,7 +516,7 @@ describe("ReBAC Transitive Closures and Caveats", () => {
       ),
     ).toBe(false);
     expect(
-      await authz.canWithContext(
+      await authz.can(
         ctx as any,
         "user_4",
         "documents:read",
@@ -549,7 +549,7 @@ describe("ReBAC Transitive Closures and Caveats", () => {
 
     // None are valid
     expect(
-      await authz.canWithContext(
+      await authz.can(
         ctx as any,
         "user_4",
         "documents:read",
@@ -558,7 +558,7 @@ describe("ReBAC Transitive Closures and Caveats", () => {
       ),
     ).toBe(false);
     expect(
-      await authz.canWithContext(
+      await authz.can(
         ctx as any,
         "user_4",
         "documents:read",
