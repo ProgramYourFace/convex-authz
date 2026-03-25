@@ -152,7 +152,12 @@ export const can = query({
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    return await authz.can(ctx, args.userId, args.permission as any, args.scope);
+    return await authz.can(
+      ctx,
+      args.userId,
+      args.permission as any,
+      args.scope,
+    );
   },
 });
 
@@ -165,7 +170,7 @@ export const canWithContext = query({
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    return await authz.canWithContext(
+    return await authz.can(
       ctx,
       args.userId,
       args.permission as any,

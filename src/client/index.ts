@@ -631,40 +631,10 @@ export class Authz<
    * (e.g. "documents:*", "*:read", or "*"), it is treated as granting that permission when the
    * pattern matches the requested permission.
    * @param permission - Concrete permission "resource:action" (e.g. "documents:read")
+   * @param scope - Optional scope to check the permission within.
+   * @param requestContext - Additional context passed to deferred policy conditions or caveats.
    */
   async can(
-    ctx: QueryCtx | ActionCtx,
-    userId: string,
-    permission: PermissionArg<P>,
-    scope?: Scope,
-  ): Promise<boolean> {
-    const result = await this._checkPermission(ctx, userId, permission, scope);
-    if (!result.allowed) return false;
-    // For deferred policies, evaluate with empty context
-    if (
-      result.tier === "deferred" &&
-      (this.options.policies || result.policyName === "$relation_caveats")
-    ) {
-      return this._evaluateDeferredPolicy(
-        ctx,
-        userId,
-        result.policyName,
-        permission,
-        scope,
-        undefined,
-        result.sources,
-      );
-    }
-    return true;
-  }
-
-  /**
-   * Check if user has permission, with additional request context for deferred policy evaluation.
-   * Uses O(1) indexed lookup via the unified checkPermission query.
-   * @param permission - Concrete permission "resource:action" (e.g. "documents:read")
-   * @param requestContext - Additional context passed to deferred policy conditions
-   */
-  async canWithContext(
     ctx: QueryCtx | ActionCtx,
     userId: string,
     permission: PermissionArg<P>,
@@ -673,6 +643,7 @@ export class Authz<
   ): Promise<boolean> {
     const result = await this._checkPermission(ctx, userId, permission, scope);
     if (!result.allowed) return false;
+    // For deferred policies, evaluate with provided or empty context
     if (
       result.tier === "deferred" &&
       (this.options.policies || result.policyName === "$relation_caveats")
@@ -688,6 +659,19 @@ export class Authz<
       );
     }
     return true;
+  }
+
+  /**
+   * @deprecated Use {@link Authz.can} instead, which now accepts `requestContext` as an optional parameter.
+   */
+  async canWithContext(
+    ctx: QueryCtx | ActionCtx,
+    userId: string,
+    permission: PermissionArg<P>,
+    scope?: Scope,
+    requestContext?: Record<string, unknown>,
+  ): Promise<boolean> {
+    return this.can(ctx, userId, permission, scope, requestContext);
   }
 
   /**
