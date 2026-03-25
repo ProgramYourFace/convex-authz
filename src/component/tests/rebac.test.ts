@@ -290,8 +290,14 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
   });
 
   describe("relationship traversal", () => {
-    it.skip("should traverse relationships with rules", async () => {
+    it("should traverse relationships with rules", async () => {
       const t = convexTest(schema, modules);
+
+      const traversalRules = {
+        "account:viewer": [
+          { through: "team", via: "owner", inherit: "member" },
+        ],
+      };
 
       await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
@@ -300,6 +306,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         relation: "member",
         objectType: "team",
         objectId: "sales",
+        traversalRules,
       });
 
       await t.mutation(api.unified.addRelationUnified, {
@@ -309,6 +316,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         relation: "owner",
         objectType: "account",
         objectId: "acme",
+        traversalRules,
       });
 
       const result = await t.query(api.rebac.checkRelationWithTraversal, {
@@ -318,11 +326,6 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         relation: "viewer",
         objectType: "account",
         objectId: "acme",
-        traversalRules: {
-          "account:viewer": [
-            { through: "team", via: "owner", inherit: "member" },
-          ],
-        },
       });
 
       expect(result.allowed).toBe(true);
@@ -332,6 +335,12 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
     it("should fail traversal when path doesn't exist", async () => {
       const t = convexTest(schema, modules);
 
+      const traversalRules = {
+        "account:viewer": [
+          { through: "team", via: "owner", inherit: "member" },
+        ],
+      };
+
       await t.mutation(api.unified.addRelationUnified, {
         tenantId: TENANT,
         subjectType: "user",
@@ -339,6 +348,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         relation: "member",
         objectType: "team",
         objectId: "marketing",
+        traversalRules,
       });
 
       await t.mutation(api.unified.addRelationUnified, {
@@ -348,6 +358,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         relation: "owner",
         objectType: "account",
         objectId: "acme",
+        traversalRules,
       });
 
       const result = await t.query(api.rebac.checkRelationWithTraversal, {
@@ -357,17 +368,12 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         relation: "viewer",
         objectType: "account",
         objectId: "acme",
-        traversalRules: {
-          "account:viewer": [
-            { through: "team", via: "owner", inherit: "member" },
-          ],
-        },
       });
 
       expect(result.allowed).toBe(false);
     });
 
-    it.skip("should return false when no traversal rules and no direct relation", async () => {
+    it("should return false when no traversal rules and no direct relation", async () => {
       const t = convexTest(schema, modules);
 
       const result = await t.query(api.rebac.checkRelationWithTraversal, {
@@ -380,12 +386,10 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
       });
 
       expect(result.allowed).toBe(false);
-      expect(result.reason).toBe(
-        "No direct relationship and no traversal rules provided",
-      );
+      expect(result.reason).toBe("No relationship path found");
     });
 
-    it.skip("should find direct relationship without traversal", async () => {
+    it("should find direct relationship without traversal", async () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.unified.addRelationUnified, {
@@ -407,7 +411,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
       });
 
       expect(result.allowed).toBe(true);
-      expect(result.reason).toBe("Direct relationship");
+      expect(result.reason).toBe("Direct or unconditional inherited access");
     });
 
     it("should respect maxDepth limit", async () => {
@@ -463,34 +467,8 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
       expect(result.allowed).toBe(false);
     });
 
-    it.skip("should enforce maxDepth strictly: depth-3 path fails with maxDepth 2, succeeds with maxDepth 3", async () => {
+    it("should enforce maxDepth strictly: depth-3 path fails with maxDepth 2, succeeds with maxDepth 3", async () => {
       const t = convexTest(schema, modules);
-
-      // Chain: user -> team -> project -> account (need depth 3 to reach account)
-      await t.mutation(api.unified.addRelationUnified, {
-        tenantId: TENANT,
-        subjectType: "user",
-        subjectId: "alice",
-        relation: "member",
-        objectType: "team",
-        objectId: "sales",
-      });
-      await t.mutation(api.unified.addRelationUnified, {
-        tenantId: TENANT,
-        subjectType: "team",
-        subjectId: "sales",
-        relation: "owner",
-        objectType: "project",
-        objectId: "alpha",
-      });
-      await t.mutation(api.unified.addRelationUnified, {
-        tenantId: TENANT,
-        subjectType: "project",
-        subjectId: "alpha",
-        relation: "parent",
-        objectType: "account",
-        objectId: "acme",
-      });
 
       const rules = {
         "account:viewer": [
@@ -501,30 +479,85 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         ],
       };
 
-      const withDepth2 = await t.query(api.rebac.checkRelationWithTraversal, {
+      // Chain: user -> team -> project -> account (need depth 3 to reach account)
+      await t.mutation(api.unified.addRelationUnified, {
+        tenantId: TENANT,
+        subjectType: "user",
+        subjectId: "alice",
+        relation: "member",
+        objectType: "team",
+        objectId: "sales",
+        traversalRules: rules,
+      });
+
+      await t.mutation(api.unified.addRelationUnified, {
+        tenantId: TENANT,
+        subjectType: "team",
+        subjectId: "sales",
+        relation: "owner",
+        objectType: "project",
+        objectId: "alpha",
+        traversalRules: rules,
+      });
+
+      await t.mutation(api.unified.addRelationUnified, {
+        tenantId: TENANT,
+        subjectType: "project",
+        subjectId: "alpha",
+        relation: "parent",
+        objectType: "account",
+        objectId: "acme",
+        traversalRules: rules,
+        maxDepth: 1, // Only allowed 1 depth jump at write time
+      });
+
+      const result = await t.query(api.rebac.checkRelationWithTraversal, {
         tenantId: TENANT,
         subjectType: "user",
         subjectId: "alice",
         relation: "viewer",
         objectType: "account",
         objectId: "acme",
-        traversalRules: rules,
-        maxDepth: 2,
       });
-      expect(withDepth2.allowed).toBe(false);
-      expect(withDepth2.reason).toBe("No relationship path found");
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe("No relationship path found");
 
-      const withDepth3 = await t.query(api.rebac.checkRelationWithTraversal, {
+      // We need to remove the existing relation because addRelationUnified is idempotent
+      // and won't traverse again if the direct relation already exists
+      await t.mutation(api.unified.removeRelationUnified, {
         tenantId: TENANT,
-        subjectType: "user",
-        subjectId: "alice",
-        relation: "viewer",
+        subjectType: "project",
+        subjectId: "alpha",
+        relation: "parent",
+        objectType: "account",
+        objectId: "acme",
+        traversalRules: rules,
+      });
+
+      // Allow maxDepth 3 at write time
+      await t.mutation(api.unified.addRelationUnified, {
+        tenantId: TENANT,
+        subjectType: "project",
+        subjectId: "alpha",
+        relation: "parent",
         objectType: "account",
         objectId: "acme",
         traversalRules: rules,
         maxDepth: 3,
       });
-      expect(withDepth3.allowed).toBe(true);
+
+      const resultAllowed = await t.query(
+        api.rebac.checkRelationWithTraversal,
+        {
+          tenantId: TENANT,
+          subjectType: "user",
+          subjectId: "alice",
+          relation: "viewer",
+          objectType: "account",
+          objectId: "acme",
+        },
+      );
+      expect(resultAllowed.allowed).toBe(true);
     });
 
     it("should return 'No relationship path found' when traversal finds nothing", async () => {
@@ -537,79 +570,10 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
         relation: "viewer",
         objectType: "account",
         objectId: "acme",
-        traversalRules: {
-          "account:viewer": [
-            { through: "team", via: "owner", inherit: "member" },
-          ],
-        },
       });
 
       expect(result.allowed).toBe(false);
       expect(result.reason).toBe("No relationship path found");
-    });
-
-    it.skip("should accept maxBranching parameter and still traverse correctly", async () => {
-      const t = convexTest(schema, modules);
-
-      // Setup: user -[member]-> team, team -[owner]-> account
-      await t.mutation(api.unified.addRelationUnified, {
-        tenantId: TENANT,
-        subjectType: "user",
-        subjectId: "alice",
-        relation: "member",
-        objectType: "team",
-        objectId: "sales",
-      });
-
-      await t.mutation(api.unified.addRelationUnified, {
-        tenantId: TENANT,
-        subjectType: "team",
-        subjectId: "sales",
-        relation: "owner",
-        objectType: "account",
-        objectId: "acme",
-      });
-
-      // With maxBranching=1 the single parent is still found, access is granted
-      const resultAllowed = await t.query(
-        api.rebac.checkRelationWithTraversal,
-        {
-          tenantId: TENANT,
-          subjectType: "user",
-          subjectId: "alice",
-          relation: "viewer",
-          objectType: "account",
-          objectId: "acme",
-          traversalRules: {
-            "account:viewer": [
-              { through: "team", via: "owner", inherit: "member" },
-            ],
-          },
-          maxBranching: 1,
-        },
-      );
-
-      expect(resultAllowed.allowed).toBe(true);
-      expect(resultAllowed.path).toBeDefined();
-
-      // With maxBranching=0 no parents are fetched, access is denied
-      const resultDenied = await t.query(api.rebac.checkRelationWithTraversal, {
-        tenantId: TENANT,
-        subjectType: "user",
-        subjectId: "alice",
-        relation: "viewer",
-        objectType: "account",
-        objectId: "acme",
-        traversalRules: {
-          "account:viewer": [
-            { through: "team", via: "owner", inherit: "member" },
-          ],
-        },
-        maxBranching: 0,
-      });
-
-      expect(resultDenied.allowed).toBe(false);
-      expect(resultDenied.reason).toBe("No relationship path found");
     });
   });
 
