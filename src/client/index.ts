@@ -298,7 +298,11 @@ export function defineRoles<P extends PermissionDefinition>(
           existing.includes = [...new Set([...prev, ...r.includes])];
         }
         for (const [key, value] of Object.entries(r)) {
-          if (RESERVED_ROLE_KEYS.includes(key as (typeof RESERVED_ROLE_KEYS)[number]))
+          if (
+            RESERVED_ROLE_KEYS.includes(
+              key as (typeof RESERVED_ROLE_KEYS)[number],
+            )
+          )
             continue;
           const existingArr = (existing[key] ?? []) as string[];
           const incomingArr = Array.isArray(value) ? (value as string[]) : [];
@@ -314,7 +318,7 @@ export function defineRoles<P extends PermissionDefinition>(
  * Define ABAC policies
  */
 export function definePolicies<Policy extends PolicyDefinition>(
-  policies: Policy
+  policies: Policy,
 ): Policy {
   return policies;
 }
@@ -324,7 +328,7 @@ export function definePolicies<Policy extends PolicyDefinition>(
  */
 export function evaluatePolicyCondition(
   condition: (ctx: PolicyContext) => boolean | Promise<boolean>,
-  ctx: PolicyContext
+  ctx: PolicyContext,
 ): Promise<boolean> {
   try {
     return Promise.resolve(condition(ctx)).catch(() => false);
@@ -340,12 +344,12 @@ export function evaluatePolicyCondition(
 function resolveRolePermissions(
   roles: Record<string, Record<string, unknown>>,
   roleName: string,
-  visited: Set<string>
+  visited: Set<string>,
 ): string[] {
   if (!Object.prototype.hasOwnProperty.call(roles, roleName)) return [];
   if (visited.has(roleName)) {
     throw new Error(
-      `Role inheritance cycle detected involving role "${roleName}"`
+      `Role inheritance cycle detected involving role "${roleName}"`,
     );
   }
   visited.add(roleName);
@@ -357,9 +361,7 @@ function resolveRolePermissions(
     if (inherits !== undefined && inherits !== null) {
       const ref = String(inherits);
       if (!Object.prototype.hasOwnProperty.call(roles, ref)) {
-        throw new Error(
-          `Role "${roleName}" inherits unknown role "${ref}"`
-        );
+        throw new Error(`Role "${roleName}" inherits unknown role "${ref}"`);
       }
       for (const p of resolveRolePermissions(roles, ref, visited)) perms.add(p);
     }
@@ -368,20 +370,21 @@ function resolveRolePermissions(
       for (const ref of includes) {
         const r = String(ref);
         if (!Object.prototype.hasOwnProperty.call(roles, r)) {
-          throw new Error(
-            `Role "${roleName}" includes unknown role "${r}"`
-          );
+          throw new Error(`Role "${roleName}" includes unknown role "${r}"`);
         }
         for (const p of resolveRolePermissions(roles, r, visited)) perms.add(p);
       }
     }
     for (const [resource, actions] of Object.entries(rolePerms)) {
       if (
-        RESERVED_ROLE_KEYS.includes(resource as (typeof RESERVED_ROLE_KEYS)[number])
+        RESERVED_ROLE_KEYS.includes(
+          resource as (typeof RESERVED_ROLE_KEYS)[number],
+        )
       )
         continue;
       if (Array.isArray(actions)) {
-        for (const action of actions) perms.add(`${resource}:${String(action)}`);
+        for (const action of actions)
+          perms.add(`${resource}:${String(action)}`);
       }
     }
     return [...perms];
@@ -397,7 +400,7 @@ function resolveRolePermissions(
  */
 export function flattenRolePermissions(
   roles: Record<string, Record<string, unknown>>,
-  roleName: string
+  roleName: string,
 ): string[] {
   const visited = new Set<string>();
   return resolveRolePermissions(roles, roleName, visited);
@@ -445,7 +448,9 @@ export class Authz<
       tenantId: string;
       // v2:
       relationPermissions?: RelationPermissionMap;
-    }
+      caveats?: Record<string, CaveatFunction>;
+      traversalRules?: TraversalRules;
+    },
   ) {
     validateTenantId(options.tenantId);
   }
@@ -460,7 +465,10 @@ export class Authz<
    */
   private buildRolePermissionsMap(): Record<string, string[]> {
     const map: Record<string, string[]> = {};
-    const roles = this.options.roles as unknown as Record<string, Record<string, string[]>>;
+    const roles = this.options.roles as unknown as Record<
+      string,
+      Record<string, string[]>
+    >;
 
     for (const roleName of Object.keys(roles)) {
       map[roleName] = flattenRolePermissions(roles, roleName);
@@ -478,7 +486,13 @@ export class Authz<
     userId: string,
     permission: string,
     scope?: Scope,
-  ): Promise<{ allowed: boolean; reason: string; tier: string; policyName?: string }> {
+  ): Promise<{
+    allowed: boolean;
+    reason: string;
+    tier: string;
+    policyName?: string;
+    sources?: string[];
+  }> {
     validateUserId(userId);
     validatePermission(permission);
     validateScope(scope);
@@ -501,9 +515,73 @@ export class Authz<
     permission: string,
     scope?: Scope,
     requestContext?: Record<string, unknown>,
+    sources?: string[],
   ): Promise<boolean> {
-    if (!policyName || !this.options.policies) return false;
-    const policy = (this.options.policies as Record<string, { condition: (ctx: PolicyContext) => boolean | Promise<boolean> }>)[policyName];
+    if (!policyName) return false;
+
+    // Special handling for relation caveats
+    if (policyName === "$relation_caveats") {
+      if (!scope) return false;
+
+      const relationSources = (sources || [])
+        .filter((s) => s.startsWith("relation:"))
+        .map((s) => s.substring(9));
+
+      if (relationSources.length === 0) return false;
+
+      // Evaluate caveats for all relevant relations
+      for (const rel of relationSources) {
+        const cachedRelations = await ctx.runQuery(
+          (this.component.indexed as any).getEffectiveRelationshipsForCaveats,
+          {
+            tenantId: this.options.tenantId,
+            subjectType: "user",
+            subjectId: userId,
+            relation: rel,
+            objectType: scope.type,
+            objectId: scope.id,
+          },
+        );
+
+        for (const path of cachedRelations) {
+          if (!path.caveats || path.caveats.length === 0) return true; // caveat-free path exists
+
+          let pathAllowed = true;
+          for (const caveat of path.caveats) {
+            const caveatFn = this.options.caveats?.[caveat.caveatName];
+            if (!caveatFn) {
+              console.error(`Caveat function ${caveat.caveatName} not found`);
+              pathAllowed = false;
+              break;
+            }
+
+            const result = await caveatFn({
+              subject: { type: "user", id: userId },
+              object: scope,
+              relation: rel,
+              caveatContext: { ...caveat.caveatContext, ...requestContext },
+            });
+
+            if (!result) {
+              pathAllowed = false;
+              break;
+            }
+          }
+
+          if (pathAllowed) return true;
+        }
+      }
+
+      return false;
+    }
+
+    if (!this.options.policies) return false;
+    const policy = (
+      this.options.policies as Record<
+        string,
+        { condition: (ctx: PolicyContext) => boolean | Promise<boolean> }
+      >
+    )[policyName];
     if (!policy) return false;
 
     // Fetch user attributes and roles for the context
@@ -520,7 +598,9 @@ export class Authz<
     ]);
 
     const roleNames = roles.map((r: { role: string }) => r.role);
-    const attrMap = Object.fromEntries(attrs.map((a: { key: string; value: unknown }) => [a.key, a.value]));
+    const attrMap = Object.fromEntries(
+      attrs.map((a: { key: string; value: unknown }) => [a.key, a.value]),
+    );
 
     const policyCtx: PolicyContext = {
       subject: {
@@ -528,12 +608,17 @@ export class Authz<
         roles: roleNames,
         attributes: attrMap,
       },
-      resource: scope ? { type: scope.type, id: scope.id, ...requestContext } : requestContext ? { type: "", id: "", ...requestContext } : undefined,
+      resource: scope
+        ? { type: scope.type, id: scope.id, ...requestContext }
+        : requestContext
+          ? { type: "", id: "", ...requestContext }
+          : undefined,
       action: permission,
       environment: { timestamp: Date.now() },
       hasRole: (role: string) => roleNames.includes(role),
       hasAttribute: (key: string) => key in attrMap,
-      getAttribute: <T = unknown>(key: string, defaultValue?: T) => (attrMap[key] as T) ?? defaultValue,
+      getAttribute: <T = unknown>(key: string, defaultValue?: T) =>
+        (attrMap[key] as T) ?? defaultValue,
     };
 
     return evaluatePolicyCondition(policy.condition, policyCtx);
@@ -551,13 +636,24 @@ export class Authz<
     ctx: QueryCtx | ActionCtx,
     userId: string,
     permission: PermissionArg<P>,
-    scope?: Scope
+    scope?: Scope,
   ): Promise<boolean> {
     const result = await this._checkPermission(ctx, userId, permission, scope);
     if (!result.allowed) return false;
     // For deferred policies, evaluate with empty context
-    if (result.tier === "deferred" && this.options.policies) {
-      return this._evaluateDeferredPolicy(ctx, userId, result.policyName, permission, scope);
+    if (
+      result.tier === "deferred" &&
+      (this.options.policies || result.policyName === "$relation_caveats")
+    ) {
+      return this._evaluateDeferredPolicy(
+        ctx,
+        userId,
+        result.policyName,
+        permission,
+        scope,
+        undefined,
+        result.sources,
+      );
     }
     return true;
   }
@@ -577,8 +673,19 @@ export class Authz<
   ): Promise<boolean> {
     const result = await this._checkPermission(ctx, userId, permission, scope);
     if (!result.allowed) return false;
-    if (result.tier === "deferred" && this.options.policies) {
-      return this._evaluateDeferredPolicy(ctx, userId, result.policyName, permission, scope, requestContext);
+    if (
+      result.tier === "deferred" &&
+      (this.options.policies || result.policyName === "$relation_caveats")
+    ) {
+      return this._evaluateDeferredPolicy(
+        ctx,
+        userId,
+        result.policyName,
+        permission,
+        scope,
+        requestContext,
+        result.sources,
+      );
     }
     return true;
   }
@@ -592,12 +699,12 @@ export class Authz<
     ctx: QueryCtx | ActionCtx,
     userId: string,
     permission: PermissionArg<P>,
-    scope?: Scope
+    scope?: Scope,
   ): Promise<void> {
     const allowed = await this.can(ctx, userId, permission, scope);
     if (!allowed) {
       throw new Error(
-        `Permission denied: ${permission}${scope ? ` on ${scope.type}:${scope.id}` : ""}`
+        `Permission denied: ${permission}${scope ? ` on ${scope.type}:${scope.id}` : ""}`,
       );
     }
   }
@@ -611,7 +718,7 @@ export class Authz<
     ctx: QueryCtx | ActionCtx,
     userId: string,
     permissions: PermissionArg<P>[],
-    scope?: Scope
+    scope?: Scope,
   ): Promise<boolean> {
     validateUserId(userId);
     validatePermissions(permissions as string[]);
@@ -631,7 +738,7 @@ export class Authz<
     ctx: QueryCtx | ActionCtx,
     userId: string,
     role: keyof R & string,
-    scope?: Scope
+    scope?: Scope,
   ): Promise<boolean> {
     validateUserId(userId);
     validateRole(role, this.options.roles);
@@ -665,7 +772,7 @@ export class Authz<
   async getUserPermissions(
     ctx: QueryCtx | ActionCtx,
     userId: string,
-    scope?: Scope
+    scope?: Scope,
   ) {
     validateUserId(userId);
     validateScope(scope);
@@ -697,7 +804,7 @@ export class Authz<
     role: keyof R & string,
     scope?: Scope,
     expiresAt?: number,
-    actorId?: string
+    actorId?: string,
   ): Promise<string> {
     validateUserId(userId);
     validateRole(role, this.options.roles);
@@ -705,16 +812,21 @@ export class Authz<
     validateOptionalExpiresAt(expiresAt);
     const rolePermissions = flattenRolePermissions(
       this.options.roles as unknown as Record<string, Record<string, string[]>>,
-      role
+      role,
     );
     // Build policy classifications for permissions being assigned
     // Static policies (type: "static" or undefined) are classified as "deferred" because
     // we cannot evaluate them at assignment time without user context (MutationCtx lacks runQuery).
     // They will be properly evaluated at read time in can().
-    const policyClassifications: Record<string, "deferred" | "allow" | "deny" | null> = {};
+    const policyClassifications: Record<
+      string,
+      "deferred" | "allow" | "deny" | null
+    > = {};
     if (this.options.policies) {
       for (const perm of rolePermissions) {
-        const policy = (this.options.policies as Record<string, { type?: string }>)[perm];
+        const policy = (
+          this.options.policies as Record<string, { type?: string }>
+        )[perm];
         if (policy) {
           policyClassifications[perm] = "deferred";
         }
@@ -729,7 +841,10 @@ export class Authz<
       expiresAt,
       assignedBy: actorId ?? this.options.defaultActorId,
       enableAudit: true,
-      policyClassifications: Object.keys(policyClassifications).length > 0 ? policyClassifications : undefined,
+      policyClassifications:
+        Object.keys(policyClassifications).length > 0
+          ? policyClassifications
+          : undefined,
     });
   }
 
@@ -741,14 +856,14 @@ export class Authz<
     userId: string,
     role: keyof R & string,
     scope?: Scope,
-    actorId?: string
+    actorId?: string,
   ): Promise<boolean> {
     validateUserId(userId);
     validateRole(role, this.options.roles);
     validateScope(scope);
     const rolePermissions = flattenRolePermissions(
       this.options.roles as unknown as Record<string, Record<string, string[]>>,
-      role
+      role,
     );
     return await ctx.runMutation(this.component.unified.revokeRoleUnified, {
       tenantId: this.options.tenantId,
@@ -769,7 +884,7 @@ export class Authz<
     ctx: MutationCtx | ActionCtx,
     userId: string,
     roles: RoleAssignItem[],
-    actorId?: string
+    actorId?: string,
   ): Promise<{ assigned: number; assignmentIds: string[] }> {
     validateUserId(userId);
     validateRoleAssignItems(roles, this.options.roles);
@@ -777,13 +892,18 @@ export class Authz<
     // Build policy classifications from all permissions across all roles being assigned
     // All policies (static and deferred) are classified as "deferred" because
     // we cannot evaluate static policies at assignment time without user context.
-    const policyClassifications: Record<string, "deferred" | "allow" | "deny" | null> = {};
+    const policyClassifications: Record<
+      string,
+      "deferred" | "allow" | "deny" | null
+    > = {};
     if (this.options.policies) {
       const rolePermissionsMap = this.buildRolePermissionsMap();
       for (const r of roles) {
         const perms = rolePermissionsMap[r.role] ?? [];
         for (const perm of perms) {
-          const policy = (this.options.policies as Record<string, { type?: string }>)[perm];
+          const policy = (
+            this.options.policies as Record<string, { type?: string }>
+          )[perm];
           if (policy) {
             policyClassifications[perm] = "deferred";
           }
@@ -802,7 +922,10 @@ export class Authz<
       assignedBy,
       enableAudit: true,
       tenantId: this.options.tenantId,
-      policyClassifications: Object.keys(policyClassifications).length > 0 ? policyClassifications : undefined,
+      policyClassifications:
+        Object.keys(policyClassifications).length > 0
+          ? policyClassifications
+          : undefined,
     });
   }
 
@@ -814,7 +937,7 @@ export class Authz<
     ctx: MutationCtx | ActionCtx,
     userId: string,
     roles: RoleScopeItem[],
-    actorId?: string
+    actorId?: string,
   ): Promise<{ revoked: number }> {
     validateUserId(userId);
     validateRoles(roles, this.options.roles);
@@ -836,7 +959,7 @@ export class Authz<
     ctx: MutationCtx | ActionCtx,
     userId: string,
     scope?: Scope,
-    actorId?: string
+    actorId?: string,
   ): Promise<number> {
     validateUserId(userId);
     validateScope(scope);
@@ -864,7 +987,7 @@ export class Authz<
       removeAttributes?: boolean;
       removeOverrides?: boolean;
       removeRelationships?: boolean;
-    }
+    },
   ): Promise<{
     rolesRevoked: number;
     overridesRemoved: number;
@@ -896,7 +1019,7 @@ export class Authz<
   async deprovisionUser(
     ctx: MutationCtx | ActionCtx,
     userId: string,
-    options?: { actorId?: string; enableAudit?: boolean }
+    options?: { actorId?: string; enableAudit?: boolean },
   ): Promise<{
     rolesRevoked: number;
     overridesRemoved: number;
@@ -923,18 +1046,21 @@ export class Authz<
     userId: string,
     key: string,
     value: unknown,
-    actorId?: string
+    actorId?: string,
   ): Promise<string> {
     validateUserId(userId);
     validateAttributeKey(key);
-    return await ctx.runMutation(this.component.unified.setAttributeWithRecompute, {
-      tenantId: this.options.tenantId,
-      userId,
-      key,
-      value,
-      setBy: actorId ?? this.options.defaultActorId,
-      enableAudit: true,
-    });
+    return await ctx.runMutation(
+      this.component.unified.setAttributeWithRecompute,
+      {
+        tenantId: this.options.tenantId,
+        userId,
+        key,
+        value,
+        setBy: actorId ?? this.options.defaultActorId,
+        enableAudit: true,
+      },
+    );
   }
 
   /**
@@ -944,22 +1070,33 @@ export class Authz<
     ctx: MutationCtx | ActionCtx,
     userId: string,
     key: string,
-    actorId?: string
+    actorId?: string,
   ): Promise<boolean> {
     validateUserId(userId);
     validateAttributeKey(key);
-    const result = await ctx.runMutation(this.component.mutations.removeAttribute, {
-      userId,
-      key,
-      removedBy: actorId ?? this.options.defaultActorId,
-      enableAudit: true,
-      tenantId: this.options.tenantId,
-    });
+    const result = await ctx.runMutation(
+      this.component.mutations.removeAttribute,
+      {
+        userId,
+        key,
+        removedBy: actorId ?? this.options.defaultActorId,
+        enableAudit: true,
+        tenantId: this.options.tenantId,
+      },
+    );
     // Trigger policy re-evaluation after attribute removal (policies may depend on this attribute)
     // All policies are classified as "deferred" so they are re-evaluated at read time.
-    if (this.options.policies && Object.keys(this.options.policies).length > 0) {
-      const policyClassifications: Record<string, "deferred" | "allow" | "deny" | null> = {};
-      for (const [name] of Object.entries(this.options.policies as Record<string, { type?: string }>)) {
+    if (
+      this.options.policies &&
+      Object.keys(this.options.policies).length > 0
+    ) {
+      const policyClassifications: Record<
+        string,
+        "deferred" | "allow" | "deny" | null
+      > = {};
+      for (const [name] of Object.entries(
+        this.options.policies as Record<string, { type?: string }>,
+      )) {
         policyClassifications[name] = "deferred";
       }
       await ctx.runMutation(this.component.unified.recomputeUser, {
@@ -985,22 +1122,25 @@ export class Authz<
     scope?: Scope,
     reason?: string,
     expiresAt?: number,
-    actorId?: string
+    actorId?: string,
   ): Promise<string> {
     validateUserId(userId);
     validatePermission(permission);
     validateScope(scope);
     validateOptionalExpiresAt(expiresAt);
-    return await ctx.runMutation(this.component.unified.grantPermissionUnified, {
-      tenantId: this.options.tenantId,
-      userId,
-      permission,
-      scope,
-      reason,
-      expiresAt,
-      createdBy: actorId ?? this.options.defaultActorId,
-      enableAudit: true,
-    });
+    return await ctx.runMutation(
+      this.component.unified.grantPermissionUnified,
+      {
+        tenantId: this.options.tenantId,
+        userId,
+        permission,
+        scope,
+        reason,
+        expiresAt,
+        createdBy: actorId ?? this.options.defaultActorId,
+        enableAudit: true,
+      },
+    );
   }
 
   /**
@@ -1015,7 +1155,7 @@ export class Authz<
     scope?: Scope,
     reason?: string,
     expiresAt?: number,
-    actorId?: string
+    actorId?: string,
   ): Promise<string> {
     validateUserId(userId);
     validatePermission(permission);
@@ -1062,7 +1202,13 @@ export class Authz<
     object: { type: string; id: string },
     options?: { caveat?: string; caveatContext?: unknown; createdBy?: string },
   ): Promise<string> {
-    validateRelationArgs(subject.type, subject.id, relation, object.type, object.id);
+    validateRelationArgs(
+      subject.type,
+      subject.id,
+      relation,
+      object.type,
+      object.id,
+    );
     return ctx.runMutation(this.component.unified.addRelationUnified, {
       subjectType: subject.type,
       subjectId: subject.id,
@@ -1088,7 +1234,13 @@ export class Authz<
     object: { type: string; id: string },
     actorId?: string,
   ): Promise<boolean> {
-    validateRelationArgs(subject.type, subject.id, relation, object.type, object.id);
+    validateRelationArgs(
+      subject.type,
+      subject.id,
+      relation,
+      object.type,
+      object.id,
+    );
     return ctx.runMutation(this.component.unified.removeRelationUnified, {
       subjectType: subject.type,
       subjectId: subject.id,
@@ -1106,13 +1258,21 @@ export class Authz<
    * Recompute all indexed data for a user (effectiveRoles, effectivePermissions).
    * Useful when role definitions change and you need to rebuild the index.
    */
-  async recomputeUser(ctx: MutationCtx | ActionCtx, userId: string): Promise<void> {
+  async recomputeUser(
+    ctx: MutationCtx | ActionCtx,
+    userId: string,
+  ): Promise<void> {
     validateUserId(userId);
     // Build policy classifications from policies config
     // All policies are classified as "deferred" so they are evaluated at read time in can().
-    const policyClassifications: Record<string, "deferred" | "allow" | "deny" | null> = {};
+    const policyClassifications: Record<
+      string,
+      "deferred" | "allow" | "deny" | null
+    > = {};
     if (this.options.policies) {
-      for (const [name] of Object.entries(this.options.policies as Record<string, { type?: string }>)) {
+      for (const [name] of Object.entries(
+        this.options.policies as Record<string, { type?: string }>,
+      )) {
         policyClassifications[name] = "deferred";
       }
     }
@@ -1120,7 +1280,10 @@ export class Authz<
       tenantId: this.options.tenantId,
       userId,
       rolePermissionsMap: this.buildRolePermissionsMap(),
-      policyClassifications: Object.keys(policyClassifications).length > 0 ? policyClassifications : undefined,
+      policyClassifications:
+        Object.keys(policyClassifications).length > 0
+          ? policyClassifications
+          : undefined,
     });
   }
 
@@ -1139,7 +1302,7 @@ export class Authz<
       numItems?: number;
       /** Cursor from previous page to fetch next page. */
       cursor?: string | null;
-    }
+    },
   ): Promise<
     | Array<{
         _id: string;
@@ -1229,7 +1392,7 @@ export function defineTraversalRules(rules: TraversalRules): TraversalRules {
  * ```
  */
 export function defineRelationPermissions(
-  map: RelationPermissionMap
+  map: RelationPermissionMap,
 ): RelationPermissionMap {
   return map;
 }
@@ -1246,7 +1409,7 @@ export function defineRelationPermissions(
  * ```
  */
 export function defineCaveats(
-  caveats: Record<string, CaveatFunction>
+  caveats: Record<string, CaveatFunction>,
 ): Record<string, CaveatFunction> {
   return caveats;
 }

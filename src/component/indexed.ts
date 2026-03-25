@@ -34,9 +34,10 @@ export const checkPermissionFast = query({
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    const scopeKey = args.objectType && args.objectId
-      ? `${args.objectType}:${args.objectId}`
-      : "global";
+    const scopeKey =
+      args.objectType && args.objectId
+        ? `${args.objectType}:${args.objectId}`
+        : "global";
 
     // O(1) indexed lookup
     const cached = await ctx.db
@@ -46,7 +47,7 @@ export const checkPermissionFast = query({
           .eq("tenantId", args.tenantId)
           .eq("userId", args.userId)
           .eq("permission", args.permission)
-          .eq("scopeKey", scopeKey)
+          .eq("scopeKey", scopeKey),
       )
       .unique();
 
@@ -81,19 +82,23 @@ export const checkPermissionsFast = query({
     if (args.permissions.length === 0) return false;
     if (args.permissions.length > MAX_BULK_PERMISSIONS) {
       throw new Error(
-        `permissions must not exceed ${MAX_BULK_PERMISSIONS} items (got ${args.permissions.length})`
+        `permissions must not exceed ${MAX_BULK_PERMISSIONS} items (got ${args.permissions.length})`,
       );
     }
 
-    const scopeKey = args.objectType && args.objectId
-      ? `${args.objectType}:${args.objectId}`
-      : "global";
+    const scopeKey =
+      args.objectType && args.objectId
+        ? `${args.objectType}:${args.objectId}`
+        : "global";
 
     const now = Date.now();
     const rows = await ctx.db
       .query("effectivePermissions")
       .withIndex("by_tenant_user_scope", (q) =>
-        q.eq("tenantId", args.tenantId).eq("userId", args.userId).eq("scopeKey", scopeKey)
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("userId", args.userId)
+          .eq("scopeKey", scopeKey),
       )
       .take(1000);
 
@@ -135,9 +140,10 @@ export const hasRoleFast = query({
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    const scopeKey = args.objectType && args.objectId
-      ? `${args.objectType}:${args.objectId}`
-      : "global";
+    const scopeKey =
+      args.objectType && args.objectId
+        ? `${args.objectType}:${args.objectId}`
+        : "global";
 
     // O(1) indexed lookup
     const cached = await ctx.db
@@ -147,7 +153,7 @@ export const hasRoleFast = query({
           .eq("tenantId", args.tenantId)
           .eq("userId", args.userId)
           .eq("role", args.role)
-          .eq("scopeKey", scopeKey)
+          .eq("scopeKey", scopeKey),
       )
       .unique();
 
@@ -185,11 +191,54 @@ export const hasRelationFast = query({
           .eq("tenantId", args.tenantId)
           .eq("subjectKey", `${args.subjectType}:${args.subjectId}`)
           .eq("relation", args.relation)
-          .eq("objectKey", `${args.objectType}:${args.objectId}`)
+          .eq("objectKey", `${args.objectType}:${args.objectId}`),
       )
-      .unique();
+      .take(1);
 
-    return cached !== null;
+    return cached.length > 0;
+  },
+});
+
+export const getEffectiveRelationshipsForCaveats = query({
+  args: {
+    tenantId: v.string(),
+    subjectType: v.string(),
+    subjectId: v.string(),
+    relation: v.string(),
+    objectType: v.string(),
+    objectId: v.string(),
+  },
+  returns: v.array(
+    v.object({
+      _id: v.string(),
+      path: v.optional(v.array(v.string())),
+      caveats: v.optional(
+        v.array(
+          v.object({
+            caveatName: v.string(),
+            caveatContext: v.optional(v.any()),
+          }),
+        ),
+      ),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const cached = await ctx.db
+      .query("effectiveRelationships")
+      .withIndex("by_tenant_subject_relation_object", (q) =>
+        q
+          .eq("tenantId", args.tenantId)
+          .eq("subjectKey", `${args.subjectType}:${args.subjectId}`)
+          .eq("relation", args.relation)
+          .eq("objectKey", `${args.objectType}:${args.objectId}`),
+      )
+      .take(1000);
+
+    return cached.map((c) => ({
+      _id: c._id,
+      path: c.path,
+      caveats: c.caveats,
+    }));
   },
 });
 
@@ -212,7 +261,7 @@ export const getUserPermissionsFast = query({
       effect: v.string(),
       scopeKey: v.string(),
       sources: v.array(v.string()),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     let permissions;
@@ -221,14 +270,17 @@ export const getUserPermissionsFast = query({
       permissions = await ctx.db
         .query("effectivePermissions")
         .withIndex("by_tenant_user_scope", (q) =>
-          q.eq("tenantId", args.tenantId).eq("userId", args.userId).eq("scopeKey", args.scopeKey as string)
+          q
+            .eq("tenantId", args.tenantId)
+            .eq("userId", args.userId)
+            .eq("scopeKey", args.scopeKey as string),
         )
         .take(1000);
     } else {
       permissions = await ctx.db
         .query("effectivePermissions")
         .withIndex("by_tenant_user", (q) =>
-          q.eq("tenantId", args.tenantId).eq("userId", args.userId)
+          q.eq("tenantId", args.tenantId).eq("userId", args.userId),
         )
         .take(1000);
     }
@@ -259,7 +311,7 @@ export const getUserRolesFast = query({
       role: v.string(),
       scopeKey: v.string(),
       scope: v.optional(v.object({ type: v.string(), id: v.string() })),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     let roles;
@@ -268,14 +320,17 @@ export const getUserRolesFast = query({
       roles = await ctx.db
         .query("effectiveRoles")
         .withIndex("by_tenant_user_scope", (q) =>
-          q.eq("tenantId", args.tenantId).eq("userId", args.userId).eq("scopeKey", args.scopeKey as string)
+          q
+            .eq("tenantId", args.tenantId)
+            .eq("userId", args.userId)
+            .eq("scopeKey", args.scopeKey as string),
         )
         .take(1000);
     } else {
       roles = await ctx.db
         .query("effectiveRoles")
         .withIndex("by_tenant_user", (q) =>
-          q.eq("tenantId", args.tenantId).eq("userId", args.userId)
+          q.eq("tenantId", args.tenantId).eq("userId", args.userId),
         )
         .take(1000);
     }
@@ -346,10 +401,7 @@ export const cleanupExpired = mutation({
               q.eq("tenantId", args.tenantId!),
             )
             .take(CLEANUP_BATCH)
-        : await ctx.db
-            .query("effectiveRoles")
-            .order("asc")
-            .take(CLEANUP_BATCH);
+        : await ctx.db.query("effectiveRoles").order("asc").take(CLEANUP_BATCH);
       if (roles.length === 0) break;
       let deletedAny = false;
       for (const role of roles) {

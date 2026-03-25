@@ -15,6 +15,131 @@ import { mutation, query } from "./_generated/server.js";
 import { scopeValidator } from "./validators.js";
 import { isExpired, matchesPermissionPattern } from "./helpers.js";
 
+// Helper for ReBAC updates to effectivePermissions
+async function updatePermissionsForRelation(
+  ctx: any,
+  tenantId: string | undefined,
+  subjectType: string,
+  subjectId: string,
+  relation: string,
+  objectType: string,
+  objectId: string,
+  relationPermissions: Record<string, string[]> | undefined,
+  now: number,
+) {
+  if (!relationPermissions) return;
+
+  const relationKey = `${objectType}:${relation}`;
+  const permissions = relationPermissions[relationKey] ?? [];
+  if (permissions.length === 0) return;
+
+  const subjectKey = `${subjectType}:${subjectId}`;
+  const objectKey = `${objectType}:${objectId}`;
+
+  // Find all effective relationships for this path
+  const paths = await ctx.db
+    .query("effectiveRelationships")
+    .withIndex("by_tenant_subject_relation_object", (q: any) =>
+      q
+        .eq("tenantId", tenantId)
+        .eq("subjectKey", subjectKey)
+        .eq("relation", relation)
+        .eq("objectKey", objectKey),
+    )
+    .take(1000);
+
+  const scopeKey = `${objectType}:${objectId}`;
+  const scope = { type: objectType, id: objectId };
+  const sourceLabel = `relation:${relation}`;
+  const userId =
+    subjectType === "user" ? subjectId : `${subjectType}:${subjectId}`;
+
+  const hasAnyPath = paths.length > 0;
+  let allHaveCaveats = true;
+  for (const p of paths) {
+    if (!p.caveats || p.caveats.length === 0) {
+      allHaveCaveats = false;
+      break;
+    }
+  }
+
+  for (const permission of permissions) {
+    const existingPerm = await ctx.db
+      .query("effectivePermissions")
+      .withIndex("by_tenant_user_permission_scope", (q: any) =>
+        q
+          .eq("tenantId", tenantId)
+          .eq("userId", userId)
+          .eq("permission", permission)
+          .eq("scopeKey", scopeKey),
+      )
+      .unique();
+
+    if (!hasAnyPath) {
+      // Remove source
+      if (existingPerm) {
+        const updatedSources = existingPerm.sources.filter(
+          (s: string) => s !== sourceLabel,
+        );
+        if (
+          updatedSources.length === 0 &&
+          !existingPerm.directGrant &&
+          !existingPerm.directDeny
+        ) {
+          await ctx.db.delete(existingPerm._id);
+        } else if (updatedSources.length !== existingPerm.sources.length) {
+          await ctx.db.patch(existingPerm._id, {
+            sources: updatedSources,
+            updatedAt: now,
+          });
+        }
+      }
+      continue;
+    }
+
+    // Add source and update policyResult if needed
+    if (existingPerm) {
+      const sources = existingPerm.sources.includes(sourceLabel)
+        ? existingPerm.sources
+        : [...existingPerm.sources, sourceLabel];
+
+      const patchData: any = { sources, updatedAt: now };
+
+      if (allHaveCaveats) {
+        if (existingPerm.policyResult !== "deferred") {
+          patchData.policyResult = "deferred";
+          patchData.policyName = "$relation_caveats";
+        }
+      } else {
+        if (
+          existingPerm.policyResult === "deferred" &&
+          existingPerm.policyName === "$relation_caveats"
+        ) {
+          patchData.policyResult = "allow";
+          patchData.policyName = undefined;
+        }
+      }
+
+      await ctx.db.patch(existingPerm._id, patchData);
+    } else {
+      await ctx.db.insert("effectivePermissions", {
+        tenantId,
+        userId,
+        permission,
+        scopeKey,
+        scope,
+        effect: "allow",
+        sources: [sourceLabel],
+        createdAt: now,
+        updatedAt: now,
+        ...(allHaveCaveats
+          ? { policyResult: "deferred", policyName: "$relation_caveats" }
+          : {}),
+      });
+    }
+  }
+}
+
 /**
  * Exact scope equality check for duplicate detection.
  * Unlike matchesScope (which is asymmetric — global matches everything),
@@ -41,6 +166,7 @@ export const checkPermission = query({
     reason: v.string(),
     tier: v.string(),
     policyName: v.optional(v.string()),
+    sources: v.optional(v.array(v.string())),
   }),
   handler: async (ctx, args) => {
     // Compute scopeKey
@@ -56,7 +182,7 @@ export const checkPermission = query({
           .eq("tenantId", args.tenantId)
           .eq("userId", args.userId)
           .eq("permission", args.permission)
-          .eq("scopeKey", scopeKey)
+          .eq("scopeKey", scopeKey),
       )
       .unique();
 
@@ -74,16 +200,24 @@ export const checkPermission = query({
       const globalRows = await ctx.db
         .query("effectivePermissions")
         .withIndex("by_tenant_user_scope", (q) =>
-          q.eq("tenantId", args.tenantId)
+          q
+            .eq("tenantId", args.tenantId)
             .eq("userId", args.userId)
-            .eq("scopeKey", "global")
+            .eq("scopeKey", "global"),
         )
         .take(4000);
 
       for (const row of globalRows) {
         if (isExpired(row.expiresAt)) continue;
-        if (row.effect === "deny" && matchesPermissionPattern(args.permission, row.permission)) {
-          return { allowed: false, reason: "Denied by global pattern", tier: "cached" };
+        if (
+          row.effect === "deny" &&
+          matchesPermissionPattern(args.permission, row.permission)
+        ) {
+          return {
+            allowed: false,
+            reason: "Denied by global pattern",
+            tier: "cached",
+          };
         }
       }
     }
@@ -100,7 +234,7 @@ export const checkPermission = query({
           q
             .eq("tenantId", args.tenantId)
             .eq("userId", args.userId)
-            .eq("scopeKey", scopeKey)
+            .eq("scopeKey", scopeKey),
         )
         .take(4000);
 
@@ -133,6 +267,7 @@ export const checkPermission = query({
           reason: "Allowed (policy deferred)",
           tier: "deferred",
           policyName: exact.policyName,
+          sources: exact.sources,
         };
       }
 
@@ -152,7 +287,7 @@ export const checkPermission = query({
         q
           .eq("tenantId", args.tenantId)
           .eq("userId", args.userId)
-          .eq("scopeKey", scopeKey)
+          .eq("scopeKey", scopeKey),
       )
       .take(4000);
 
@@ -187,6 +322,7 @@ export const checkPermission = query({
             reason: "Allowed by pattern (policy deferred)",
             tier: "deferred",
             policyName: row.policyName,
+            sources: row.sources,
           };
         }
 
@@ -224,12 +360,17 @@ export const assignRoleUnified = mutation({
     assignedBy: v.optional(v.string()),
     metadata: v.optional(v.any()),
     enableAudit: v.optional(v.boolean()),
-    policyClassifications: v.optional(v.record(v.string(), v.union(
-      v.null(),
-      v.literal("allow"),
-      v.literal("deny"),
-      v.literal("deferred"),
-    ))),
+    policyClassifications: v.optional(
+      v.record(
+        v.string(),
+        v.union(
+          v.null(),
+          v.literal("allow"),
+          v.literal("deny"),
+          v.literal("deferred"),
+        ),
+      ),
+    ),
   },
   returns: v.string(),
   handler: async (ctx, args) => {
@@ -247,7 +388,7 @@ export const assignRoleUnified = mutation({
         q
           .eq("tenantId", args.tenantId)
           .eq("userId", args.userId)
-          .eq("role", args.role)
+          .eq("role", args.role),
       )
       .take(100);
 
@@ -256,7 +397,8 @@ export const assignRoleUnified = mutation({
         // Extend expiry: only update if new value is later or removes expiry entirely.
         // Passing a shorter expiresAt is a no-op (prevents accidental expiry reduction).
         // To shorten expiry, revoke and re-assign.
-        const shouldExtend = args.expiresAt === undefined ||
+        const shouldExtend =
+          args.expiresAt === undefined ||
           (row.expiresAt !== undefined && args.expiresAt > row.expiresAt);
         if (shouldExtend && args.expiresAt !== row.expiresAt) {
           const newExpiry = args.expiresAt;
@@ -269,34 +411,45 @@ export const assignRoleUnified = mutation({
           const effRole = await ctx.db
             .query("effectiveRoles")
             .withIndex("by_tenant_user_role_scope", (q) =>
-              q.eq("tenantId", args.tenantId)
+              q
+                .eq("tenantId", args.tenantId)
                 .eq("userId", args.userId)
                 .eq("role", args.role)
-                .eq("scopeKey", scopeKey)
+                .eq("scopeKey", scopeKey),
             )
             .unique();
           if (effRole) {
-            await ctx.db.patch(effRole._id, { expiresAt: newExpiry, updatedAt: Date.now() });
+            await ctx.db.patch(effRole._id, {
+              expiresAt: newExpiry,
+              updatedAt: Date.now(),
+            });
           }
           // 3. Update effectivePermissions for this role's permissions
           for (const permission of args.rolePermissions) {
             const effPerm = await ctx.db
               .query("effectivePermissions")
               .withIndex("by_tenant_user_permission_scope", (q) =>
-                q.eq("tenantId", args.tenantId)
+                q
+                  .eq("tenantId", args.tenantId)
                   .eq("userId", args.userId)
                   .eq("permission", permission)
-                  .eq("scopeKey", scopeKey)
+                  .eq("scopeKey", scopeKey),
               )
               .unique();
             if (effPerm && effPerm.sources.includes(args.role)) {
               // Recompute merged expiresAt considering all sources
               // Since we can't cheaply check all other sources' expiry,
               // just set to the new (extended) value
-              const mergedExpiry = effPerm.expiresAt === undefined ? undefined
-                : newExpiry === undefined ? undefined
-                : Math.max(effPerm.expiresAt, newExpiry);
-              await ctx.db.patch(effPerm._id, { expiresAt: mergedExpiry, updatedAt: Date.now() });
+              const mergedExpiry =
+                effPerm.expiresAt === undefined
+                  ? undefined
+                  : newExpiry === undefined
+                    ? undefined
+                    : Math.max(effPerm.expiresAt, newExpiry);
+              await ctx.db.patch(effPerm._id, {
+                expiresAt: mergedExpiry,
+                updatedAt: Date.now(),
+              });
             }
           }
         }
@@ -323,7 +476,7 @@ export const assignRoleUnified = mutation({
           .eq("tenantId", args.tenantId)
           .eq("userId", args.userId)
           .eq("role", args.role)
-          .eq("scopeKey", scopeKey)
+          .eq("scopeKey", scopeKey),
       )
       .unique();
 
@@ -363,7 +516,7 @@ export const assignRoleUnified = mutation({
             .eq("tenantId", args.tenantId)
             .eq("userId", args.userId)
             .eq("permission", permission)
-            .eq("scopeKey", scopeKey)
+            .eq("scopeKey", scopeKey),
         )
         .unique();
 
@@ -383,9 +536,10 @@ export const assignRoleUnified = mutation({
         // Compute merged expiresAt: no-expiry (undefined) wins over any expiry
         const existingExpiry = existingPerm.expiresAt;
         const newExpiry = args.expiresAt;
-        const mergedExpiresAt = existingExpiry === undefined || newExpiry === undefined
-          ? undefined
-          : Math.max(existingExpiry, newExpiry);
+        const mergedExpiresAt =
+          existingExpiry === undefined || newExpiry === undefined
+            ? undefined
+            : Math.max(existingExpiry, newExpiry);
         patchData.expiresAt = mergedExpiresAt;
         await ctx.db.patch(existingPerm._id, patchData);
       } else {
@@ -461,12 +615,12 @@ export const revokeRoleUnified = mutation({
         q
           .eq("tenantId", args.tenantId)
           .eq("userId", args.userId)
-          .eq("role", args.role)
+          .eq("role", args.role),
       )
       .take(100);
 
-    const assignment = assignments.find(
-      (row) => scopeEquals(row.scope, args.scope)
+    const assignment = assignments.find((row) =>
+      scopeEquals(row.scope, args.scope),
     );
 
     if (!assignment) {
@@ -484,7 +638,7 @@ export const revokeRoleUnified = mutation({
           .eq("tenantId", args.tenantId)
           .eq("userId", args.userId)
           .eq("role", args.role)
-          .eq("scopeKey", scopeKey)
+          .eq("scopeKey", scopeKey),
       )
       .unique();
 
@@ -501,17 +655,21 @@ export const revokeRoleUnified = mutation({
             .eq("tenantId", args.tenantId)
             .eq("userId", args.userId)
             .eq("permission", permission)
-            .eq("scopeKey", scopeKey)
+            .eq("scopeKey", scopeKey),
         )
         .unique();
 
       if (!effectivePerm) continue;
 
       const updatedSources = effectivePerm.sources.filter(
-        (s) => s !== args.role
+        (s) => s !== args.role,
       );
 
-      if (updatedSources.length === 0 && !effectivePerm.directGrant && !effectivePerm.directDeny) {
+      if (
+        updatedSources.length === 0 &&
+        !effectivePerm.directGrant &&
+        !effectivePerm.directDeny
+      ) {
         // No more sources, no direct grant, no direct deny — delete the row
         await ctx.db.delete(effectivePerm._id);
       } else if (updatedSources.length !== effectivePerm.sources.length) {
@@ -576,12 +734,12 @@ export const grantPermissionUnified = mutation({
         q
           .eq("tenantId", args.tenantId)
           .eq("userId", args.userId)
-          .eq("permission", args.permission)
+          .eq("permission", args.permission),
       )
       .take(100);
 
     const existingOverride = existingOverrides.find((row) =>
-      scopeEquals(row.scope, args.scope)
+      scopeEquals(row.scope, args.scope),
     );
 
     let overrideId: string;
@@ -615,24 +773,25 @@ export const grantPermissionUnified = mutation({
           .eq("tenantId", args.tenantId)
           .eq("userId", args.userId)
           .eq("permission", args.permission)
-          .eq("scopeKey", scopeKey)
+          .eq("scopeKey", scopeKey),
       )
       .unique();
 
     if (existingPerm) {
       // Compute merged expiry: if existing row has sources with role-based grants,
       // the expiry should be the later of existing vs new (and undefined = no expiry wins)
-      const mergedExpiresAt = existingPerm.sources.length > 0
-        ? (existingPerm.expiresAt === undefined || args.expiresAt === undefined
+      const mergedExpiresAt =
+        existingPerm.sources.length > 0
+          ? existingPerm.expiresAt === undefined || args.expiresAt === undefined
             ? undefined
-            : Math.max(existingPerm.expiresAt, args.expiresAt))
-        : args.expiresAt;
+            : Math.max(existingPerm.expiresAt, args.expiresAt)
+          : args.expiresAt;
 
       await ctx.db.patch(existingPerm._id, {
         directGrant: true,
         directDeny: undefined,
         effect: "allow",
-        policyResult: undefined,  // explicit grant overrides any policy result
+        policyResult: undefined, // explicit grant overrides any policy result
         policyName: undefined,
         reason: args.reason,
         expiresAt: mergedExpiresAt,
@@ -695,10 +854,9 @@ export const setAttributeWithRecompute = mutation({
     enableAudit: v.optional(v.boolean()),
     // v2: pre-evaluated policy results from client
     // Map of permission -> new policy result after attribute change
-    policyReEvaluations: v.optional(v.record(v.string(), v.union(
-      v.literal("allow"),
-      v.literal("deny"),
-    ))),
+    policyReEvaluations: v.optional(
+      v.record(v.string(), v.union(v.literal("allow"), v.literal("deny"))),
+    ),
   },
   returns: v.string(), // attribute ID
   handler: async (ctx, args) => {
@@ -711,7 +869,7 @@ export const setAttributeWithRecompute = mutation({
         q
           .eq("tenantId", args.tenantId)
           .eq("userId", args.userId)
-          .eq("key", args.key)
+          .eq("key", args.key),
       )
       .unique();
 
@@ -735,26 +893,28 @@ export const setAttributeWithRecompute = mutation({
       const allEffectivePerms = await ctx.db
         .query("effectivePermissions")
         .withIndex("by_tenant_user", (q) =>
-          q
-            .eq("tenantId", args.tenantId)
-            .eq("userId", args.userId)
+          q.eq("tenantId", args.tenantId).eq("userId", args.userId),
         )
         .take(4000);
 
-      for (const [permission, newResult] of Object.entries(args.policyReEvaluations)) {
+      for (const [permission, newResult] of Object.entries(
+        args.policyReEvaluations,
+      )) {
         const matchingPerms = allEffectivePerms.filter(
-          (p) => p.permission === permission
+          (p) => p.permission === permission,
         );
 
         for (const effectivePerm of matchingPerms) {
-
           if (newResult === "deny" && effectivePerm.effect === "allow") {
             // Mark as denied via policyResult
             await ctx.db.patch(effectivePerm._id, {
               policyResult: "deny",
               updatedAt: now,
             });
-          } else if (newResult === "allow" && effectivePerm.policyResult === "deny") {
+          } else if (
+            newResult === "allow" &&
+            effectivePerm.policyResult === "deny"
+          ) {
             // Policy now allows — restore allow state
             await ctx.db.patch(effectivePerm._id, {
               policyResult: "allow",
@@ -777,9 +937,10 @@ export const setAttributeWithRecompute = mutation({
         details: {
           attribute: {
             key: args.key,
-            value: typeof args.value === "string" && args.value.length > 1000
-              ? args.value.slice(0, 1000) + "...[truncated]"
-              : args.value,
+            value:
+              typeof args.value === "string" && args.value.length > 1000
+                ? args.value.slice(0, 1000) + "...[truncated]"
+                : args.value,
           },
         },
       });
@@ -812,10 +973,13 @@ export const addRelationUnified = mutation({
     createdBy: v.optional(v.string()),
     enableAudit: v.optional(v.boolean()),
     relationPermissions: v.optional(v.record(v.string(), v.array(v.string()))),
+    traversalRules: v.optional(v.any()),
+    maxDepth: v.optional(v.number()),
   },
   returns: v.string(), // relation ID
   handler: async (ctx, args) => {
     const now = Date.now();
+    const maxDepth = args.maxDepth ?? 5;
 
     // 1. Check for duplicate in relationships (idempotent)
     const existing = await ctx.db
@@ -827,110 +991,206 @@ export const addRelationUnified = mutation({
           .eq("subjectId", args.subjectId)
           .eq("relation", args.relation)
           .eq("objectType", args.objectType)
-          .eq("objectId", args.objectId)
+          .eq("objectId", args.objectId),
       )
       .unique();
 
     if (existing) {
-      // Repair: ensure effectiveRelationships is also populated
-      const subjectKey = `${args.subjectType}:${args.subjectId}`;
-      const objectKey = `${args.objectType}:${args.objectId}`;
+      // Check if effectiveRelationships is missing
       const existingEffective = await ctx.db
         .query("effectiveRelationships")
         .withIndex("by_tenant_subject_relation_object", (q) =>
-          q.eq("tenantId", args.tenantId)
-            .eq("subjectKey", subjectKey)
+          q
+            .eq("tenantId", args.tenantId)
+            .eq("subjectKey", `${args.subjectType}:${args.subjectId}`)
             .eq("relation", args.relation)
-            .eq("objectKey", objectKey)
+            .eq("objectKey", `${args.objectType}:${args.objectId}`),
         )
-        .unique();
-      if (!existingEffective) {
-        await ctx.db.insert("effectiveRelationships", {
-          tenantId: args.tenantId,
-          subjectKey, subjectType: args.subjectType, subjectId: args.subjectId,
-          relation: args.relation,
-          objectKey, objectType: args.objectType, objectId: args.objectId,
-          isDirect: true, inheritedFrom: null,
-          createdBy: args.createdBy, createdAt: Date.now(), depth: 0,
-        });
+        .first();
+
+      if (existingEffective) {
+        return existing._id;
       }
-      return existing._id;
     }
 
     // 2. Insert into relationships (source of truth)
-    const relationId = await ctx.db.insert("relationships", {
-      tenantId: args.tenantId,
+    const relationId = existing
+      ? existing._id
+      : await ctx.db.insert("relationships", {
+          tenantId: args.tenantId,
+          subjectType: args.subjectType,
+          subjectId: args.subjectId,
+          relation: args.relation,
+          objectType: args.objectType,
+          objectId: args.objectId,
+          createdBy: args.createdBy,
+          createdAt: now,
+          ...(args.caveat !== undefined ? { caveat: args.caveat } : {}),
+          ...(args.caveatContext !== undefined
+            ? { caveatContext: args.caveatContext }
+            : {}),
+        });
+
+    // 3. Setup Traversal
+    const rules = args.traversalRules || {};
+    const queue: any[] = [];
+
+    // Add the direct relationship path
+    const directCaveats = args.caveat
+      ? [{ caveatName: args.caveat, caveatContext: args.caveatContext }]
+      : [];
+
+    queue.push({
       subjectType: args.subjectType,
       subjectId: args.subjectId,
       relation: args.relation,
       objectType: args.objectType,
       objectId: args.objectId,
-      createdBy: args.createdBy,
-      createdAt: now,
-      ...(args.caveat !== undefined ? { caveat: args.caveat } : {}),
-      ...(args.caveatContext !== undefined
-        ? { caveatContext: args.caveatContext }
-        : {}),
-    });
-
-    // 3. Insert into effectiveRelationships (materialized)
-    const subjectKey = `${args.subjectType}:${args.subjectId}`;
-    const objectKey = `${args.objectType}:${args.objectId}`;
-
-    await ctx.db.insert("effectiveRelationships", {
-      tenantId: args.tenantId,
-      subjectKey,
-      subjectType: args.subjectType,
-      subjectId: args.subjectId,
-      relation: args.relation,
-      objectKey,
-      objectType: args.objectType,
-      objectId: args.objectId,
-      isDirect: true,
-      inheritedFrom: null,
-      createdBy: args.createdBy,
-      createdAt: now,
+      directRelationId: relationId,
+      baseEffectiveId: undefined,
+      path: [relationId],
+      caveats: directCaveats,
       depth: 0,
     });
 
-    // 4. Bridge: write relation-derived permissions to effectivePermissions
-    if (args.relationPermissions) {
-      const relationKey = `${args.objectType}:${args.relation}`;
-      const permissions = args.relationPermissions[relationKey] ?? [];
-      const scopeKey = `${args.objectType}:${args.objectId}`;
-      const scope = { type: args.objectType, id: args.objectId };
-      const sourceLabel = `relation:${args.relation}`;
+    // Direction 2: Find existing paths that can be extended by this new relation
+    for (const [targetKey, ruleList] of Object.entries(rules)) {
+      const [targetType, targetRelation] = targetKey.split(":");
+      for (const rule of ruleList as any[]) {
+        if (
+          rule.via === args.relation &&
+          rule.through === args.subjectType &&
+          targetType === args.objectType
+        ) {
+          // Find all existing paths where subject -> rule.inherit -> args.subjectId
+          const basePaths = await ctx.db
+            .query("effectiveRelationships")
+            .withIndex("by_tenant_object", (q) =>
+              q
+                .eq("tenantId", args.tenantId)
+                .eq("objectKey", `${args.subjectType}:${args.subjectId}`),
+            )
+            .take(1000);
 
-      for (const permission of permissions) {
-        const existingPerm = await ctx.db
-          .query("effectivePermissions")
-          .withIndex("by_tenant_user_permission_scope", (q) =>
-            q.eq("tenantId", args.tenantId)
-              .eq("userId", args.subjectType === "user" ? args.subjectId : `${args.subjectType}:${args.subjectId}`)
-              .eq("permission", permission)
-              .eq("scopeKey", scopeKey),
-          )
-          .unique();
+          for (const bp of basePaths) {
+            if (bp.relation !== rule.inherit) continue;
+            // Cycle check
+            if (bp.path?.includes(relationId)) continue;
 
-        if (existingPerm) {
-          const sources = existingPerm.sources.includes(sourceLabel)
-            ? existingPerm.sources
-            : [...existingPerm.sources, sourceLabel];
-          await ctx.db.patch(existingPerm._id, { sources, updatedAt: now });
-        } else {
-          await ctx.db.insert("effectivePermissions", {
-            tenantId: args.tenantId,
-            userId: args.subjectType === "user" ? args.subjectId : `${args.subjectType}:${args.subjectId}`,
-            permission,
-            scopeKey,
-            scope,
-            effect: "allow",
-            sources: [sourceLabel],
-            createdAt: now,
-            updatedAt: now,
-          });
+            queue.push({
+              subjectType: bp.subjectType,
+              subjectId: bp.subjectId,
+              relation: targetRelation,
+              objectType: args.objectType,
+              objectId: args.objectId,
+              directRelationId: relationId,
+              baseEffectiveId: bp._id,
+              path: [...(bp.path || []), relationId],
+              caveats: [...(bp.caveats || []), ...directCaveats],
+              depth: (bp.depth || 0) + 1,
+            });
+          }
         }
       }
+    }
+
+    // Process BFS Queue
+    const affectedTuples = new Set<string>();
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+
+      // Stop if exceeding max depth
+      if (current.depth > maxDepth) continue;
+
+      // Insert into effectiveRelationships
+      const subjectKey = `${current.subjectType}:${current.subjectId}`;
+      const objectKey = `${current.objectType}:${current.objectId}`;
+
+      const effectiveId = await ctx.db.insert("effectiveRelationships", {
+        tenantId: args.tenantId,
+        subjectKey,
+        subjectType: current.subjectType,
+        subjectId: current.subjectId,
+        relation: current.relation,
+        objectKey,
+        objectType: current.objectType,
+        objectId: current.objectId,
+        isDirect: current.baseEffectiveId === undefined,
+        inheritedFrom: current.baseEffectiveId ?? null,
+        baseEffectiveId: current.baseEffectiveId,
+        directRelationId: current.directRelationId,
+        path: current.path,
+        caveats: current.caveats,
+        createdBy: args.createdBy,
+        createdAt: now,
+        depth: current.depth,
+      });
+
+      // Track tuple for permission updates
+      affectedTuples.add(
+        `${current.subjectType}:${current.subjectId}:${current.relation}:${current.objectType}:${current.objectId}`,
+      );
+
+      // Step 3: Direction 1 - find rules that extend forward from the newly inserted effectiveRelationship
+      for (const [targetKey, ruleList] of Object.entries(rules)) {
+        const [targetType, targetRelation] = targetKey.split(":");
+        for (const rule of ruleList as any[]) {
+          if (
+            rule.inherit === current.relation &&
+            rule.through === current.objectType
+          ) {
+            // Find direct relations to extend with
+            const directPaths = await ctx.db
+              .query("relationships")
+              .withIndex("by_tenant_subject_relation_object", (q) =>
+                q
+                  .eq("tenantId", args.tenantId)
+                  .eq("subjectType", current.objectType)
+                  .eq("subjectId", current.objectId)
+                  .eq("relation", rule.via)
+                  .eq("objectType", targetType),
+              )
+              .take(100);
+
+            for (const dp of directPaths) {
+              if (current.path.includes(dp._id)) continue; // cycle detection
+
+              const newCaveats = dp.caveat
+                ? [{ caveatName: dp.caveat, caveatContext: dp.caveatContext }]
+                : [];
+              queue.push({
+                subjectType: current.subjectType,
+                subjectId: current.subjectId,
+                relation: targetRelation,
+                objectType: targetType,
+                objectId: dp.objectId,
+                directRelationId: dp._id,
+                baseEffectiveId: effectiveId,
+                path: [...current.path, dp._id],
+                caveats: [...current.caveats, ...newCaveats],
+                depth: current.depth + 1,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // 4. Bridge: write relation-derived permissions to effectivePermissions
+    for (const tuple of affectedTuples) {
+      const [subjType, subjId, rel, objType, objId] = tuple.split(":");
+      await updatePermissionsForRelation(
+        ctx,
+        args.tenantId,
+        subjType,
+        subjId,
+        rel,
+        objType,
+        objId,
+        args.relationPermissions,
+        now,
+      );
     }
 
     // 5. Audit log
@@ -939,7 +1199,10 @@ export const addRelationUnified = mutation({
         tenantId: args.tenantId,
         timestamp: now,
         action: "relation_added",
-        userId: args.subjectType === "user" ? args.subjectId : args.createdBy ?? "system",
+        userId:
+          args.subjectType === "user"
+            ? args.subjectId
+            : (args.createdBy ?? "system"),
         actorId: args.createdBy,
         details: {
           relation: args.relation,
@@ -950,7 +1213,7 @@ export const addRelationUnified = mutation({
     }
 
     // 6. Return relation ID
-    return relationId;
+    return relationId as string;
   },
 });
 
@@ -972,6 +1235,7 @@ export const removeRelationUnified = mutation({
     removedBy: v.optional(v.string()),
     enableAudit: v.optional(v.boolean()),
     relationPermissions: v.optional(v.record(v.string(), v.array(v.string()))),
+    traversalRules: v.optional(v.any()), // included for symmetry, though not strictly needed for deletion
   },
   returns: v.boolean(), // true if found and removed
   handler: async (ctx, args) => {
@@ -987,7 +1251,7 @@ export const removeRelationUnified = mutation({
           .eq("subjectId", args.subjectId)
           .eq("relation", args.relation)
           .eq("objectType", args.objectType)
-          .eq("objectId", args.objectId)
+          .eq("objectId", args.objectId),
       )
       .unique();
 
@@ -998,76 +1262,79 @@ export const removeRelationUnified = mutation({
     // 2. Delete from relationships
     await ctx.db.delete(existing._id);
 
-    // 3. Find and delete from effectiveRelationships
-    const subjectKey = `${args.subjectType}:${args.subjectId}`;
-    const objectKey = `${args.objectType}:${args.objectId}`;
+    // 3. Delete cascading effectiveRelationships
+    const affectedTuples = new Set<string>();
 
-    const effectiveRel = await ctx.db
+    // Find all effective relationships directly extending from this directRelationId
+    // or where this is the direct relation (baseEffectiveId is null).
+    const directEffectives = await ctx.db
       .query("effectiveRelationships")
-      .withIndex("by_tenant_subject_relation_object", (q) =>
-        q
-          .eq("tenantId", args.tenantId)
-          .eq("subjectKey", subjectKey)
-          .eq("relation", args.relation)
-          .eq("objectKey", objectKey)
-      )
-      .unique();
-
-    if (effectiveRel) {
-      await ctx.db.delete(effectiveRel._id);
-    }
-
-    // 4. Delete any inherited relationships that point to this one
-    const inherited = await ctx.db
-      .query("effectiveRelationships")
-      .withIndex("by_tenant_inherited_from", (q) =>
-        q
-          .eq("tenantId", args.tenantId)
-          .eq("inheritedFrom", existing._id)
+      .withIndex("by_tenant_directRelationId", (q) =>
+        q.eq("tenantId", args.tenantId).eq("directRelationId", existing._id),
       )
       .take(1000);
 
-    for (const row of inherited) {
-      await ctx.db.delete(row._id);
+    const toDeleteIds: any[] = [];
+    const queue: any[] = [];
+
+    for (const de of directEffectives) {
+      toDeleteIds.push(de._id);
+      queue.push(de._id);
+      affectedTuples.add(
+        `${de.subjectType}:${de.subjectId}:${de.relation}:${de.objectType}:${de.objectId}`,
+      );
     }
 
-    // 5. Bridge: remove relation-derived permissions from effectivePermissions
-    if (args.relationPermissions) {
-      const relationKey = `${args.objectType}:${args.relation}`;
-      const permissions = args.relationPermissions[relationKey] ?? [];
-      const scopeKey = `${args.objectType}:${args.objectId}`;
-      const sourceLabel = `relation:${args.relation}`;
+    // BFS to find all cascading derived effective relationships
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      const derived = await ctx.db
+        .query("effectiveRelationships")
+        .withIndex("by_tenant_baseEffectiveId", (q) =>
+          q.eq("tenantId", args.tenantId).eq("baseEffectiveId", currentId),
+        )
+        .take(1000);
 
-      for (const permission of permissions) {
-        const effectivePerm = await ctx.db
-          .query("effectivePermissions")
-          .withIndex("by_tenant_user_permission_scope", (q) =>
-            q.eq("tenantId", args.tenantId)
-              .eq("userId", args.subjectType === "user" ? args.subjectId : `${args.subjectType}:${args.subjectId}`)
-              .eq("permission", permission)
-              .eq("scopeKey", scopeKey),
-          )
-          .unique();
-
-        if (!effectivePerm) continue;
-
-        const updatedSources = effectivePerm.sources.filter((s) => s !== sourceLabel);
-
-        if (updatedSources.length === 0 && !effectivePerm.directGrant && !effectivePerm.directDeny) {
-          await ctx.db.delete(effectivePerm._id);
-        } else if (updatedSources.length !== effectivePerm.sources.length) {
-          await ctx.db.patch(effectivePerm._id, { sources: updatedSources, updatedAt: now });
-        }
+      for (const d of derived) {
+        toDeleteIds.push(d._id);
+        queue.push(d._id);
+        affectedTuples.add(
+          `${d.subjectType}:${d.subjectId}:${d.relation}:${d.objectType}:${d.objectId}`,
+        );
       }
     }
 
-    // 6. Audit log
+    // Delete them
+    for (const id of toDeleteIds) {
+      await ctx.db.delete(id);
+    }
+
+    // 4. Bridge: re-evaluate relation-derived permissions
+    for (const tuple of affectedTuples) {
+      const [subjType, subjId, rel, objType, objId] = tuple.split(":");
+      await updatePermissionsForRelation(
+        ctx,
+        args.tenantId,
+        subjType,
+        subjId,
+        rel,
+        objType,
+        objId,
+        args.relationPermissions,
+        now,
+      );
+    }
+
+    // 5. Audit log
     if (args.enableAudit) {
       await ctx.db.insert("auditLog", {
         tenantId: args.tenantId,
         timestamp: now,
         action: "relation_removed",
-        userId: args.subjectType === "user" ? args.subjectId : args.removedBy ?? "system",
+        userId:
+          args.subjectType === "user"
+            ? args.subjectId
+            : (args.removedBy ?? "system"),
         actorId: args.removedBy,
         details: {
           relation: args.relation,
@@ -1077,7 +1344,7 @@ export const removeRelationUnified = mutation({
       });
     }
 
-    // 7. Return true
+    // 6. Return true
     return true;
   },
 });
@@ -1099,12 +1366,17 @@ export const recomputeUser = mutation({
     tenantId: v.string(),
     userId: v.string(),
     rolePermissionsMap: v.record(v.string(), v.array(v.string())),
-    policyClassifications: v.optional(v.record(v.string(), v.union(
-      v.null(),
-      v.literal("allow"),
-      v.literal("deny"),
-      v.literal("deferred"),
-    ))),
+    policyClassifications: v.optional(
+      v.record(
+        v.string(),
+        v.union(
+          v.null(),
+          v.literal("allow"),
+          v.literal("deny"),
+          v.literal("deferred"),
+        ),
+      ),
+    ),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -1114,7 +1386,7 @@ export const recomputeUser = mutation({
     const existingEffectiveRoles = await ctx.db
       .query("effectiveRoles")
       .withIndex("by_tenant_user", (q) =>
-        q.eq("tenantId", args.tenantId).eq("userId", args.userId)
+        q.eq("tenantId", args.tenantId).eq("userId", args.userId),
       )
       .take(4000);
 
@@ -1126,7 +1398,7 @@ export const recomputeUser = mutation({
     const existingEffectivePerms = await ctx.db
       .query("effectivePermissions")
       .withIndex("by_tenant_user", (q) =>
-        q.eq("tenantId", args.tenantId).eq("userId", args.userId)
+        q.eq("tenantId", args.tenantId).eq("userId", args.userId),
       )
       .take(4000);
 
@@ -1135,7 +1407,10 @@ export const recomputeUser = mutation({
       if (row.directGrant === true || row.directDeny === true) {
         // Clear stale policy data from direct rows
         if (row.policyResult !== undefined) {
-          await ctx.db.patch(row._id, { policyResult: undefined, policyName: undefined });
+          await ctx.db.patch(row._id, {
+            policyResult: undefined,
+            policyName: undefined,
+          });
         }
         continue;
       }
@@ -1146,7 +1421,7 @@ export const recomputeUser = mutation({
     const roleAssignments = await ctx.db
       .query("roleAssignments")
       .withIndex("by_tenant_user", (q) =>
-        q.eq("tenantId", args.tenantId).eq("userId", args.userId)
+        q.eq("tenantId", args.tenantId).eq("userId", args.userId),
       )
       .take(4000);
 
@@ -1193,7 +1468,7 @@ export const recomputeUser = mutation({
               .eq("tenantId", args.tenantId)
               .eq("userId", args.userId)
               .eq("permission", permission)
-              .eq("scopeKey", scopeKey)
+              .eq("scopeKey", scopeKey),
           )
           .unique();
 
@@ -1205,16 +1480,20 @@ export const recomputeUser = mutation({
           // Compute merged expiresAt: no-expiry (undefined) wins over any expiry
           const existingExpiry = existingPerm.expiresAt;
           const newExpiry = assignment.expiresAt;
-          const mergedExpiresAt = existingExpiry === undefined || newExpiry === undefined
-            ? undefined
-            : Math.max(existingExpiry, newExpiry);
+          const mergedExpiresAt =
+            existingExpiry === undefined || newExpiry === undefined
+              ? undefined
+              : Math.max(existingExpiry, newExpiry);
           const patchData: Record<string, unknown> = {
             sources,
             expiresAt: mergedExpiresAt,
             updatedAt: now,
           };
           // Propagate policyClassifications to existing rows (e.g., directGrant rows preserved in step 2)
-          if (classification === "deferred" && existingPerm.policyResult !== "deferred") {
+          if (
+            classification === "deferred" &&
+            existingPerm.policyResult !== "deferred"
+          ) {
             patchData.policyResult = "deferred";
             patchData.policyName = permission;
           } else if (classification === "allow" && !existingPerm.policyResult) {
@@ -1274,12 +1553,12 @@ export const denyPermissionUnified = mutation({
         q
           .eq("tenantId", args.tenantId)
           .eq("userId", args.userId)
-          .eq("permission", args.permission)
+          .eq("permission", args.permission),
       )
       .take(100);
 
     const existingOverride = existingOverrides.find((row) =>
-      scopeEquals(row.scope, args.scope)
+      scopeEquals(row.scope, args.scope),
     );
 
     let overrideId: string;
@@ -1313,18 +1592,19 @@ export const denyPermissionUnified = mutation({
           .eq("tenantId", args.tenantId)
           .eq("userId", args.userId)
           .eq("permission", args.permission)
-          .eq("scopeKey", scopeKey)
+          .eq("scopeKey", scopeKey),
       )
       .unique();
 
     if (existingPerm) {
       // Compute merged expiry: if existing row has sources with role-based grants,
       // the expiry should be the later of existing vs new (and undefined = no expiry wins)
-      const mergedExpiresAt = existingPerm.sources.length > 0
-        ? (existingPerm.expiresAt === undefined || args.expiresAt === undefined
+      const mergedExpiresAt =
+        existingPerm.sources.length > 0
+          ? existingPerm.expiresAt === undefined || args.expiresAt === undefined
             ? undefined
-            : Math.max(existingPerm.expiresAt, args.expiresAt))
-        : args.expiresAt;
+            : Math.max(existingPerm.expiresAt, args.expiresAt)
+          : args.expiresAt;
 
       await ctx.db.patch(existingPerm._id, {
         directDeny: true,
@@ -1385,20 +1665,33 @@ export const assignRolesUnified = mutation({
   args: {
     tenantId: v.string(),
     userId: v.string(),
-    roles: v.array(v.object({
-      role: v.string(),
-      scope: scopeValidator,
-      expiresAt: v.optional(v.number()),
-      metadata: v.optional(v.any()),
-    })),
+    roles: v.array(
+      v.object({
+        role: v.string(),
+        scope: scopeValidator,
+        expiresAt: v.optional(v.number()),
+        metadata: v.optional(v.any()),
+      }),
+    ),
     rolePermissionsMap: v.record(v.string(), v.array(v.string())),
     assignedBy: v.optional(v.string()),
     enableAudit: v.optional(v.boolean()),
-    policyClassifications: v.optional(v.record(v.string(), v.union(
-      v.null(), v.literal("allow"), v.literal("deny"), v.literal("deferred"),
-    ))),
+    policyClassifications: v.optional(
+      v.record(
+        v.string(),
+        v.union(
+          v.null(),
+          v.literal("allow"),
+          v.literal("deny"),
+          v.literal("deferred"),
+        ),
+      ),
+    ),
   },
-  returns: v.object({ assigned: v.number(), assignmentIds: v.array(v.string()) }),
+  returns: v.object({
+    assigned: v.number(),
+    assignmentIds: v.array(v.string()),
+  }),
   handler: async (ctx, args) => {
     if (args.roles.length === 0) {
       return { assigned: 0, assignmentIds: [] };
@@ -1426,7 +1719,7 @@ export const assignRolesUnified = mutation({
           q
             .eq("tenantId", args.tenantId)
             .eq("userId", args.userId)
-            .eq("role", item.role)
+            .eq("role", item.role),
         )
         .take(100);
 
@@ -1436,7 +1729,8 @@ export const assignRolesUnified = mutation({
           // Extend expiry: only update if new value is later or removes expiry entirely.
           // Passing a shorter expiresAt is a no-op (prevents accidental expiry reduction).
           // To shorten expiry, revoke and re-assign.
-          const shouldExtend = item.expiresAt === undefined ||
+          const shouldExtend =
+            item.expiresAt === undefined ||
             (row.expiresAt !== undefined && item.expiresAt > row.expiresAt);
           if (shouldExtend && item.expiresAt !== row.expiresAt) {
             const newExpiry = item.expiresAt;
@@ -1446,14 +1740,18 @@ export const assignRolesUnified = mutation({
             const effRole = await ctx.db
               .query("effectiveRoles")
               .withIndex("by_tenant_user_role_scope", (q) =>
-                q.eq("tenantId", args.tenantId)
+                q
+                  .eq("tenantId", args.tenantId)
                   .eq("userId", args.userId)
                   .eq("role", item.role)
-                  .eq("scopeKey", scopeKey)
+                  .eq("scopeKey", scopeKey),
               )
               .unique();
             if (effRole) {
-              await ctx.db.patch(effRole._id, { expiresAt: newExpiry, updatedAt: now });
+              await ctx.db.patch(effRole._id, {
+                expiresAt: newExpiry,
+                updatedAt: now,
+              });
             }
             // Update effectivePermissions for this role's permissions
             const permissions = args.rolePermissionsMap[item.role] ?? [];
@@ -1461,17 +1759,24 @@ export const assignRolesUnified = mutation({
               const effPerm = await ctx.db
                 .query("effectivePermissions")
                 .withIndex("by_tenant_user_permission_scope", (q) =>
-                  q.eq("tenantId", args.tenantId)
+                  q
+                    .eq("tenantId", args.tenantId)
                     .eq("userId", args.userId)
                     .eq("permission", permission)
-                    .eq("scopeKey", scopeKey)
+                    .eq("scopeKey", scopeKey),
                 )
                 .unique();
               if (effPerm && effPerm.sources.includes(item.role)) {
-                const mergedExpiry = effPerm.expiresAt === undefined ? undefined
-                  : newExpiry === undefined ? undefined
-                  : Math.max(effPerm.expiresAt, newExpiry);
-                await ctx.db.patch(effPerm._id, { expiresAt: mergedExpiry, updatedAt: now });
+                const mergedExpiry =
+                  effPerm.expiresAt === undefined
+                    ? undefined
+                    : newExpiry === undefined
+                      ? undefined
+                      : Math.max(effPerm.expiresAt, newExpiry);
+                await ctx.db.patch(effPerm._id, {
+                  expiresAt: mergedExpiry,
+                  updatedAt: now,
+                });
               }
             }
           }
@@ -1505,7 +1810,7 @@ export const assignRolesUnified = mutation({
             .eq("tenantId", args.tenantId)
             .eq("userId", args.userId)
             .eq("role", item.role)
-            .eq("scopeKey", scopeKey)
+            .eq("scopeKey", scopeKey),
         )
         .unique();
 
@@ -1546,7 +1851,7 @@ export const assignRolesUnified = mutation({
               .eq("tenantId", args.tenantId)
               .eq("userId", args.userId)
               .eq("permission", permission)
-              .eq("scopeKey", scopeKey)
+              .eq("scopeKey", scopeKey),
           )
           .unique();
 
@@ -1555,7 +1860,10 @@ export const assignRolesUnified = mutation({
           const sources = existingPerm.sources.includes(item.role)
             ? existingPerm.sources
             : [...existingPerm.sources, item.role];
-          const patchData: Record<string, unknown> = { sources, updatedAt: now };
+          const patchData: Record<string, unknown> = {
+            sources,
+            updatedAt: now,
+          };
           if (classification === "deferred" && !existingPerm.policyResult) {
             patchData.policyResult = "deferred";
             patchData.policyName = permission;
@@ -1565,9 +1873,10 @@ export const assignRolesUnified = mutation({
           // Compute merged expiresAt: no-expiry (undefined) wins over any expiry
           const existingExpiry = existingPerm.expiresAt;
           const newExpiry = item.expiresAt;
-          const mergedExpiresAt = existingExpiry === undefined || newExpiry === undefined
-            ? undefined
-            : Math.max(existingExpiry, newExpiry);
+          const mergedExpiresAt =
+            existingExpiry === undefined || newExpiry === undefined
+              ? undefined
+              : Math.max(existingExpiry, newExpiry);
           patchData.expiresAt = mergedExpiresAt;
           await ctx.db.patch(existingPerm._id, patchData);
         } else {
@@ -1621,10 +1930,12 @@ export const revokeRolesUnified = mutation({
   args: {
     tenantId: v.string(),
     userId: v.string(),
-    roles: v.array(v.object({
-      role: v.string(),
-      scope: scopeValidator,
-    })),
+    roles: v.array(
+      v.object({
+        role: v.string(),
+        scope: scopeValidator,
+      }),
+    ),
     rolePermissionsMap: v.record(v.string(), v.array(v.string())),
     revokedBy: v.optional(v.string()),
     enableAudit: v.optional(v.boolean()),
@@ -1656,12 +1967,12 @@ export const revokeRolesUnified = mutation({
           q
             .eq("tenantId", args.tenantId)
             .eq("userId", args.userId)
-            .eq("role", item.role)
+            .eq("role", item.role),
         )
         .take(100);
 
-      const assignment = assignments.find(
-        (row) => scopeEquals(row.scope, item.scope)
+      const assignment = assignments.find((row) =>
+        scopeEquals(row.scope, item.scope),
       );
 
       if (!assignment) {
@@ -1680,7 +1991,7 @@ export const revokeRolesUnified = mutation({
             .eq("tenantId", args.tenantId)
             .eq("userId", args.userId)
             .eq("role", item.role)
-            .eq("scopeKey", scopeKey)
+            .eq("scopeKey", scopeKey),
         )
         .unique();
 
@@ -1698,17 +2009,21 @@ export const revokeRolesUnified = mutation({
               .eq("tenantId", args.tenantId)
               .eq("userId", args.userId)
               .eq("permission", permission)
-              .eq("scopeKey", scopeKey)
+              .eq("scopeKey", scopeKey),
           )
           .unique();
 
         if (!effectivePerm) continue;
 
         const updatedSources = effectivePerm.sources.filter(
-          (s) => s !== item.role
+          (s) => s !== item.role,
         );
 
-        if (updatedSources.length === 0 && !effectivePerm.directGrant && !effectivePerm.directDeny) {
+        if (
+          updatedSources.length === 0 &&
+          !effectivePerm.directGrant &&
+          !effectivePerm.directDeny
+        ) {
           // No more sources, no direct grant, no direct deny — delete the row
           await ctx.db.delete(effectivePerm._id);
         } else if (updatedSources.length !== effectivePerm.sources.length) {
@@ -1763,7 +2078,7 @@ export const revokeAllRolesUnified = mutation({
     const assignments = await ctx.db
       .query("roleAssignments")
       .withIndex("by_tenant_user", (q) =>
-        q.eq("tenantId", args.tenantId).eq("userId", args.userId)
+        q.eq("tenantId", args.tenantId).eq("userId", args.userId),
       )
       .take(4000);
 
@@ -1800,7 +2115,7 @@ export const revokeAllRolesUnified = mutation({
             .eq("tenantId", args.tenantId)
             .eq("userId", args.userId)
             .eq("role", assignment.role)
-            .eq("scopeKey", scopeKey)
+            .eq("scopeKey", scopeKey),
         )
         .unique();
 
@@ -1818,17 +2133,21 @@ export const revokeAllRolesUnified = mutation({
               .eq("tenantId", args.tenantId)
               .eq("userId", args.userId)
               .eq("permission", permission)
-              .eq("scopeKey", scopeKey)
+              .eq("scopeKey", scopeKey),
           )
           .unique();
 
         if (!effectivePerm) continue;
 
         const updatedSources = effectivePerm.sources.filter(
-          (s) => s !== assignment.role
+          (s) => s !== assignment.role,
         );
 
-        if (updatedSources.length === 0 && !effectivePerm.directGrant && !effectivePerm.directDeny) {
+        if (
+          updatedSources.length === 0 &&
+          !effectivePerm.directGrant &&
+          !effectivePerm.directDeny
+        ) {
           await ctx.db.delete(effectivePerm._id);
         } else if (updatedSources.length !== effectivePerm.sources.length) {
           await ctx.db.patch(effectivePerm._id, {

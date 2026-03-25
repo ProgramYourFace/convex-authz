@@ -314,7 +314,7 @@ describe("Category 7: Direct grant/deny vs role-based", () => {
             .eq("tenantId", TENANT)
             .eq("userId", "alice")
             .eq("permission", "docs:read")
-            .eq("scopeKey", "global")
+            .eq("scopeKey", "global"),
         )
         .unique();
     });
@@ -393,7 +393,7 @@ describe("Category 7: Direct grant/deny vs role-based", () => {
             .eq("tenantId", TENANT)
             .eq("userId", "alice")
             .eq("permission", "docs:read")
-            .eq("scopeKey", "global")
+            .eq("scopeKey", "global"),
         )
         .unique();
     });
@@ -852,7 +852,7 @@ describe("Category 9: ReBAC", () => {
             .eq("subjectId", "alice")
             .eq("relation", "member")
             .eq("objectType", "team")
-            .eq("objectId", "team1")
+            .eq("objectId", "team1"),
         )
         .collect();
     });
@@ -993,7 +993,10 @@ describe("Category 9: ReBAC", () => {
       return ctx.db
         .query("relationships")
         .withIndex("by_tenant_subject", (q: any) =>
-          q.eq("tenantId", TENANT).eq("subjectType", "user").eq("subjectId", "alice")
+          q
+            .eq("tenantId", TENANT)
+            .eq("subjectType", "user")
+            .eq("subjectId", "alice"),
         )
         .collect();
     });
@@ -1110,7 +1113,7 @@ describe("Category 9: ReBAC", () => {
             .eq("tenantId", TENANT)
             .eq("subjectKey", "user:alice")
             .eq("relation", "member")
-            .eq("objectKey", "team:team1")
+            .eq("objectKey", "team:team1"),
         )
         .collect();
       for (const row of rows) {
@@ -1168,22 +1171,20 @@ describe("Category 9: ReBAC", () => {
     // removeRelationUnified uses relationships._id for inheritedFrom lookups
     const sourceRow = await t.run(async (ctx) => {
       return ctx.db
-        .query("relationships")
+        .query("effectiveRelationships")
         .withIndex("by_tenant_subject_relation_object", (q: any) =>
           q
             .eq("tenantId", TENANT)
-            .eq("subjectType", "user")
-            .eq("subjectId", "alice")
+            .eq("subjectKey", "user:alice")
             .eq("relation", "member")
-            .eq("objectType", "team")
-            .eq("objectId", "team1")
+            .eq("objectKey", "team:team1"),
         )
         .unique();
     });
     expect(sourceRow).not.toBeNull();
 
     // Manually insert an inherited effectiveRelationship that points to the
-    // source relationships row ID (this is what removeRelationUnified looks up)
+    // source effectiveRelationships row ID (this is what removeRelationUnified looks up)
     await t.run(async (ctx) => {
       await ctx.db.insert("effectiveRelationships", {
         tenantId: TENANT,
@@ -1196,6 +1197,7 @@ describe("Category 9: ReBAC", () => {
         objectId: "org1",
         isDirect: false,
         inheritedFrom: sourceRow!._id as string,
+        baseEffectiveId: sourceRow!._id as any,
         createdAt: Date.now(),
         depth: 1,
       });
@@ -1205,8 +1207,10 @@ describe("Category 9: ReBAC", () => {
     const inheritedBefore = await t.run(async (ctx) => {
       return ctx.db
         .query("effectiveRelationships")
-        .withIndex("by_tenant_inherited_from", (q: any) =>
-          q.eq("tenantId", TENANT).eq("inheritedFrom", sourceRow!._id as string)
+        .withIndex("by_tenant_baseEffectiveId", (q: any) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("baseEffectiveId", sourceRow!._id as string),
         )
         .collect();
     });
@@ -1242,7 +1246,7 @@ describe("Category 9: ReBAC", () => {
             .eq("tenantId", TENANT)
             .eq("subjectKey", "user:alice")
             .eq("relation", "viewer")
-            .eq("objectKey", "org:org1")
+            .eq("objectKey", "org:org1"),
         )
         .collect();
     });

@@ -52,8 +52,8 @@ export default defineSchema({
     createdBy: v.optional(v.string()),
     createdAt: v.number(),
     // v2: optional caveat (ABAC condition on an edge)
-    caveat: v.optional(v.string()),         // name of a registered caveat function
-    caveatContext: v.optional(v.any()),     // static context passed to caveat at eval time
+    caveat: v.optional(v.string()), // name of a registered caveat function
+    caveatContext: v.optional(v.any()), // static context passed to caveat at eval time
   })
     .index("by_tenant_subject", ["tenantId", "subjectType", "subjectId"])
     .index("by_tenant_object", ["tenantId", "objectType", "objectId"])
@@ -88,11 +88,13 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
     // v2: policy evaluation result
-    policyResult: v.optional(v.union(
-      v.literal("allow"),
-      v.literal("deny"),
-      v.literal("deferred"),     // must re-evaluate at read time
-    )),
+    policyResult: v.optional(
+      v.union(
+        v.literal("allow"),
+        v.literal("deny"),
+        v.literal("deferred"), // must re-evaluate at read time
+      ),
+    ),
     policyName: v.optional(v.string()),
   })
     .index("by_tenant_user", ["tenantId", "userId"])
@@ -134,6 +136,23 @@ export default defineSchema({
     objectType: v.string(),
     objectId: v.string(),
     isDirect: v.boolean(),
+
+    // The specific direct relation in `relationships` that formed the *last step* of this path
+    directRelationId: v.optional(v.id("relationships")),
+    // The preceding effective relationship that this one extends from
+    baseEffectiveId: v.optional(v.id("effectiveRelationships")),
+    // Full list of relationship IDs in this path (to prevent cycles)
+    path: v.optional(v.array(v.id("relationships"))),
+    // Accumulated caveats along this path
+    caveats: v.optional(
+      v.array(
+        v.object({
+          caveatName: v.string(),
+          caveatContext: v.optional(v.any()),
+        }),
+      ),
+    ),
+
     inheritedFrom: v.union(v.string(), v.null()),
     createdBy: v.optional(v.string()),
     createdAt: v.number(),
@@ -142,18 +161,16 @@ export default defineSchema({
   })
     .index("by_tenant_subject", ["tenantId", "subjectKey"])
     .index("by_tenant_object", ["tenantId", "objectKey"])
-    .index("by_tenant_subject_relation", [
-      "tenantId",
-      "subjectKey",
-      "relation",
-    ])
+    .index("by_tenant_subject_relation", ["tenantId", "subjectKey", "relation"])
     .index("by_tenant_subject_relation_object", [
       "tenantId",
       "subjectKey",
       "relation",
       "objectKey",
     ])
-    .index("by_tenant_inherited_from", ["tenantId", "inheritedFrom"]),
+    .index("by_tenant_inherited_from", ["tenantId", "inheritedFrom"])
+    .index("by_tenant_directRelationId", ["tenantId", "directRelationId"])
+    .index("by_tenant_baseEffectiveId", ["tenantId", "baseEffectiveId"]),
 
   auditLog: defineTable({
     tenantId: v.optional(v.string()),
@@ -168,7 +185,7 @@ export default defineSchema({
       v.literal("attribute_removed"),
       v.literal("relation_added"),
       v.literal("relation_removed"),
-      v.literal("policy_evaluated")
+      v.literal("policy_evaluated"),
     ),
     userId: v.string(),
     actorId: v.optional(v.string()),
@@ -181,7 +198,7 @@ export default defineSchema({
         v.object({
           key: v.string(),
           value: v.optional(v.any()),
-        })
+        }),
       ),
       reason: v.optional(v.string()),
       // v2: ReBAC relation details
