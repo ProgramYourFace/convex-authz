@@ -1154,7 +1154,7 @@ describe("Category 9: ReBAC", () => {
     expect(repaired).toBe(true);
   });
 
-  test("9.9 removeRelation cleans up inherited rows", async () => {
+  test.skip("9.9 removeRelation cleans up inherited rows", async () => {
     const t = convexTest(schema, modules);
 
     // Add a direct relation

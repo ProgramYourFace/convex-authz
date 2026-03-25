@@ -15,6 +15,18 @@ import { mutation, query } from "./_generated/server.js";
 import { scopeValidator } from "./validators.js";
 import { isExpired, matchesPermissionPattern } from "./helpers.js";
 
+function buildInvolvedTokens(paths: any[]): string {
+  const tokens = new Set<string>();
+  for (const p of paths) {
+    if (p.directRelationId) tokens.add(p.directRelationId);
+    if (p.baseEffectiveId) tokens.add(p.baseEffectiveId);
+    if (p.path) {
+      for (const id of p.path) tokens.add(id);
+    }
+  }
+  return Array.from(tokens).join(" ");
+}
+
 // Helper for ReBAC updates to effectivePermissions
 async function updatePermissionsForRelation(
   ctx: any,
@@ -1150,8 +1162,10 @@ export const addRelationUnified = mutation({
             p.baseEffectiveId === current.baseEffectiveId,
         );
         if (!hasPath) {
+          const newPaths = [...existingEffectiveRow.paths, newPathObj];
           await ctx.db.patch(existingEffectiveRow._id, {
-            paths: [...existingEffectiveRow.paths, newPathObj],
+            paths: newPaths,
+            involvedTokens: buildInvolvedTokens(newPaths),
           });
         } else {
           continue; // Already processed this exact path extension
@@ -1167,6 +1181,7 @@ export const addRelationUnified = mutation({
           objectType: current.objectType,
           objectId: current.objectId,
           paths: [newPathObj],
+          involvedTokens: buildInvolvedTokens([newPathObj]),
           createdBy: args.createdBy,
           createdAt: now,
         });
@@ -1310,18 +1325,26 @@ export const removeRelationUnified = mutation({
     // 3. Delete cascading effectiveRelationships
     const affectedTuples = new Set<string>();
 
-    // V2: Since we now store paths as an array in a single tuple row, we need a full scan or targeted
-    // traversal to find which rows contain paths that rely on existing._id.
-    // For now we'll do a partial scan based on the tenant (or target a subject if we can).
-    // In a future index update we can index `paths.directRelationId`.
-    const allEffectives = await ctx.db
-      .query("effectiveRelationships")
-      .withIndex("by_tenant_subject_relation_object", (q) =>
-        q.eq("tenantId", args.tenantId),
-      )
-      .take(4000); // Note: Could be optimized with a better index
+    // V2: Query utilizing the `search_involved_tokens` index.
+    // This allows us to quickly find ONLY the effectiveRelationships that depend on the
+    // deleted direct relationship (`existing._id`), bypassing the need to scan all tenant tuples!
+    const tokenQuery = args.tenantId
+      ? ctx.db
+          .query("effectiveRelationships")
+          .withSearchIndex("search_involved_tokens", (q) =>
+            q
+              .search("involvedTokens", existing._id)
+              .eq("tenantId", args.tenantId),
+          )
+      : ctx.db
+          .query("effectiveRelationships")
+          .withSearchIndex("search_involved_tokens", (q) =>
+            q.search("involvedTokens", existing._id),
+          );
 
-    for (const de of allEffectives) {
+    const affectedRows = await tokenQuery.take(1000);
+
+    for (const de of affectedRows) {
       let isModified = false;
       let currentPaths = de.paths;
       let prevLength = currentPaths.length;
@@ -1336,7 +1359,7 @@ export const removeRelationUnified = mutation({
             // Also filter out any path that uses a baseEffectiveId of a path we just removed from THIS row
             // (If the row itself is the baseEffectiveId, this handles when paths reference other paths within the same effective tuple)
             (p.baseEffectiveId === undefined ||
-              allEffectives.some(
+              affectedRows.some(
                 (e) => e._id === p.baseEffectiveId && e.paths.length > 0,
               ) ||
               (de._id === p.baseEffectiveId &&
@@ -1361,7 +1384,10 @@ export const removeRelationUnified = mutation({
         if (currentPaths.length === 0) {
           await ctx.db.delete(de._id);
         } else {
-          await ctx.db.patch(de._id, { paths: currentPaths });
+          await ctx.db.patch(de._id, {
+            paths: currentPaths,
+            involvedTokens: buildInvolvedTokens(currentPaths),
+          });
         }
 
         affectedTuples.add(

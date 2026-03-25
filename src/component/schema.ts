@@ -156,6 +156,11 @@ export default defineSchema({
       }),
     ),
 
+    // Space-separated string of all relation and effective relation IDs involved in this tuple's paths.
+    // We use a search index on this field to quickly find which effective relationships
+    // need to be cleaned up when an underlying relationship is deleted.
+    involvedTokens: v.optional(v.string()),
+
     createdBy: v.optional(v.string()),
     createdAt: v.number(),
   })
@@ -169,7 +174,11 @@ export default defineSchema({
       "objectKey",
     ])
     // Missing index fix for listUsersWithAccess
-    .index("by_tenant_object_relation", ["tenantId", "objectKey", "relation"]),
+    .index("by_tenant_object_relation", ["tenantId", "objectKey", "relation"])
+    .searchIndex("search_involved_tokens", {
+      searchField: "involvedTokens",
+      filterFields: ["tenantId"],
+    }),
 
   auditLog: defineTable({
     tenantId: v.optional(v.string()),
