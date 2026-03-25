@@ -1343,6 +1343,12 @@ export const removeRelationUnified = mutation({
           );
 
     const affectedRows = await tokenQuery.take(1000);
+    console.log(
+      "affectedRows count for",
+      existing._id,
+      "is",
+      affectedRows.length,
+    );
 
     for (const de of affectedRows) {
       let isModified = false;
@@ -1355,24 +1361,13 @@ export const removeRelationUnified = mutation({
           (p: any) =>
             p.directRelationId !== existing._id &&
             !p.path?.includes(existing._id) &&
-            p.baseEffectiveId !== existing._id &&
-            // Also filter out any path that uses a baseEffectiveId of a path we just removed from THIS row
-            // (If the row itself is the baseEffectiveId, this handles when paths reference other paths within the same effective tuple)
-            (p.baseEffectiveId === undefined ||
-              affectedRows.some(
-                (e) => e._id === p.baseEffectiveId && e.paths.length > 0,
-              ) ||
-              (de._id === p.baseEffectiveId &&
-                currentPaths.some(
-                  (cp: any) => cp.directRelationId === p.baseEffectiveId,
-                ))),
-        );
-
-        // Simpler reliable filter for this test: just remove paths that depend on the deleted direct relation ID
-        currentPaths = currentPaths.filter(
-          (p: any) =>
-            p.directRelationId !== existing._id &&
-            !p.path?.includes(existing._id),
+            // Also filter out if baseEffectiveId was in this very row and that path was just removed
+            !(
+              de._id === p.baseEffectiveId &&
+              !currentPaths.some(
+                (cp: any) => cp.directRelationId === p.baseEffectiveId,
+              )
+            ),
         );
 
         if (currentPaths.length === prevLength) break;

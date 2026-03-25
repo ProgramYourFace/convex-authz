@@ -25,6 +25,7 @@
   ],
   "type": "module",
   "scripts": {
+    "postinstall": "patch-package",
     "dev": "run-p -r 'dev:*'",
     "dev:backend": "convex dev --typecheck-components",
     "dev:frontend": "cd example && vite --clearScreen false",
@@ -106,6 +107,7 @@
     "jsdom": "^25.0.0",
     "lucide-react": "^0.555.0",
     "npm-run-all2": "8.0.4",
+    "patch-package": "^8.0.1",
     "path-exists-cli": "2.0.0",
     "pkg-pr-new": "^0.0.60",
     "prettier": "3.6.2",

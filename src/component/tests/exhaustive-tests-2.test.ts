@@ -1154,7 +1154,7 @@ describe("Category 9: ReBAC", () => {
     expect(repaired).toBe(true);
   });
 
-  test.skip("9.9 removeRelation cleans up inherited rows", async () => {
+  test("9.9 removeRelation cleans up inherited rows", async () => {
     const t = convexTest(schema, modules);
 
     // Add a direct relation
@@ -1220,6 +1220,7 @@ describe("Category 9: ReBAC", () => {
             path: [],
           },
         ],
+        involvedTokens: sourceRelRow!._id as string,
         createdAt: Date.now(),
       });
     });

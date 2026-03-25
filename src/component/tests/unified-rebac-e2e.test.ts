@@ -177,7 +177,7 @@ describe("ReBAC Transitive Closures and Caveats", () => {
     ).toBe(false);
   });
 
-  it.skip("should handle multiple paths with at least 3 hops and caveats, updating properly when paths are removed", async () => {
+  it("should handle multiple paths with at least 3 hops and caveats, updating properly when paths are removed", async () => {
     const t = convexTest(schema, modules);
     const myTraversalRules = defineTraversalRules({
       "document:viewer": [
@@ -346,7 +346,7 @@ describe("ReBAC Transitive Closures and Caveats", () => {
     ).toBe(false);
   });
 
-  it.skip("should handle 4 paths with mixed caveats correctly", async () => {
+  it("should handle 4 paths with mixed caveats correctly", async () => {
     const t = convexTest(schema, modules);
     const myTraversalRules = defineTraversalRules({
       "document:viewer": [

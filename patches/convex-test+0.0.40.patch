@@ -1,0 +1,13 @@
+diff --git a/node_modules/convex-test/dist/index.js b/node_modules/convex-test/dist/index.js
+index dc392aa..60d7ec1 100644
+--- a/node_modules/convex-test/dist/index.js
++++ b/node_modules/convex-test/dist/index.js
+@@ -509,7 +509,7 @@ function evaluateSearchFilter(document, filter) {
+                 .toLowerCase()
+                 .split(/\s+/)
+                 .filter((term) => term.length > 0);
+-            const documentWords = result
++            const documentWords = (result || "")
+                 .split(/\s+/)
+                 .map((word) => word.toLowerCase());
+             return queryTerms.some((queryTerm) => documentWords.some((word) => word.startsWith(queryTerm)));
