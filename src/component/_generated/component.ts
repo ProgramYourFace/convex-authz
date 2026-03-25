@@ -66,6 +66,24 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         { expiredPermissions: number; expiredRoles: number },
         Name
       >;
+      getEffectiveRelationshipsForCaveats: FunctionReference<
+        "query",
+        "internal",
+        {
+          objectId: string;
+          objectType: string;
+          relation: string;
+          subjectId: string;
+          subjectType: string;
+          tenantId: string;
+        },
+        Array<{
+          _id: string;
+          caveats?: Array<{ caveatContext?: any; caveatName: string }>;
+          path?: Array<string>;
+        }>,
+        Name
+      >;
       getUserPermissionsFast: FunctionReference<
         "query",
         "internal",
@@ -398,7 +416,18 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           tenantId: string;
           traversalRules?: any;
         },
-        Array<{ objectId: string; via: string }>,
+        Array<{
+          objectId: string;
+          paths?: Array<{
+            baseEffectiveId?: string;
+            caveats?: Array<{ caveatContext?: any; caveatName: string }>;
+            depth: number;
+            directRelationId?: string;
+            isDirect: boolean;
+            path?: Array<string>;
+          }>;
+          via: string;
+        }>,
         Name
       >;
       listUsersWithAccess: FunctionReference<
@@ -410,7 +439,18 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           relation: string;
           tenantId: string;
         },
-        Array<{ userId: string; via: string }>,
+        Array<{
+          paths?: Array<{
+            baseEffectiveId?: string;
+            caveats?: Array<{ caveatContext?: any; caveatName: string }>;
+            depth: number;
+            directRelationId?: string;
+            isDirect: boolean;
+            path?: Array<string>;
+          }>;
+          userId: string;
+          via: string;
+        }>,
         Name
       >;
     };
@@ -423,6 +463,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           caveatContext?: any;
           createdBy?: string;
           enableAudit?: boolean;
+          maxDepth?: number;
           objectId: string;
           objectType: string;
           relation: string;
@@ -430,6 +471,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           subjectId: string;
           subjectType: string;
           tenantId: string;
+          traversalRules?: any;
         },
         string,
         Name
@@ -487,7 +529,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           tenantId: string;
           userId: string;
         },
-        { allowed: boolean; policyName?: string; reason: string; tier: string },
+        {
+          allowed: boolean;
+          policyName?: string;
+          reason: string;
+          sources?: Array<string>;
+          tier: string;
+        },
         Name
       >;
       denyPermissionUnified: FunctionReference<
@@ -550,6 +598,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           subjectId: string;
           subjectType: string;
           tenantId: string;
+          traversalRules?: any;
         },
         boolean,
         Name

@@ -684,8 +684,9 @@ export class Authz<
     userId: string,
     permission: PermissionArg<P>,
     scope?: Scope,
+    requestContext?: Record<string, unknown>
   ): Promise<void> {
-    const allowed = await this.can(ctx, userId, permission, scope);
+    const allowed = await this.can(ctx, userId, permission, scope, requestContext);
     if (!allowed) {
       throw new Error(
         `Permission denied: ${permission}${scope ? ` on ${scope.type}:${scope.id}` : ""}`,
