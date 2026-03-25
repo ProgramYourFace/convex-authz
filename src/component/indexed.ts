@@ -232,12 +232,14 @@ export const getEffectiveRelationshipsForCaveats = query({
           .eq("relation", args.relation)
           .eq("objectKey", `${args.objectType}:${args.objectId}`),
       )
-      .take(1000);
+      .take(1);
 
-    return cached.map((c) => ({
-      _id: c._id,
-      path: c.path,
-      caveats: c.caveats,
+    if (cached.length === 0) return [];
+
+    return cached[0].paths.map((p) => ({
+      _id: cached[0]._id,
+      path: p.path,
+      caveats: p.caveats,
     }));
   },
 });

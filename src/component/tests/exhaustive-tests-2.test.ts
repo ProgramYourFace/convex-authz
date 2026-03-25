@@ -1169,6 +1169,21 @@ describe("Category 9: ReBAC", () => {
 
     // Get the relationships table ID (source of truth)
     // removeRelationUnified uses relationships._id for inheritedFrom lookups
+    const sourceRelRow = await t.run(async (ctx) => {
+      return ctx.db
+        .query("relationships")
+        .withIndex("by_tenant_subject_relation_object", (q: any) =>
+          q
+            .eq("tenantId", TENANT)
+            .eq("subjectType", "user")
+            .eq("subjectId", "alice")
+            .eq("relation", "member")
+            .eq("objectType", "team")
+            .eq("objectId", "team1"),
+        )
+        .unique();
+    });
+
     const sourceRow = await t.run(async (ctx) => {
       return ctx.db
         .query("effectiveRelationships")
@@ -1182,6 +1197,7 @@ describe("Category 9: ReBAC", () => {
         .unique();
     });
     expect(sourceRow).not.toBeNull();
+    expect(sourceRelRow).not.toBeNull();
 
     // Manually insert an inherited effectiveRelationship that points to the
     // source effectiveRelationships row ID (this is what removeRelationUnified looks up)
@@ -1195,24 +1211,32 @@ describe("Category 9: ReBAC", () => {
         objectKey: "org:org1",
         objectType: "org",
         objectId: "org1",
-        isDirect: false,
-        inheritedFrom: sourceRow!._id as string,
-        baseEffectiveId: sourceRow!._id as any,
+        paths: [
+          {
+            isDirect: false,
+            baseEffectiveId: sourceRow!._id as any,
+            directRelationId: sourceRelRow!._id as any,
+            depth: 1,
+            path: [],
+          },
+        ],
         createdAt: Date.now(),
-        depth: 1,
       });
     });
 
     // Verify inherited row exists
     const inheritedBefore = await t.run(async (ctx) => {
-      return ctx.db
+      const allRows = await ctx.db
         .query("effectiveRelationships")
-        .withIndex("by_tenant_baseEffectiveId", (q: any) =>
+        .withIndex("by_tenant_subject_relation_object", (q: any) =>
           q
             .eq("tenantId", TENANT)
-            .eq("baseEffectiveId", sourceRow!._id as string),
+            .eq("subjectKey", "user:alice")
+            .eq("relation", "viewer")
+            .eq("objectKey", "org:org1"),
         )
         .collect();
+      return allRows;
     });
     expect(inheritedBefore.length).toBe(1);
 
@@ -1239,7 +1263,7 @@ describe("Category 9: ReBAC", () => {
 
     // Inherited should also be gone
     const inheritedAfter = await t.run(async (ctx) => {
-      return ctx.db
+      const remaining = await ctx.db
         .query("effectiveRelationships")
         .withIndex("by_tenant_subject_relation_object", (q: any) =>
           q
@@ -1249,6 +1273,8 @@ describe("Category 9: ReBAC", () => {
             .eq("objectKey", "org:org1"),
         )
         .collect();
+      // Only return rows that actually have paths in them
+      return remaining.filter((r) => r.paths && r.paths.length > 0);
     });
     expect(inheritedAfter.length).toBe(0);
   });

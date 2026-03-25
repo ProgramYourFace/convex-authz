@@ -135,29 +135,29 @@ export default defineSchema({
     objectKey: v.string(),
     objectType: v.string(),
     objectId: v.string(),
-    isDirect: v.boolean(),
 
-    // The specific direct relation in `relationships` that formed the *last step* of this path
-    directRelationId: v.optional(v.id("relationships")),
-    // The preceding effective relationship that this one extends from
-    baseEffectiveId: v.optional(v.id("effectiveRelationships")),
-    // Full list of relationship IDs in this path (to prevent cycles)
-    path: v.optional(v.array(v.id("relationships"))),
-    // Accumulated caveats along this path
-    caveats: v.optional(
-      v.array(
-        v.object({
-          caveatName: v.string(),
-          caveatContext: v.optional(v.any()),
-        }),
-      ),
+    // V2 Optimization: Store all paths between subject and object in a single row
+    // to prevent path explosion and allow true O(1) indexed lookups
+    paths: v.array(
+      v.object({
+        isDirect: v.boolean(),
+        directRelationId: v.optional(v.id("relationships")),
+        baseEffectiveId: v.optional(v.id("effectiveRelationships")),
+        path: v.optional(v.array(v.id("relationships"))),
+        caveats: v.optional(
+          v.array(
+            v.object({
+              caveatName: v.string(),
+              caveatContext: v.optional(v.any()),
+            }),
+          ),
+        ),
+        depth: v.number(),
+      }),
     ),
 
-    inheritedFrom: v.union(v.string(), v.null()),
     createdBy: v.optional(v.string()),
     createdAt: v.number(),
-    // v2: depth for traversal debugging
-    depth: v.optional(v.number()),
   })
     .index("by_tenant_subject", ["tenantId", "subjectKey"])
     .index("by_tenant_object", ["tenantId", "objectKey"])
@@ -168,9 +168,8 @@ export default defineSchema({
       "relation",
       "objectKey",
     ])
-    .index("by_tenant_inherited_from", ["tenantId", "inheritedFrom"])
-    .index("by_tenant_directRelationId", ["tenantId", "directRelationId"])
-    .index("by_tenant_baseEffectiveId", ["tenantId", "baseEffectiveId"]),
+    // Missing index fix for listUsersWithAccess
+    .index("by_tenant_object_relation", ["tenantId", "objectKey", "relation"]),
 
   auditLog: defineTable({
     tenantId: v.optional(v.string()),

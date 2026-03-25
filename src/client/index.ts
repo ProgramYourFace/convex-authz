@@ -962,7 +962,7 @@ export class Authz<
     actorId?: string,
   ): Promise<number> {
     validateUserId(userId);
-    validateScope(scope);
+    if (scope) validateScope(scope);
     return ctx.runMutation(this.component.unified.revokeAllRolesUnified, {
       userId,
       scope,
@@ -971,6 +971,174 @@ export class Authz<
       enableAudit: true,
       tenantId: this.options.tenantId,
     });
+  }
+
+  /**
+   * Get all objects a user has a specific relation to (O(1) Indexed).
+   * Checks the compiled transitive graph. If there are caveats, it evaluates them locally.
+   */
+  async listAccessibleObjects(
+    ctx: QueryCtx | ActionCtx,
+    userId: string,
+    relation: string,
+    objectType: string,
+    requestContext?: Record<string, unknown>,
+  ): Promise<Array<{ objectId: string }>> {
+    const rawPaths = await ctx.runQuery(
+      this.component.rebac.listAccessibleObjects,
+      {
+        tenantId: this.options.tenantId,
+        subjectType: "user",
+        subjectId: userId,
+        relation,
+        objectType,
+      },
+    );
+
+    // If no caveats configured, return early
+    if (!this.options.caveats)
+      return rawPaths.map((r) => ({ objectId: r.objectId }));
+
+    const results: Array<{ objectId: string }> = [];
+
+    // Group paths by objectId since multiple paths may grant access to the same object
+    const pathsByObj = new Map<string, any[]>();
+    for (const p of rawPaths) {
+      if (!pathsByObj.has(p.objectId)) pathsByObj.set(p.objectId, []);
+      pathsByObj.get(p.objectId)!.push(p);
+    }
+
+    // Evaluate caveats
+    for (const [objectId, rawPathObjects] of pathsByObj.entries()) {
+      let objectAllowed = false;
+      for (const rawPathObj of rawPathObjects) {
+        if (!rawPathObj.paths || rawPathObj.paths.length === 0) continue;
+
+        for (const path of rawPathObj.paths) {
+          if (!path.caveats || path.caveats.length === 0) {
+            objectAllowed = true;
+            break;
+          }
+
+          let pathAllowed = true;
+          for (const caveat of path.caveats) {
+            const caveatFn = this.options.caveats?.[caveat.caveatName];
+            if (!caveatFn) {
+              console.error(`Caveat function ${caveat.caveatName} not found`);
+              pathAllowed = false;
+              break;
+            }
+
+            const result = await caveatFn({
+              subject: { type: "user", id: userId },
+              object: { type: objectType, id: objectId },
+              relation,
+              caveatContext: { ...caveat.caveatContext, ...requestContext },
+            });
+
+            if (!result) {
+              pathAllowed = false;
+              break;
+            }
+          }
+
+          if (pathAllowed) {
+            objectAllowed = true;
+            break;
+          }
+        }
+        if (objectAllowed) break;
+      }
+
+      if (objectAllowed) {
+        results.push({ objectId });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Get all users that have a specific relation to an object (O(1) Indexed).
+   * Checks the compiled transitive graph. If there are caveats, it evaluates them locally.
+   */
+  async listUsersWithAccess(
+    ctx: QueryCtx | ActionCtx,
+    objectType: string,
+    objectId: string,
+    relation: string,
+    requestContext?: Record<string, unknown>,
+  ): Promise<Array<{ userId: string }>> {
+    const rawPaths = await ctx.runQuery(
+      this.component.rebac.listUsersWithAccess,
+      {
+        tenantId: this.options.tenantId,
+        objectType,
+        objectId,
+        relation,
+      },
+    );
+
+    // If no caveats configured, return early
+    if (!this.options.caveats)
+      return rawPaths.map((r) => ({ userId: r.userId }));
+
+    const results: Array<{ userId: string }> = [];
+
+    const pathsByUser = new Map<string, any[]>();
+    for (const p of rawPaths) {
+      if (!pathsByUser.has(p.userId)) pathsByUser.set(p.userId, []);
+      pathsByUser.get(p.userId)!.push(p);
+    }
+
+    // Evaluate caveats
+    for (const [userId, rawPathObjects] of pathsByUser.entries()) {
+      let userAllowed = false;
+      for (const rawPathObj of rawPathObjects) {
+        if (!rawPathObj.paths || rawPathObj.paths.length === 0) continue;
+
+        for (const path of rawPathObj.paths) {
+          if (!path.caveats || path.caveats.length === 0) {
+            userAllowed = true;
+            break;
+          }
+
+          let pathAllowed = true;
+          for (const caveat of path.caveats) {
+            const caveatFn = this.options.caveats?.[caveat.caveatName];
+            if (!caveatFn) {
+              console.error(`Caveat function ${caveat.caveatName} not found`);
+              pathAllowed = false;
+              break;
+            }
+
+            const result = await caveatFn({
+              subject: { type: "user", id: userId },
+              object: { type: objectType, id: objectId },
+              relation,
+              caveatContext: { ...caveat.caveatContext, ...requestContext },
+            });
+
+            if (!result) {
+              pathAllowed = false;
+              break;
+            }
+          }
+
+          if (pathAllowed) {
+            userAllowed = true;
+            break;
+          }
+        }
+        if (userAllowed) break;
+      }
+
+      if (userAllowed) {
+        results.push({ userId });
+      }
+    }
+
+    return results;
   }
 
   /**

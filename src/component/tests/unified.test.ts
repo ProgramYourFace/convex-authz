@@ -228,7 +228,7 @@ describe("assignRoleUnified", () => {
       const assignments = await ctx.db
         .query("roleAssignments")
         .withIndex("by_tenant_user_and_role", (q) =>
-          q.eq("tenantId", TENANT).eq("userId", "user_1").eq("role", "editor")
+          q.eq("tenantId", TENANT).eq("userId", "user_1").eq("role", "editor"),
         )
         .collect();
       expect(assignments.length).toBe(1);
@@ -244,7 +244,7 @@ describe("assignRoleUnified", () => {
             .eq("tenantId", TENANT)
             .eq("userId", "user_1")
             .eq("role", "editor")
-            .eq("scopeKey", "global")
+            .eq("scopeKey", "global"),
         )
         .collect();
       expect(roles.length).toBe(1);
@@ -255,7 +255,7 @@ describe("assignRoleUnified", () => {
       const perms = await ctx.db
         .query("effectivePermissions")
         .withIndex("by_tenant_user", (q) =>
-          q.eq("tenantId", TENANT).eq("userId", "user_1")
+          q.eq("tenantId", TENANT).eq("userId", "user_1"),
         )
         .collect();
       expect(perms.length).toBe(2);
@@ -292,7 +292,7 @@ describe("assignRoleUnified", () => {
       const assignments = await ctx.db
         .query("roleAssignments")
         .withIndex("by_tenant_user_and_role", (q) =>
-          q.eq("tenantId", TENANT).eq("userId", "user_1").eq("role", "editor")
+          q.eq("tenantId", TENANT).eq("userId", "user_1").eq("role", "editor"),
         )
         .collect();
       expect(assignments.length).toBe(1);
@@ -318,7 +318,7 @@ describe("assignRoleUnified", () => {
       const perms = await ctx.db
         .query("effectivePermissions")
         .withIndex("by_tenant_user", (q) =>
-          q.eq("tenantId", TENANT).eq("userId", "user_1")
+          q.eq("tenantId", TENANT).eq("userId", "user_1"),
         )
         .collect();
       const permNames = perms.map((p) => p.permission);
@@ -349,7 +349,7 @@ describe("assignRoleUnified", () => {
             .eq("tenantId", TENANT)
             .eq("userId", "user_1")
             .eq("permission", "billing:manage")
-            .eq("scopeKey", "global")
+            .eq("scopeKey", "global"),
         )
         .unique();
       expect(perm).not.toBeNull();
@@ -390,7 +390,7 @@ describe("revokeRoleUnified", () => {
       const assignments = await ctx.db
         .query("roleAssignments")
         .withIndex("by_tenant_user_and_role", (q) =>
-          q.eq("tenantId", TENANT).eq("userId", "user_1").eq("role", "editor")
+          q.eq("tenantId", TENANT).eq("userId", "user_1").eq("role", "editor"),
         )
         .collect();
       expect(assignments.length).toBe(0);
@@ -405,7 +405,7 @@ describe("revokeRoleUnified", () => {
             .eq("tenantId", TENANT)
             .eq("userId", "user_1")
             .eq("role", "editor")
-            .eq("scopeKey", "global")
+            .eq("scopeKey", "global"),
         )
         .collect();
       expect(roles.length).toBe(0);
@@ -416,7 +416,7 @@ describe("revokeRoleUnified", () => {
       const perms = await ctx.db
         .query("effectivePermissions")
         .withIndex("by_tenant_user", (q) =>
-          q.eq("tenantId", TENANT).eq("userId", "user_1")
+          q.eq("tenantId", TENANT).eq("userId", "user_1"),
         )
         .collect();
       expect(perms.length).toBe(0);
@@ -463,7 +463,7 @@ describe("revokeRoleUnified", () => {
             .eq("tenantId", TENANT)
             .eq("userId", "user_1")
             .eq("permission", "documents:read")
-            .eq("scopeKey", "global")
+            .eq("scopeKey", "global"),
         )
         .unique();
       expect(readPerm).not.toBeNull();
@@ -477,7 +477,7 @@ describe("revokeRoleUnified", () => {
             .eq("tenantId", TENANT)
             .eq("userId", "user_1")
             .eq("permission", "documents:write")
-            .eq("scopeKey", "global")
+            .eq("scopeKey", "global"),
         )
         .unique();
       expect(writePerm).toBeNull();
@@ -521,7 +521,7 @@ describe("grantPermissionUnified", () => {
           q
             .eq("tenantId", TENANT)
             .eq("userId", "user_1")
-            .eq("permission", "billing:manage")
+            .eq("permission", "billing:manage"),
         )
         .collect();
       expect(overrides.length).toBe(1);
@@ -538,7 +538,7 @@ describe("grantPermissionUnified", () => {
             .eq("tenantId", TENANT)
             .eq("userId", "user_1")
             .eq("permission", "billing:manage")
-            .eq("scopeKey", "global")
+            .eq("scopeKey", "global"),
         )
         .unique();
       expect(perm).not.toBeNull();
@@ -566,7 +566,10 @@ describe("setAttributeWithRecompute", () => {
       const attr = await ctx.db
         .query("userAttributes")
         .withIndex("by_tenant_user_and_key", (q) =>
-          q.eq("tenantId", TENANT).eq("userId", "user_1").eq("key", "department")
+          q
+            .eq("tenantId", TENANT)
+            .eq("userId", "user_1")
+            .eq("key", "department"),
         )
         .unique();
       expect(attr).not.toBeNull();
@@ -600,7 +603,10 @@ describe("setAttributeWithRecompute", () => {
       const attrs = await ctx.db
         .query("userAttributes")
         .withIndex("by_tenant_user_and_key", (q) =>
-          q.eq("tenantId", TENANT).eq("userId", "user_1").eq("key", "department")
+          q
+            .eq("tenantId", TENANT)
+            .eq("userId", "user_1")
+            .eq("key", "department"),
         )
         .collect();
       // Only one row should exist
@@ -633,7 +639,7 @@ describe("setAttributeWithRecompute", () => {
             .eq("tenantId", TENANT)
             .eq("userId", "user_1")
             .eq("permission", "billing:manage")
-            .eq("scopeKey", "global")
+            .eq("scopeKey", "global"),
         )
         .unique();
       expect(perm).not.toBeNull();
@@ -662,7 +668,7 @@ describe("setAttributeWithRecompute", () => {
             .eq("tenantId", TENANT)
             .eq("userId", "user_1")
             .eq("permission", "billing:manage")
-            .eq("scopeKey", "global")
+            .eq("scopeKey", "global"),
         )
         .unique();
       expect(perm).not.toBeNull();
@@ -689,7 +695,7 @@ describe("setAttributeWithRecompute", () => {
             .eq("tenantId", TENANT)
             .eq("userId", "user_1")
             .eq("permission", "billing:manage")
-            .eq("scopeKey", "global")
+            .eq("scopeKey", "global"),
         )
         .unique();
       expect(perm).not.toBeNull();
@@ -725,7 +731,7 @@ describe("addRelationUnified", () => {
             .eq("subjectId", "user_1")
             .eq("relation", "member")
             .eq("objectType", "org")
-            .eq("objectId", "org_1")
+            .eq("objectId", "org_1"),
         )
         .collect();
       expect(rels.length).toBe(1);
@@ -742,13 +748,13 @@ describe("addRelationUnified", () => {
             .eq("tenantId", TENANT)
             .eq("subjectKey", "user:user_1")
             .eq("relation", "member")
-            .eq("objectKey", "org:org_1")
+            .eq("objectKey", "org:org_1"),
         )
         .collect();
       expect(effRels.length).toBe(1);
-      expect(effRels[0].isDirect).toBe(true);
-      expect(effRels[0].inheritedFrom).toBeNull();
-      expect(effRels[0].depth).toBe(0);
+      expect(effRels[0].paths[0].isDirect).toBe(true);
+      expect(effRels[0].paths[0].baseEffectiveId).toBeUndefined();
+      expect(effRels[0].paths[0].depth).toBe(0);
       expect(effRels[0].subjectType).toBe("user");
       expect(effRels[0].subjectId).toBe("user_1");
       expect(effRels[0].objectType).toBe("org");
@@ -790,7 +796,7 @@ describe("addRelationUnified", () => {
             .eq("subjectId", "user_1")
             .eq("relation", "member")
             .eq("objectType", "org")
-            .eq("objectId", "org_1")
+            .eq("objectId", "org_1"),
         )
         .collect();
       expect(rels.length).toBe(1);
@@ -821,7 +827,7 @@ describe("addRelationUnified", () => {
             .eq("subjectId", "user_1")
             .eq("relation", "viewer")
             .eq("objectType", "document")
-            .eq("objectId", "doc_1")
+            .eq("objectId", "doc_1"),
         )
         .unique();
       expect(rel).not.toBeNull();
@@ -868,7 +874,7 @@ describe("removeRelationUnified", () => {
             .eq("subjectId", "user_1")
             .eq("relation", "member")
             .eq("objectType", "org")
-            .eq("objectId", "org_1")
+            .eq("objectId", "org_1"),
         )
         .collect();
       expect(rels.length).toBe(0);
@@ -883,7 +889,7 @@ describe("removeRelationUnified", () => {
             .eq("tenantId", TENANT)
             .eq("subjectKey", "user:user_1")
             .eq("relation", "member")
-            .eq("objectKey", "org:org_1")
+            .eq("objectKey", "org:org_1"),
         )
         .collect();
       expect(effRels.length).toBe(0);
@@ -934,7 +940,7 @@ describe("recomputeUser", () => {
       const perms = await ctx.db
         .query("effectivePermissions")
         .withIndex("by_tenant_user", (q) =>
-          q.eq("tenantId", TENANT).eq("userId", "user_1")
+          q.eq("tenantId", TENANT).eq("userId", "user_1"),
         )
         .collect();
       expect(perms.length).toBe(2);
@@ -949,7 +955,7 @@ describe("recomputeUser", () => {
       const roles = await ctx.db
         .query("effectiveRoles")
         .withIndex("by_tenant_user", (q) =>
-          q.eq("tenantId", TENANT).eq("userId", "user_1")
+          q.eq("tenantId", TENANT).eq("userId", "user_1"),
         )
         .collect();
       expect(roles.length).toBe(1);
@@ -998,7 +1004,7 @@ describe("recomputeUser", () => {
             .eq("tenantId", TENANT)
             .eq("userId", "user_1")
             .eq("permission", "billing:manage")
-            .eq("scopeKey", "global")
+            .eq("scopeKey", "global"),
         )
         .unique();
       expect(perm).not.toBeNull();
@@ -1016,7 +1022,7 @@ describe("recomputeUser", () => {
             .eq("tenantId", TENANT)
             .eq("userId", "user_1")
             .eq("permission", "documents:read")
-            .eq("scopeKey", "global")
+            .eq("scopeKey", "global"),
         )
         .unique();
       expect(perm).not.toBeNull();
@@ -1069,7 +1075,7 @@ describe("recomputeUser", () => {
             .eq("tenantId", TENANT)
             .eq("userId", "user_1")
             .eq("permission", "stale:permission")
-            .eq("scopeKey", "global")
+            .eq("scopeKey", "global"),
         )
         .unique();
       expect(stalePerm).toBeNull();
@@ -1084,7 +1090,7 @@ describe("recomputeUser", () => {
             .eq("tenantId", TENANT)
             .eq("userId", "user_1")
             .eq("permission", "documents:read")
-            .eq("scopeKey", "global")
+            .eq("scopeKey", "global"),
         )
         .unique();
       expect(newPerm).not.toBeNull();
@@ -1114,7 +1120,7 @@ describe("denyPermissionUnified", () => {
             .eq("tenantId", TENANT)
             .eq("userId", "user_1")
             .eq("permission", "billing:manage")
-            .eq("scopeKey", "global")
+            .eq("scopeKey", "global"),
         )
         .unique();
       expect(perm!.effect).toBe("allow");
@@ -1138,7 +1144,7 @@ describe("denyPermissionUnified", () => {
           q
             .eq("tenantId", TENANT)
             .eq("userId", "user_1")
-            .eq("permission", "billing:manage")
+            .eq("permission", "billing:manage"),
         )
         .collect();
       expect(overrides.length).toBe(1);
@@ -1154,7 +1160,7 @@ describe("denyPermissionUnified", () => {
             .eq("tenantId", TENANT)
             .eq("userId", "user_1")
             .eq("permission", "billing:manage")
-            .eq("scopeKey", "global")
+            .eq("scopeKey", "global"),
         )
         .unique();
       expect(perm).not.toBeNull();
@@ -1301,12 +1307,20 @@ describe("ReBAC → permission bridge", () => {
       objectType: "document",
       objectId: "doc1",
       relationPermissions: {
-        "document:editor": ["documents:read", "documents:update", "documents:delete"],
+        "document:editor": [
+          "documents:read",
+          "documents:update",
+          "documents:delete",
+        ],
       },
     });
 
     // All three permissions should be granted
-    for (const perm of ["documents:read", "documents:update", "documents:delete"]) {
+    for (const perm of [
+      "documents:read",
+      "documents:update",
+      "documents:delete",
+    ]) {
       const result = await t.query(api.unified.checkPermission, {
         tenantId: TENANT,
         userId: "bob",

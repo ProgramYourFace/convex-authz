@@ -248,8 +248,12 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
       });
 
       expect(relations).toHaveLength(2);
-      expect(relations.map((r: { subjectId: string }) => r.subjectId)).toContain("alice");
-      expect(relations.map((r: { subjectId: string }) => r.subjectId)).toContain("bob");
+      expect(
+        relations.map((r: { subjectId: string }) => r.subjectId),
+      ).toContain("alice");
+      expect(
+        relations.map((r: { subjectId: string }) => r.subjectId),
+      ).toContain("bob");
     });
 
     it("should filter object relations by relation type", async () => {
@@ -377,7 +381,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
 
       expect(result.allowed).toBe(false);
       expect(result.reason).toBe(
-        "No direct relationship and no traversal rules provided"
+        "No direct relationship and no traversal rules provided",
       );
     });
 
@@ -567,20 +571,23 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
       });
 
       // With maxBranching=1 the single parent is still found, access is granted
-      const resultAllowed = await t.query(api.rebac.checkRelationWithTraversal, {
-        tenantId: TENANT,
-        subjectType: "user",
-        subjectId: "alice",
-        relation: "viewer",
-        objectType: "account",
-        objectId: "acme",
-        traversalRules: {
-          "account:viewer": [
-            { through: "team", via: "owner", inherit: "member" },
-          ],
+      const resultAllowed = await t.query(
+        api.rebac.checkRelationWithTraversal,
+        {
+          tenantId: TENANT,
+          subjectType: "user",
+          subjectId: "alice",
+          relation: "viewer",
+          objectType: "account",
+          objectId: "acme",
+          traversalRules: {
+            "account:viewer": [
+              { through: "team", via: "owner", inherit: "member" },
+            ],
+          },
+          maxBranching: 1,
         },
-        maxBranching: 1,
-      });
+      );
 
       expect(resultAllowed.allowed).toBe(true);
       expect(resultAllowed.path).toBeDefined();
@@ -646,7 +653,9 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
       });
 
       expect(teams).toHaveLength(2);
-      expect(teams.every((t: { via: string }) => t.via === "direct")).toBe(true);
+      expect(teams.every((t: { via: string }) => t.via === "effective")).toBe(
+        true,
+      );
     });
 
     it("should return empty for no accessible objects", async () => {
@@ -702,7 +711,10 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
       });
 
       expect(users).toHaveLength(2);
-      expect(users.every((u: { via: string }) => u.via === "direct")).toBe(true);
+      expect(users.every((u: { via: string }) => u.via === "effective")).toBe(
+        true,
+      );
+      expect(users.map((u: { userId: string }) => u.userId)).toContain("alice");
       expect(users.map((u: { userId: string }) => u.userId)).toContain("alice");
       expect(users.map((u: { userId: string }) => u.userId)).toContain("bob");
     });

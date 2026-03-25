@@ -346,32 +346,51 @@ export const listAccessibleObjects = query({
     v.object({
       objectId: v.string(),
       via: v.string(),
+      paths: v.optional(
+        v.array(
+          v.object({
+            directRelationId: v.optional(v.id("relationships")),
+            baseEffectiveId: v.optional(v.id("effectiveRelationships")),
+            path: v.optional(v.array(v.id("relationships"))),
+            caveats: v.optional(
+              v.array(
+                v.object({
+                  caveatName: v.string(),
+                  caveatContext: v.optional(v.any()),
+                }),
+              ),
+            ),
+            isDirect: v.boolean(),
+            depth: v.number(),
+          }),
+        ),
+      ),
     }),
   ),
   handler: async (ctx, args) => {
-    const results: Array<{ objectId: string; via: string }> = [];
+    const results: Array<{ objectId: string; via: string; paths: any }> = [];
 
-    // Direct relations
-    const directRelations = await ctx.db
-      .query("relationships")
-      .withIndex("by_tenant_subject", (q) =>
+    const effectiveRelations = await ctx.db
+      .query("effectiveRelationships")
+      .withIndex("by_tenant_subject_relation", (q) =>
         q
           .eq("tenantId", args.tenantId)
-          .eq("subjectType", args.subjectType)
-          .eq("subjectId", args.subjectId),
+          .eq("subjectKey", `${args.subjectType}:${args.subjectId}`)
+          .eq("relation", args.relation),
       )
       .take(1000);
 
-    const directObjects = directRelations.filter(
-      (r) => r.relation === args.relation && r.objectType === args.objectType,
+    const targetObjects = effectiveRelations.filter(
+      (r) => r.objectType === args.objectType && r.paths && r.paths.length > 0,
     );
 
-    for (const obj of directObjects) {
-      results.push({ objectId: obj.objectId, via: "direct" });
+    for (const obj of targetObjects) {
+      results.push({
+        objectId: obj.objectId,
+        via: "effective",
+        paths: obj.paths,
+      });
     }
-
-    // TODO: Add traversal for inherited access
-    // This would require iterating through intermediate objects
 
     return results;
   },
@@ -391,31 +410,51 @@ export const listUsersWithAccess = query({
     v.object({
       userId: v.string(),
       via: v.string(),
+      paths: v.optional(
+        v.array(
+          v.object({
+            directRelationId: v.optional(v.id("relationships")),
+            baseEffectiveId: v.optional(v.id("effectiveRelationships")),
+            path: v.optional(v.array(v.id("relationships"))),
+            caveats: v.optional(
+              v.array(
+                v.object({
+                  caveatName: v.string(),
+                  caveatContext: v.optional(v.any()),
+                }),
+              ),
+            ),
+            isDirect: v.boolean(),
+            depth: v.number(),
+          }),
+        ),
+      ),
     }),
   ),
   handler: async (ctx, args) => {
-    const results: Array<{ userId: string; via: string }> = [];
+    const results: Array<{ userId: string; via: string; paths: any }> = [];
 
-    // Direct relations
-    const directRelations = await ctx.db
-      .query("relationships")
-      .withIndex("by_tenant_object", (q) =>
+    const effectiveRelations = await ctx.db
+      .query("effectiveRelationships")
+      .withIndex("by_tenant_object_relation", (q) =>
         q
           .eq("tenantId", args.tenantId)
-          .eq("objectType", args.objectType)
-          .eq("objectId", args.objectId),
+          .eq("objectKey", `${args.objectType}:${args.objectId}`)
+          .eq("relation", args.relation),
       )
       .take(1000);
 
-    const directUsers = directRelations.filter(
-      (r) => r.relation === args.relation && r.subjectType === "user",
+    const userRelations = effectiveRelations.filter(
+      (r) => r.subjectType === "user" && r.paths && r.paths.length > 0,
     );
 
-    for (const user of directUsers) {
-      results.push({ userId: user.subjectId, via: "direct" });
+    for (const user of userRelations) {
+      results.push({
+        userId: user.subjectId,
+        via: "effective",
+        paths: user.paths,
+      });
     }
-
-    // TODO: Add traversal for inherited access
 
     return results;
   },
