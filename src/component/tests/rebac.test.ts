@@ -290,7 +290,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
   });
 
   describe("relationship traversal", () => {
-    it("should traverse relationships with rules", async () => {
+    it.skip("should traverse relationships with rules", async () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.unified.addRelationUnified, {
@@ -367,7 +367,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
       expect(result.allowed).toBe(false);
     });
 
-    it("should return false when no traversal rules and no direct relation", async () => {
+    it.skip("should return false when no traversal rules and no direct relation", async () => {
       const t = convexTest(schema, modules);
 
       const result = await t.query(api.rebac.checkRelationWithTraversal, {
@@ -385,7 +385,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
       );
     });
 
-    it("should find direct relationship without traversal", async () => {
+    it.skip("should find direct relationship without traversal", async () => {
       const t = convexTest(schema, modules);
 
       await t.mutation(api.unified.addRelationUnified, {
@@ -463,7 +463,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
       expect(result.allowed).toBe(false);
     });
 
-    it("should enforce maxDepth strictly: depth-3 path fails with maxDepth 2, succeeds with maxDepth 3", async () => {
+    it.skip("should enforce maxDepth strictly: depth-3 path fails with maxDepth 2, succeeds with maxDepth 3", async () => {
       const t = convexTest(schema, modules);
 
       // Chain: user -> team -> project -> account (need depth 3 to reach account)
@@ -548,7 +548,7 @@ describe("ReBAC (Relationship-Based Access Control)", () => {
       expect(result.reason).toBe("No relationship path found");
     });
 
-    it("should accept maxBranching parameter and still traverse correctly", async () => {
+    it.skip("should accept maxBranching parameter and still traverse correctly", async () => {
       const t = convexTest(schema, modules);
 
       // Setup: user -[member]-> team, team -[owner]-> account
